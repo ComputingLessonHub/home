@@ -28,7 +28,7 @@ window.HUB = {
   // end. Ignored entirely when OFFLINE is true, so it can be left as it is.
   // Until the Function App exists this points nowhere, and every page says
   // it cannot reach the server, which is the truth.
-  API: "computinglessonhub-api.azurewebsites.net".replace(/\/+$/, "")
+  API: "https://computinglessonhub-api.azurewebsites.net".replace(/\/+$/, "")
 };
 
 /* Everything below works out what that means, so no page has to. */
