@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Viewing student work</title>
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+<script src="worklink.js"></script>
+<script src="teacher.js"></script>
+<script src="settings.js"></script>
+<!-- for the one thing it names: the lesson id a practice sandbox is kept
+     under, which has to be the same word here as in the sandbox itself -->
+<script src="practice.js"></script>
+</head>
+<body class="workpage">
+
+<div class="homebar">
+  <div class="title" id="barTitle">Computing Teacher Console</div>
+  <span class="grow"></span>
+  <div class="subtabs worktabs">
+    <button class="on" id="tabWork">View work</button>
+    <button id="tabProgress">Progress</button>
+  </div>
+</div>
+
+<div id="loadPane" class="workwrap loadpane">
+  <div class="loading">
+    <div class="load-dots"><span></span><span></span><span></span></div>
+    <p class="loadmsg">Loading the class’s work…</p>
+  </div>
+</div>
+
+<!-- ================= progress ================= -->
+<div id="progressPane" class="workwrap" hidden>
+  <div class="toolrow" id="progressFilters"></div>
+  <p class="hint" id="progressMsg"></p>
+  <div class="progresswrap">
+    <table class="progresstable" id="progressTable"></table>
+  </div>
+  <div class="mbstats" id="progressStats"></div>
+</div>
+
+<!-- ================= viewing work ================= -->
+<div id="workPane" class="workwrap" hidden>
+  <div class="worksplit">
+    <div class="workmain">
+      <div class="workbar">
+    <button class="btn-ghost iconbtn" id="prevStu" title="Previous student">&larr;</button>
+    <select id="stuPick"></select>
+    <button class="btn-ghost iconbtn" id="nextStu" title="Next student">&rarr;</button>
+    <button class="btn-ghost" id="viewMode">All on one page</button>
+    <button class="btn-ghost" id="openPdf">PDF</button>
+    <button class="btn-ghost" id="refreshWork" title="Fetch what has been saved since this page was opened">Refresh</button>
+    <span class="hint" id="workFresh"></span>
+  </div>
+      <div class="workframe"><iframe id="workFrame" title="Their work"></iframe></div>
+    </div>
+    <aside class="workside">
+      <h3>Feedback</h3>
+      <p class="hint" id="fbWho"></p>
+      <!-- Practice only: a sandbox is several programs and feedback belongs
+           to one of them, so the boxes below say which. It follows whatever
+           is open in the frame, and opens one when it is changed here. -->
+      <div class="bfield" id="progWrap" hidden>
+        <label for="progPick">Program</label>
+        <select id="progPick" class="bigselect"></select>
+      </div>
+      <div class="bfield" id="markWrap" hidden>
+        <label id="markLabel">Mark</label>
+        <span class="markrow2" id="scoreRow">
+          <input id="fbScore" type="number" min="0"> <span id="outOfLabel">out of 20</span>
+        </span>
+        <select id="fbGrade" class="bigselect" hidden></select>
+        <p class="bhelp" id="gradeHelp"></p>
+      </div>
+      <div class="bfield" id="fbStrengthWrap">
+        <label>Strength</label><textarea id="fbStrength" rows="3"></textarea>
+        <div class="bank" id="bankStrength"></div>
+      </div>
+      <div class="bfield" id="fbTargetWrap">
+        <label>Target</label><textarea id="fbTarget" rows="3"></textarea>
+        <div class="bank" id="bankTarget"></div>
+      </div>
+      <div class="bfield"><label>General comment</label><textarea id="fbComment" rows="2"></textarea></div>
+      <button class="btn-primary wide" id="saveFb">Save feedback</button>
+      <p class="hint" id="fbMsg"></p>
+    </aside>
+  </div>
+</div>
+
+<div class="modal-back" id="mBack" hidden><div class="modal" id="mBox"></div></div>
+
+<script src="menus.js"></script>
+<script src="settings.js"></script>
+<script src="shortmatch.js"></script>
+<script src="progressmath.js"></script>
+<script>
+/* Puts everything except the cross and the closing buttons into a part that
+   scrolls on its own, so a long pop-up can be read on a small screen without
+   its buttons sliding off the bottom. */
+function scrollBody(box){
+  if (!box || box.querySelector(".modal-scroll")) return;
+  const kids = Array.from(box.children);
+  const middle = kids.filter(n =>
+    !n.classList.contains("modal-x") &&
+    !n.classList.contains("modal-cta") &&
+    !n.classList.contains("modal-stay"));
+  if (middle.length < 2) return;
+  const scroller = document.createElement("div");
+  scroller.className = "modal-scroll";
+  box.insertBefore(scroller, middle[0]);
+  middle.forEach(n => scroller.appendChild(n));
+}
+
+const $ = (id) => document.getElementById(id);
+function on(id, ev, fn){
+  const e = document.getElementById(id);
+  if (!e){ console.warn("Nothing on the page with id:", id); return; }
+  e.addEventListener(ev, fn);
+}
+function el(tag, cls, text){
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+/* The class list, the picker, the feedback panel and the Progress markbook
+   all list a class in the same order, and it is by username rather than by
+   display name: two students called Amelia are still two different rows in
+   the register, and the username is the one thing on this page that always
+   tells them apart. */
+function byUsername(a, b){ return (a.username || "").localeCompare(b.username || ""); }
+
+function openModal(build){
+  const box = $("mBox");
+  box.className = "modal";
+  box.innerHTML = "";
+  build(box);
+  if (!box.querySelector(".modal-x")){
+    const x = el("button","btn-ghost iconbtn modal-x","\u2715");
+    x.addEventListener("click", closeModal);
+    box.insertBefore(x, box.firstChild);
+  }
+  scrollBody(box);
+  $("mBack").hidden = false;
+}
+function closeModal(){ $("mBack").hidden = true; }
+
+const API = (window.HUB && window.HUB.API) || "";
+/* The session, or the key where there is no second factor to make one.
+   teacher.js decides which; this page only has to ask. */
+const H = () => window.teacherAuth.headers();
+const HJ = () => window.teacherAuth.json();
+
+const qs = new URLSearchParams(location.search);
+/* ---- practice, rather than a lesson ----
+   ?practice=1&group=8A[&student=jbloggs] shows a class's sandbox programs
+   instead of a lesson's work. It is the same page throughout: the same
+   student picker, the same feedback boxes down the right. What changes is
+   where the work comes from (one reserved row per student rather than a
+   lesson's), what is drawn in the frame (the sandbox rather than the lesson
+   page) and that feedback is written against one program rather than the
+   whole of it.
+
+   Nothing in practice is marked, here or anywhere else, so the mark and the
+   grade never appear, and neither does the Progress tab: a score on work
+   nobody set would be the one thing the Practice tab was built not to be. */
+const PRACTICE = qs.get("practice") === "1";
+const SLOT = (window.practice && window.practice.sandbox && window.practice.sandbox.SLOT)
+             || "__practice_sandbox";
+/* A link handed in by a student carries the lesson on "id"; the console
+   opens this page with "lesson" and a class alongside it. */
+const lessonId = PRACTICE ? SLOT : (qs.get("lesson") || qs.get("id") || "");
+const cls = qs.get("group") || "";
+const OFFLINE = !!(window.HUB && window.HUB.OFFLINE);
+let handedIn = null;          // the work that arrived on the address
+let markedLink = "";          // what to hand back once it has been marked
+
+let lessonJson = null;
+let roster = [];        // everyone in the class, alphabetical
+let rows = [];          // what they have saved
+let idx = 0;
+let allPages = false;
+let lastStep = 0;                                     // the page being looked at
+let lastScroll = 0;                                   // and how far down it
+
+/* ---------------- getting everything ---------------- */
+
+/* The dots belong to the wait, so anything that ends the wait without the work
+   arriving takes them away with it. Three dots bouncing over "Sign in to see
+   this class’s work." says the page is still on its way when it is not. */
+function workStopped(why){
+  $("loadPane").querySelector(".load-dots").hidden = true;
+  $("loadPane").querySelector(".loadmsg").textContent = why;
+}
+function workWaiting(){
+  $("loadPane").querySelector(".load-dots").hidden = false;
+  $("loadPane").querySelector(".loadmsg").textContent = "Loading the class’s work…";
+}
+
+async function boot(){
+  if (OFFLINE){ return bootFromLink(); }
+  workWaiting();            // boot runs again after the sign-in asked for below
+  if (!API){
+    workStopped("This copy of the site has no server address in config.js.");
+    return;
+  }
+  /* Opened straight from a bookmark rather than out of the console, so there
+     is no session in this tab yet. Asking is better than sending them away. */
+  if (!window.teacherAuth.have()){
+    workStopped("Sign in to see this class’s work.");
+    askToSignIn(boot);
+    return;
+  }
+  try{
+    /* There is no lesson behind a sandbox, so there is none to fetch: asking
+       the catalogue for a lesson called __practice_sandbox would fail and
+       take the whole screen down with it. */
+    const [lesson, students, work] = await Promise.all([
+      PRACTICE ? Promise.resolve(null) : fetchLesson(), fetchRoster(), fetchWork()
+    ]);
+    lessonJson = lesson;
+    roster = students.sort(byUsername);
+    rows = work;
+    if (!PRACTICE) await loadMarks();
+    if (!PRACTICE) lockedPages = await fetchLocks(lessonJson);
+    if (PRACTICE){
+      $("barTitle").textContent = "Computing Teacher Console \u2022 Practice programs \u2022 " + cls;
+      document.title = "Practice programs \u00b7 " + cls;
+      practiceBar();
+    } else {
+      $("barTitle").textContent = "Computing Teacher Console \u2022 Viewing Student Work for " +
+        (lessonJson && lessonJson.title ? lessonJson.title : lessonId);
+      document.title = "Student work \u00b7 " + (lessonJson && lessonJson.title ? lessonJson.title : lessonId);
+    }
+    if (!PRACTICE) paintProgress();
+    /* Never held up for this: it is a second fetch on top of the ones the
+       markbook already needed, and the table above it is worth showing
+       whether or not it ever arrives. */
+    if (!PRACTICE) loadComparison().then(() => { if (!PRACTICE) paintProgress(); });
+    /* Opened on one student, from a class list or the username search: start
+       on them rather than on whoever is first alphabetically. */
+    const asked = (qs.get("student") || "").toLowerCase();
+    if (asked){
+      const at = roster.findIndex(x => String(x.username || "").toLowerCase() === asked);
+      if (at >= 0) idx = at;
+    }
+    paintPicker();
+    $("loadPane").hidden = true;
+    /* admin.html's unit-wide progress screen sends a teacher here already
+       wanting the markbook, not the student's work, when they have drilled
+       down from a specific lesson in the trend. */
+    tab(qs.get("tab") === "progress" ? "progress" : "work");
+  }catch(e){
+    workStopped(e.message);
+  }
+}
+
+/* The few pieces of the bar that only make sense against a lesson. A PDF is
+   built out of a lesson's tasks, and "All on one page" is about a lesson's
+   pages; a sandbox has neither. Practice is not marked, so there is nothing
+   for the Progress tab to show either. */
+function practiceBar(){
+  ["viewMode","openPdf"].forEach(id => { const e = $(id); if (e) e.hidden = true; });
+  const tabW = $("tabWork");
+  if (tabW) tabW.textContent = "Programs";
+  const tabP = $("tabProgress");
+  if (tabP) tabP.hidden = true;
+}
+/* ---------------- one student, arriving on a link (no server) ----------------
+   The whole hand-in is in the address, so there is no class to page through.
+   Everything else on this page works as it does online: the same viewer, the
+   same feedback boxes down the right. */
+async function bootFromLink(){
+  const shut = workStopped;
+  if (!window.workLink || !window.workLink.supported)
+    return shut("This browser cannot read work links. Ask for the work as a PDF instead.");
+  handedIn = await window.workLink.readHash();
+  if (!handedIn)
+    return shut("Open a student's work link to mark it. There is nothing to show on its own.");
+  if (handedIn.kind === "broken")
+    return shut("The work could not be read out of this link. It was probably cut short on its way here. Ask for it again.");
+
+  /* The student has this link too: it is the one they copied. Opening it
+     again should show them their work, not the marking screen, so the first
+     thing it asks is which of the two is holding it. */
+  if (!(await whoIsThis(handedIn.n || "the student"))){
+    return openStudentView();
+  }
+
+  try{ lessonJson = await fetchLesson(); }
+  catch(e){ return shut(e.message); }
+
+  /* One student, made to look like a class of one so the rest of the page
+     does not have to know the difference. */
+  const name = handedIn.n || "A student";
+  roster = [{ username: "link", display_name: name }];
+  rows = [{ username: "link", display_name: name, data: handedIn.d || {},
+            feedback: handedIn.fb ? JSON.stringify(handedIn.fb) : "" }];
+  if (handedIn.mk) marks.link = { score: handedIn.mk.score, outOf: handedIn.mk.outOf, grade: handedIn.mk.grade || "" };
+
+  /* No class, so nobody to page to and no marks to compare. */
+  document.querySelector(".worktabs").hidden = true;
+  ["prevStu","nextStu","stuPick","refreshWork","workFresh"].forEach(id => { const e = $(id); if (e) e.remove(); });
+
+  $("barTitle").textContent = "Marking " + name + " • " +
+    (lessonJson && lessonJson.title ? lessonJson.title : lessonId);
+  document.title = "Marking " + name;
+  $("loadPane").hidden = true;
+  tab("work");
+  showStudent(0);
+}
+
+async function fetchLesson(){
+  /* Offline the lessons folder is the only place a lesson can come from.
+     With a server it is the database, and only the database: a leftover file
+     of the same name must not stand in for what a teacher has published. */
+  if (OFFLINE){
+    const r = await fetch("lessons/" + encodeURIComponent(lessonId) + ".json", { cache:"no-store" });
+    if (!r.ok) throw new Error("There is no lessons/" + lessonId + ".json.");
+    return await r.json();
+  }
+  const reply = await fetch(API + "/api/catalog?lesson=" + encodeURIComponent(lessonId), { headers: H(), cache:"no-store" });
+  const d = await reply.json();
+  if (!reply.ok) throw new Error(d.error || "Could not open that lesson.");
+  return d.lesson;
+}
+async function fetchRoster(){
+  const r = await fetch(API + "/api/teacher/students?group=" + encodeURIComponent(cls), { headers: H(), cache:"no-store" });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || "Could not load the class.");
+  return d.students || [];
+}
+async function fetchWork(){
+  const r = await fetch(API + "/api/teacher/work?lesson=" + encodeURIComponent(lessonId) +
+                        "&group=" + encodeURIComponent(cls), { headers: H(), cache:"no-store" });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || "Could not load their work.");
+  return d.rows || [];
+}
+/* What has been marked so far. Pulled out of boot so Refresh can ask for it
+   again: a colleague marking the same class in the next room is exactly the
+   sort of thing a teacher presses Refresh to see. */
+async function loadMarks(){
+  try{
+    const r = await fetch(API + "/api/teacher/results?lesson=" + encodeURIComponent(lessonId) +
+                          "&group=" + encodeURIComponent(cls), { headers: H(), cache:"no-store" });
+    const d = await r.json();
+    (d.rows || []).forEach(row => {
+      const st = roster.find(x => x.display_name === row.display_name);
+      if (st) marks[st.username] = { score: row.score, outOf: row.out_of, grade: row.grade || "",
+                                     strength: row.strength || "", target: row.target || "" };
+    });
+  }catch(e){}
+}
+
+/* The sign-in pop-up, when this tab has no session of its own. It stays open
+   until the server accepts something, so a mistyped key is just a mistype. */
+function askToSignIn(then){
+  openModal(box => window.teacherAuth.form(box, {
+    close: closeModal, then: then,
+    why: "Sign in to see this class’s work." }));
+}
+
+/* Fetch what has been saved since the page was opened. Students carry on
+   working while their work is being looked at, so what is on the screen goes
+   stale within a lesson; without this the only way to see the rest was to
+   reload and lose your place. */
+async function refreshWork(){
+  const btn = $("refreshWork");
+  if (!btn || btn.disabled) return;
+  const who = (roster[idx] || {}).username || "";
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = "Checking…";
+  $("workFresh").textContent = "";
+  try{
+    /* The lesson comes back as well: the frame is given this copy rather
+       than fetching its own, so this is the one press that picks up a lesson
+       a colleague has edited since this screen was opened. It is also the
+       one thing here that can fail without spoiling the press, because the
+       work is what Refresh is for and the copy already in hand still draws
+       the page. */
+    const [students, work, lesson] = await Promise.all([fetchRoster(), fetchWork(),
+      PRACTICE ? Promise.resolve(null) : fetchLesson().catch(() => null)]);
+    roster = students.sort(byUsername);
+    rows = work;
+    if (lesson) lessonJson = lesson;
+    if (!PRACTICE) await loadMarks();
+    if (!PRACTICE) lockedPages = await fetchLocks(lessonJson);
+    /* Back to the same student, by name rather than by position: somebody
+       added to the class since would otherwise shift everyone along. */
+    const back = roster.findIndex(x => x.username === who);
+    paintPicker();
+    if (!PRACTICE) paintProgress();
+    showStudent(back < 0 ? 0 : back);
+    const now = new Date();
+    $("workFresh").textContent = "Up to date as of " +
+      String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0");
+  }catch(e){
+    $("workFresh").textContent = e.message === "Failed to fetch" ? "Could not reach the server." : e.message;
+  }finally{ btn.disabled = false; btn.textContent = label; }
+}
+on("refreshWork", "click", refreshWork);
+
+/* ---------------- which half of the page is showing ---------------- */
+function tab(which){
+  if (!$("loadPane").hidden) return;      // nothing to show yet
+  const progress = which === "progress";
+  $("progressPane").hidden = !progress;
+  $("workPane").hidden = progress;
+  $("tabProgress").classList.toggle("on", progress);
+  $("tabWork").classList.toggle("on", !progress);
+  if (progress) syncProgressHeaderOffset();
+  if (!progress && !framedYet) showStudent(idx);
+}
+on("tabProgress", "click", () => tab("progress"));
+on("tabWork", "click", () => tab("work"));
+
+/* ---------------- the progress markbook ----------------
+   A student's saved work already holds everything a quantifiable task needs
+   to be marked: rQuiz's solved array, a checklist's checks and manual ticks,
+   the answer to an mc/order/blanks/short block. This walks the lesson the
+   same way buildPdf does (a page or a group is not itself a task, so it is
+   opened rather than counted) and marks each leaf the same way the lesson
+   page, the assessment mark and the admin markbook already do, so a total
+   here is never a second opinion on a score shown somewhere else. */
+/* quantifiableTasks, scoreTask and attempted now live in progressmath.js,
+   shared with admin.html's unit-wide progress: the same lesson marked the
+   same way wherever it is looked at. */
+const TASK_LABEL = window.progressMath.TASK_LABEL;
+function quantifiableTasks(){ return window.progressMath.quantifiableTasks(lessonJson); }
+const scoreTask = window.progressMath.scoreTask;
+const attempted = window.progressMath.attempted;
+
+/* The pages this class cannot reach yet, so the markbook never asks about a
+   task nobody has been able to attempt. Worked out exactly the way Manage
+   does in the console, down to the same default when nobody has set locks
+   by hand, because a page this reads as open has to be one the console
+   agrees is open. Shared with admin.html's unit-wide progress and the
+   comparison against a sibling lesson below, in progressmath.js. */
+function defaultLocks(lesson){ return window.progressMath.defaultLocks(lesson); }
+function fetchLocks(lesson){ return window.progressMath.fetchLockedPages(API, lessonId, cls, lesson); }
+
+/* Task types picked out by the filter pills. Empty means no filter at all,
+   which is why every pill opens unpicked: ticking one narrows the columns
+   down to it, and there is no "everything" pill to press to get back,
+   because un-ticking the one you picked already means that. */
+let progressPicked = new Set();
+let lockedPages = new Set();   // filled by fetchLocks in boot() and refreshWork()
+let progressShowExt = false;   // extension tasks are left out until asked for
+let progressHiddenCols = new Set();   // task ids a teacher has hidden by eye, for presenting the class
+let shutProgressFullscreen = null;   // set while the full-screen markbook is open
+let unitSiblings = null;   // null = not looked up yet; otherwise {before:[...]} in teaching order
+let siblingCache = new Map();   // lesson id -> the result of markRoster against it, once fetched
+let comparisonPrev = null;   // {title, pct} for the lesson before this one, false once known there isn't one
+/* What the markbook is sorted by. "username"/"displayName" are the two
+   ways to read the name column; anything else is a task id, or "total". */
+let progressSort = { key: "username", dir: 1 };
+/* The name column cycles through both fields rather than just flipping
+   direction, since there are two different things "Student" could mean
+   here and a plain toggle could only ever offer one of them. */
+function clickNameSort(){
+  const cycle = [["username",1], ["username",-1], ["displayName",1], ["displayName",-1]];
+  const at = cycle.findIndex(c => c[0] === progressSort.key && c[1] === progressSort.dir);
+  const next = cycle[(at + 1) % cycle.length];
+  progressSort = { key: next[0], dir: next[1] };
+  paintProgress();
+}
+function clickColumnSort(key){
+  if (progressSort.key === key) progressSort.dir = -progressSort.dir;
+  else progressSort = { key: key, dir: -1 };   // a mark you have just asked about is one you want the best or worst of first
+  paintProgress();
+}
+function sortArrow(key){ return progressSort.key === key ? (progressSort.dir === 1 ? " ↑" : " ↓") : ""; }
+/* Sticky headers stack: the page row pins to the top, and the task row
+   pins just below it, however tall the page row turns out to be once its
+   own text has wrapped. Getting that height needs a real layout, and
+   paintProgress runs once while the pane is still hidden behind the
+   loading screen, where everything measures as nothing; this is called
+   again once the pane is actually shown, when the answer means something. */
+function syncProgressHeaderOffset(){
+  const table = $("progressTable");
+  const rowPage = table && table.querySelector("thead tr:first-child");
+  const rowTask = table && table.querySelector("thead tr:nth-child(2)");
+  if (!rowPage || !rowTask) return;
+  requestAnimationFrame(() => {
+    const h = rowPage.getBoundingClientRect().height;
+    if (!h) return;      // still hidden; whoever shows it next asks again
+    Array.from(rowTask.children).forEach(th => { th.style.top = h + "px"; });
+  });
+}
+/* The whole markbook, bigger: the filters, the table and the stats really
+   are the same three elements, just moved into a full-screen pop-up and
+   back again on the way out, rather than redrawn from scratch a second
+   time in two places that could then disagree. getElementById finds them
+   by id wherever in the document they currently sit, so paintProgress
+   keeps working on whichever of the two copies is real without knowing
+   there even is a pop-up. */
+function openProgressFullscreen(){
+  /* Already open: the button just moved inside it, so a second press on
+     the same button asks to leave rather than to open a second one. */
+  if (shutProgressFullscreen) return shutProgressFullscreen();
+  const pane = $("progressPane");
+  /* The stats stay behind: they are a summary of the table, not part of
+     it, and a wall of numbers is not what a full screen view is for. */
+  const parts = [$("progressFilters"), $("progressMsg"), document.querySelector(".progresswrap")]
+    .filter(Boolean);
+  const back = el("div","modal-back");
+  const box = el("div","modal wide fullprev progress-full");
+  const x = el("button","btn-ghost iconbtn modal-x","✕");
+  x.title = "Close";
+  const shut = () => {
+    parts.forEach(p => pane.appendChild(p));
+    back.remove();
+    document.removeEventListener("keydown", esc);
+    shutProgressFullscreen = null;
+  };
+  shutProgressFullscreen = shut;
+  function esc(e){ if (e.key === "Escape") shut(); }
+  x.addEventListener("click", shut);
+  box.appendChild(x);
+  parts.forEach(p => box.appendChild(p));
+  back.appendChild(box);
+  back.addEventListener("mousedown", (e) => { if (e.target === back) shut(); });
+  document.addEventListener("keydown", esc);
+  document.body.appendChild(back);
+}
+function paintProgress(){
+  const filters = $("progressFilters"), table = $("progressTable"), msg = $("progressMsg");
+  if (!filters || !table) return;
+  /* A locked page is one the class cannot reach yet, so there is nothing
+     behind its tasks worth asking about: a column of dashes for a page
+     nobody could have opened would read as a class that has not tried,
+     not as a page that is not open yet. Extension tasks are left out on
+     the same principle by default: they are nobody's, until asked for. */
+  const allTasks = quantifiableTasks();
+  const openTasks = allTasks.filter(t => !lockedPages.has(t.pageIndex));
+  const hasExt = openTasks.some(t => t.extension);
+  const tasks = openTasks.filter(t => progressShowExt || !t.extension);
+  filters.innerHTML = ""; table.innerHTML = "";
+  if (hasExt){
+    const ext = el("button","btn-primary", progressShowExt ? "Hide Extension Tasks" : "Include Extension Tasks");
+    ext.addEventListener("click", () => { progressShowExt = !progressShowExt; paintProgress(); });
+    filters.appendChild(ext);
+  }
+  const full = el("button","btn-ghost iconbtn progress-full-btn","⛶");
+  full.title = "Show the markbook full screen";
+  full.addEventListener("click", openProgressFullscreen);
+  if (!tasks.length){
+    filters.appendChild(full);
+    msg.textContent = !openTasks.length
+      ? (allTasks.length ? "Every page with a scored task on it is still locked for this class."
+                         : "Nothing in this lesson can be scored automatically yet.")
+      : "Every scored task left is inside an extension. Include Extension Tasks to see them.";
+    $("progressStats").innerHTML = "";
+    return;
+  }
+  msg.textContent = "";
+  const labels = [...new Set(tasks.map(t => t.label))];
+  labels.forEach(label => {
+    const pill = el("button","progress-pill" + (progressPicked.has(label) ? " on" : ""), label);
+    pill.addEventListener("click", () => {
+      if (progressPicked.has(label)) progressPicked.delete(label); else progressPicked.add(label);
+      paintProgress();
+    });
+    filters.appendChild(pill);
+  });
+  filters.appendChild(full);
+  const shown = progressPicked.size ? tasks.filter(t => progressPicked.has(t.label)) : tasks;
+
+  /* Every mark, for every student, worked out once rather than once per
+     sort: the column being sorted by is only known after this runs, and
+     re-marking the whole class on every click would be asking scoreTask
+     to do the same sum again for no reason. */
+  const marks = {};      // username -> { taskId: {got,max}, total: {got,max} }
+  roster.forEach(st => {
+    const row = rows.find(r => r.username === st.username) || null;
+    const data = row ? row.data : null;
+    const perTask = {};
+    let gotSum = 0, maxSum = 0;
+    shown.forEach(t => {
+      const sc = scoreTask(t.block, data ? data[t.id] : undefined);
+      perTask[t.id] = sc;
+      gotSum += sc.got; maxSum += sc.max;
+    });
+    marks[st.username] = { data: data, perTask: perTask, total: { got: gotSum, max: maxSum } };
+  });
+
+  const sorted = roster.slice().sort((a, b) => {
+    const k = progressSort.key, d = progressSort.dir;
+    let x, y;
+    if (k === "username"){ x = a.username || ""; y = b.username || ""; }
+    else if (k === "displayName"){ x = a.display_name || ""; y = b.display_name || ""; }
+    else if (k === "total"){ x = marks[a.username].total.got; y = marks[b.username].total.got; }
+    else { x = marks[a.username].perTask[k] ? marks[a.username].perTask[k].got : -1;
+           y = marks[b.username].perTask[k] ? marks[b.username].perTask[k].got : -1; }
+    if (typeof x === "string") return x.localeCompare(y) * d;
+    if (x < y) return -1 * d;
+    if (x > y) return 1 * d;
+    return (a.username || "").localeCompare(b.username || "");   // a stable tie-break
+  });
+
+  const thead = el("thead"), tbody = el("tbody");
+  table.appendChild(thead); table.appendChild(tbody);
+  const rowPage = el("tr"), rowTask = el("tr");
+  thead.appendChild(rowPage); thead.appendChild(rowTask);
+  /* The page-name strip runs above the whole table, Student and Total
+     included, rather than stopping short of them: a rowspan there used to
+     make both columns as tall as the page row and the task row put
+     together, which is taller than either needs to be on its own. A blank
+     cell here, matching height with everything else in this row, is all
+     Student and Total need from it; their own header, the same height as
+     every task column's, lives in the row below like the rest. */
+  const nameBlank = el("th","pcol-name pcol-page");
+  rowPage.appendChild(nameBlank);
+  /* Columns for the same page sit under one heading between them, so a page
+     with two checklists on it reads as one page with two columns rather
+     than two unrelated columns that happen to be neighbours. An extension
+     task never merges into its page's group: it is stamped with its own
+     title in quantifiableTasks, so the two never look like one run. */
+  let i = 0;
+  while (i < shown.length){
+    let j = i + 1;
+    while (j < shown.length && shown[j].pageIndex === shown[i].pageIndex &&
+           shown[j].pageTitle === shown[i].pageTitle) j++;
+    const pageHead = el("th","pcol-page" + (shown[i].extension ? " pcol-ext" : ""), shown[i].pageTitle);
+    pageHead.colSpan = j - i;
+    rowPage.appendChild(pageHead);
+    i = j;
+  }
+  const totalBlank = el("th","pcol-total pcol-page");
+  rowPage.appendChild(totalBlank);
+
+  const nameHead = el("th","pcol-name pcol-sort","Student" + sortArrow(progressSort.key === "displayName" ? "displayName" : "username"));
+  nameHead.title = "Sort by username or by name";
+  nameHead.addEventListener("click", clickNameSort);
+  rowTask.appendChild(nameHead);
+  shown.forEach(t => {
+    const th = el("th","pcol-sort");
+    /* The type is what fits in the column; the page row above already says
+       where it is, so the full title is left for a hover rather than
+       crowding the header. */
+    th.title = t.pageTitle + " \u00b7 " + t.title;
+    th.appendChild(el("span","", t.label + sortArrow(t.id)));
+    th.addEventListener("click", () => clickColumnSort(t.id));
+    const hidden = progressHiddenCols.has(t.id);
+    const eye = el("button","eye-toggle" + (hidden ? " off" : ""), "\u{1F441}");
+    eye.title = hidden ? "Show this column's marks again" : "Hide this column's marks";
+    eye.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (hidden) progressHiddenCols.delete(t.id); else progressHiddenCols.add(t.id);
+      paintProgress();
+    });
+    th.appendChild(eye);
+    rowTask.appendChild(th);
+  });
+  const totalHead = el("th","pcol-total pcol-sort","Total" + sortArrow("total"));
+  totalHead.addEventListener("click", () => clickColumnSort("total"));
+  rowTask.appendChild(totalHead);
+  syncProgressHeaderOffset();
+
+  sorted.forEach(st => {
+    const m = marks[st.username];
+    const tr = el("tr");
+    const name = el("td","pcol-name");
+    name.appendChild(el("b","", st.display_name));
+    name.appendChild(el("span","", st.username));
+    name.addEventListener("click", () => openStudentPreview(st));
+    tr.appendChild(name);
+    shown.forEach(t => {
+      const sc = m.perTask[t.id];
+      const td = el("td","progresscell");
+      /* Hidden by eye rather than by filter: the mark still counts in the
+         total, it is only the one cell that is not for showing right now,
+         a projector in front of the class being the usual reason. */
+      if (progressHiddenCols.has(t.id)) td.appendChild(el("span","none","\u2022\u2022\u2022"));
+      else if (!attempted(m.data, t.id)) td.appendChild(el("span","none","\u2013"));
+      else{
+        const cls = sc.max === 0 ? "none" : sc.got === sc.max ? "yes" : sc.got > 0 ? "part" : "no";
+        const mark = el("span", cls + " score", sc.got + "/" + sc.max);
+        mark.title = "Open " + st.display_name + "\u2019s " + t.label.toLowerCase();
+        mark.addEventListener("click", () => openTaskPreview(st, t));
+        td.appendChild(mark);
+      }
+      tr.appendChild(td);
+    });
+    const total = el("td","pcol-total");
+    total.appendChild(el("b","", m.total.got + "/" + m.total.max));
+    tr.appendChild(total);
+    tbody.appendChild(tr);
+  });
+  paintProgressStats(shown, marks);
+}
+
+/* ---------------- comparing against the rest of the unit ----------------
+   Whether this lesson is ahead of, level with, or behind the one before it
+   in the same unit. Reuses the same catalogue and per-lesson work fetch
+   admin.html's unit-wide progress makes, aimed at one sibling lesson rather
+   than a whole unit of them, so the cost of asking is the same as opening
+   this markbook once more; nothing here is written anywhere. Run once in
+   the background after boot, never blocking the markbook that is already
+   on screen. */
+async function fetchUnitSiblings(){
+  if (unitSiblings !== null || PRACTICE || !lessonJson) return;
+  try{
+    const r = await fetch(API + "/api/catalog", { headers: H(), cache: "no-store" });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "");
+    const mine = (d.lessons || []).find(l => l.lesson_id === lessonId);
+    const unit = mine ? (mine.unit || "") : "";
+    if (!unit || !mine){ unitSiblings = { before: [] }; return; }
+    const assigned = new Set((d.assignments || [])
+      .filter(a => String(a.group_name || "").toLowerCase() === cls.toLowerCase())
+      .map(a => a.lesson_id));
+    const before = (d.lessons || [])
+      .filter(l => l.unit === unit && l.lesson_id !== lessonId && assigned.has(l.lesson_id) &&
+                   (l.position || 0) < (mine.position || 0))
+      .sort((a, b) => (b.position || 0) - (a.position || 0));   // nearest first
+    unitSiblings = { before: before };
+  }catch(e){ unitSiblings = { before: [] }; }
+}
+/* One sibling lesson's class average, worked out the same way this lesson's
+   own is: its own JSON for what counts as a task, its own work rows for
+   what the class did with them. */
+async function siblingProgress(sib){
+  if (siblingCache.has(sib.lesson_id)) return siblingCache.get(sib.lesson_id);
+  let result = null;
+  try{
+    const [lessonR, workR] = await Promise.all([
+      fetch(API + "/api/catalog?lesson=" + encodeURIComponent(sib.lesson_id), { headers: H(), cache: "no-store" }),
+      fetch(API + "/api/teacher/work?lesson=" + encodeURIComponent(sib.lesson_id) +
+            "&group=" + encodeURIComponent(cls), { headers: H(), cache: "no-store" })
+    ]);
+    const lessonD = await lessonR.json(), workD = await workR.json();
+    if (lessonR.ok && workR.ok){
+      const locks = await window.progressMath.fetchLockedPages(API, sib.lesson_id, cls, lessonD.lesson);
+      result = window.progressMath.markRoster(lessonD.lesson, roster, workD.rows || [], locks);
+    }
+  }catch(e){}
+  siblingCache.set(sib.lesson_id, result);
+  return result;
+}
+async function loadComparison(){
+  await fetchUnitSiblings();
+  const prev = unitSiblings.before[0];
+  if (!prev){ comparisonPrev = false; return; }
+  const res = await siblingProgress(prev);
+  comparisonPrev = (res && res.pct !== null) ? { title: prev.title || prev.lesson_id, pct: res.pct } : false;
+}
+
+/* The cheap, whole-lesson numbers underneath the markbook. Nothing here
+   costs more than adding up marks paintProgress had to work out anyway, so
+   it never has a different idea of a mark than the table above it, and it
+   moves with the same pills, the same Include Extension Tasks and the
+   same locked pages, though not with the eye icons: what a mark counts
+   for does not change because it is not being shown right now. */
+function paintProgressStats(shown, marks){
+  const box = $("progressStats");
+  if (!box) return;
+  box.innerHTML = "";
+  const totals = roster.map(st => marks[st.username].total).filter(t => t.max > 0);
+  if (!totals.length) return;
+  const pctOf = (t) => Math.round(100 * t.got / t.max);
+  const pctClass = (p) => p >= 80 ? "yes" : p >= 50 ? "part" : "no";
+  const stat = (big, small, cls) => {
+    const c = el("div","mbstat");
+    c.appendChild(el("b", cls || "", big));
+    c.appendChild(el("span","", small));
+    return c;
+  };
+
+  const pcts = totals.map(pctOf);
+  const avg = Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length);
+  const bands = { high: pcts.filter(p => p >= 80).length,
+                  mid: pcts.filter(p => p >= 50 && p < 80).length,
+                  low: pcts.filter(p => p < 50).length };
+  const attemptedCount = roster.filter(st => shown.some(t => attempted(marks[st.username].data, t.id))).length;
+  const fullCount = totals.filter(t => t.got === t.max).length;
+  const strugglingCount = totals.filter(t => t.got < t.max * 0.5).length;
+
+  box.appendChild(stat(avg + "%", "Class average", pctClass(avg)));
+  /* Against the lesson before this one in the same unit, once it is known:
+     fetched in the background by loadComparison and repainted in when it
+     arrives, so the rest of the stats are never held up waiting for it. */
+  if (comparisonPrev){
+    const diff = avg - comparisonPrev.pct;
+    const arrow = diff > 0 ? "↑" : diff < 0 ? "↓" : "→";
+    box.appendChild(stat(arrow + " " + Math.abs(diff) + "%",
+      "vs " + comparisonPrev.title + " (" + comparisonPrev.pct + "%)",
+      diff > 0 ? "yes" : diff < 0 ? "no" : ""));
+  }
+  box.appendChild(stat(bands.high + " / " + bands.mid + " / " + bands.low, "80%+ · 50–79% · under 50%"));
+  box.appendChild(stat(attemptedCount + " of " + roster.length, "Attempted something"));
+  box.appendChild(stat(String(fullCount), "Got full marks", fullCount ? "yes" : ""));
+  box.appendChild(stat(String(strugglingCount), "Scored under half", strugglingCount ? "no" : ""));
+
+  /* One average per task type, however many columns of it there are, so
+     two checklists on different pages still read as one Coding task
+     figure; the weakest single column is kept apart from that, because
+     two checklists miles apart in how the class did would average into a
+     figure that points at neither of them. */
+  const byLabel = {};
+  let weakest = null;
+  shown.forEach(t => {
+    const b = byLabel[t.label] || (byLabel[t.label] = { got:0, max:0 });
+    let got = 0, max = 0;
+    roster.forEach(st => { const sc = marks[st.username].perTask[t.id]; got += sc.got; max += sc.max; });
+    b.got += got; b.max += max;
+    if (max){
+      const p = Math.round(100 * got / max);
+      if (!weakest || p < weakest.pct) weakest = { t, pct: p };
+    }
+  });
+  if (weakest) box.appendChild(stat(weakest.pct + "%",
+    "Weakest: " + weakest.t.label + " · " + weakest.t.pageTitle, pctClass(weakest.pct)));
+
+  const typesRow = el("div","progress-types");
+  typesRow.appendChild(el("b","","By task type"));
+  const list = el("div","progress-typeavgs");
+  Object.keys(byLabel).forEach(label => {
+    const b = byLabel[label];
+    if (!b.max) return;
+    const p = Math.round(100 * b.got / b.max);
+    list.appendChild(el("span","typeavg " + pctClass(p), label + " " + p + "%"));
+  });
+  typesRow.appendChild(list);
+  box.appendChild(typesRow);
+}
+
+/* What a student's work looks like with nothing else on the page: no
+   comments, no marking. Both work pop-ups hand this the same shape and get
+   the same read-only frame back, from the same hub_inspect key the "View
+   work" tab's own frame uses. */
+function setInspectPayload(st, row){
+  const payload = {
+    lesson: lessonId, idx: 0, json: OFFLINE ? undefined : lessonJson,
+    list: [{ name: st.display_name, username: st.username,
+             data: row ? row.data : {}, feedback: "" }]
+  };
+  try{ localStorage.setItem("hub_inspect", JSON.stringify(payload)); }
+  catch(e){ delete payload.json; localStorage.setItem("hub_inspect", JSON.stringify(payload)); }
+}
+/* The shape behind both work pop-ups: a full-screen frame with its own
+   close button, closable by Escape or by clicking outside it, and an
+   optional bar along the bottom for whatever the caller wants there.
+
+   Built the way author.html's openFullPreview is, rather than through
+   openModal: that one wraps anything past a single child in a scrolling
+   middle, which is right for a form and wrong for an iframe meant to fill
+   the whole thing. */
+/* Closes whichever of these is currently open, if one is. Each call to
+   openWorkPreview builds its own back and its own Escape listener rather
+   than sharing mBack, so without this a second click before the first has
+   closed leaves one stuck behind the other with no way to reach either's
+   close button, and the first's listener leaking silently besides. */
+let shutWorkPreview = null;
+function openWorkPreview(src, frameTitle, buildFoot){
+  if (shutWorkPreview) shutWorkPreview();
+  const back = el("div","modal-back");
+  const box = el("div","modal wide fullprev");
+  const x = el("button","btn-ghost iconbtn modal-x","\u2715");
+  x.title = "Close";
+  const shut = () => {
+    back.remove();
+    document.removeEventListener("keydown", esc);
+    shutWorkPreview = null;
+  };
+  shutWorkPreview = shut;
+  function esc(e){ if (e.key === "Escape") shut(); }
+  x.addEventListener("click", shut);
+  box.appendChild(x);
+  const frame = document.createElement("iframe");
+  frame.className = "fullprev-frame";
+  frame.title = frameTitle;
+  frame.src = src;
+  box.appendChild(frame);
+  if (buildFoot) box.appendChild(buildFoot(shut));
+  back.appendChild(box);
+  back.addEventListener("mousedown", (e) => { if (e.target === back) shut(); });
+  document.addEventListener("keydown", esc);
+  document.body.appendChild(back);
+}
+/* One task, one student, on its own: what clicking a mark opens. The same
+   lesson.html view the "View work" tab already uses, jumped to the right
+   page and told which task to point at. */
+/* The way out of either pop-up into the real marking screen: the same
+   student, on the page this pop-up was about. Left undefined, showStudent
+   falls back to lastStep, the page whoever was looked at before this one
+   was left on, which is the right answer for the summary screen, since
+   that is never a page of its own to jump back to. */
+function addFeedbackFoot(st, pageIndex){
+  return (shut) => {
+    const foot = el("div","fullprev-foot");
+    const btn = el("button","btn-primary","Add feedback");
+    btn.addEventListener("click", () => {
+      shut();
+      const at = roster.findIndex(x => x.username === st.username);
+      if (at >= 0){ idx = at; tab("work"); showStudent(at, pageIndex); }
+    });
+    foot.appendChild(btn);
+    return foot;
+  };
+}
+function openTaskPreview(st, t){
+  setInspectPayload(st, rows.find(r => r.username === st.username) || null);
+  openWorkPreview(
+    "lesson.html?id=" + encodeURIComponent(lessonId) + "&group=" + encodeURIComponent(cls) +
+      "&view=1&embed=1&step=" + t.pageIndex + "&highlight=" + encodeURIComponent(t.id),
+    t.label + " \u00b7 " + st.display_name + " \u00b7 " + t.pageTitle,
+    addFeedbackFoot(st, t.pageIndex));
+}
+/* A whole student's work, on its own: what clicking a name in the markbook
+   opens, on their summary screen since that is the one page that is never
+   any particular task. &group= is what lets that screen's achievement
+   card ask the same question the Progress tab already asked: which pages
+   are actually released to this class, so its own total never counts a
+   page nobody here could have reached. */
+function openStudentPreview(st){
+  setInspectPayload(st, rows.find(r => r.username === st.username) || null);
+  openWorkPreview(
+    "lesson.html?id=" + encodeURIComponent(lessonId) + "&group=" + encodeURIComponent(cls) +
+      "&view=1&embed=1&summary=1",
+    st.display_name + "\u2019s work",
+    addFeedbackFoot(st));
+}
+
+/* ---------------- one student's work ---------------- */
+
+/* Putting a new address on the frame only reloads it if the address has
+   changed, so every student used to carry a timestamp on the end of theirs.
+   That also meant the browser could never reuse the copy of lesson.html it
+   already had: a third of a megabyte down the wire between one child and the
+   next. Navigating the frame's own window reloads it whether the address has
+   changed or not, so the timestamp can go and the cache can do its job. */
+let framedYet = false;
+function frameGo(url){
+  const frame = $("workFrame");
+  framedYet = true;
+  try{
+    if (frame.contentWindow) return frame.contentWindow.location.replace(url);
+  }catch(e){}
+  frame.src = url;
+}
+/* Two students sharing a display name are still two different rows in the
+   picker, so whichever shares it is given as much of their username as
+   tells them apart: a letter first, and a second only if the first one
+   still leaves them alike. Beyond that they are left alike; a class where
+   two students match on both name and the start of their username is not
+   one this is meant to solve on its own.
+
+   Written the way an initial is, not the way a username is: a capital
+   then a lower case letter, with nothing to mark it out as a fragment of
+   something else, since it reads as one no matter what case the real
+   username happens to be in. */
+function pickerDisambig(st, group){
+  if (group.length < 2) return "";
+  let n = 1;
+  while (n < 2 && new Set(group.map(x => (x.username || "").slice(0, n).toLowerCase())).size < group.length) n++;
+  const letters = (st.username || "").slice(0, n).toLowerCase();
+  if (!letters) return "";
+  return " " + letters.charAt(0).toUpperCase() + letters.slice(1);
+}
+function paintPicker(){
+  const sel = $("stuPick");
+  if (!sel) return;             // a single hand-in has nobody to page between
+  sel.innerHTML = "";
+  const byName = {};
+  roster.forEach(st => { (byName[st.display_name] = byName[st.display_name] || []).push(st); });
+  roster.forEach((st, i) => {
+    const o = document.createElement("option");
+    o.value = String(i);
+    const row = rows.find(r => r.username === st.username);
+    const has = PRACTICE ? programsOf(row).length : !!row;
+    o.textContent = st.display_name + pickerDisambig(st, byName[st.display_name]) +
+      (has ? "" : (PRACTICE ? "  \u00b7 no programs" : "  \u00b7 nothing saved"));
+    sel.appendChild(o);
+  });
+  sel.value = String(idx);
+}
+window.addEventListener("message", (e) => {
+  if (e && e.data && typeof e.data.hubWorkStep === "number") lastStep = e.data.hubWorkStep;
+  if (e && e.data && typeof e.data.hubWorkScroll === "number") lastScroll = e.data.hubWorkScroll;
+});
+function showStudent(i, step){
+  if (i < 0 || i >= roster.length) return;
+  if (PRACTICE) return showPrograms(i);
+  /* stay on the same page when moving to the next student */
+  if (step === undefined) step = lastStep;
+  idx = i;
+  paintPicker();
+  const st = roster[i];
+  const row = rows.find(r => r.username === st.username);
+  /* The lesson page reads this to know whose work to put on the screen, and
+     the lesson itself goes with it. The frame is loaded again for every
+     student, and it used to ask the API for the same lesson every time: one
+     round trip to the server, in front of the work, thirty times for a class
+     of thirty. This page already fetched it when it opened. Refresh is what
+     fetches it again, so a lesson edited next door is one press away. */
+  const box = {
+    /* Offline the frame reads the lesson out of the lessons folder and could
+       not use this copy anyway, and that browser's storage is where a
+       student's own work lives. */
+    lesson: lessonId, idx: 0, json: OFFLINE ? undefined : lessonJson,
+    list: [{ name: st.display_name, username: st.username,
+             data: row ? row.data : {}, feedback: row ? (row.feedback || "") : "" }]
+  };
+  try{ localStorage.setItem("hub_inspect", JSON.stringify(box)); }
+  catch(e){
+    /* A long lesson and a page of work together can be more than this
+       browser will keep. The work is the part that cannot be asked for
+       again from inside the frame, so the lesson is what goes. */
+    delete box.json;
+    localStorage.setItem("hub_inspect", JSON.stringify(box));
+  }
+  /* The progress bar in the frame counts the summary as one past the last
+     page, the same as the teacher console does, and posts that number out
+     when it opens. Asking for it again by number would clamp to the last
+     page, so it is asked for by name. */
+  const pages = ((lessonJson && lessonJson.blocks) || []).length;
+  const onSummary = !allPages && step !== undefined && step >= pages;
+  frameGo("lesson.html?id=" + encodeURIComponent(lessonId) + "&group=" + encodeURIComponent(cls) +
+    "&view=1&embed=1" + (allPages ? "&all=1" : "") +
+    (onSummary ? "&summary=1" : "") +
+    (step !== undefined && !allPages && !onSummary ? "&step=" + step : "") +
+    /* the same distance down as well as the same page, so the question being
+       read down the class stays where the eye already is */
+    (lastScroll > 0 ? "&scroll=" + lastScroll : ""));
+  $("fbWho").textContent = st.display_name + " · " + st.username + (row ? "" : ", nothing saved yet");
+  /* a practical assessment is marked by hand, so the boxes appear */
+  paintMarking(st.username);
+  loadFeedback(row);
+  paintFb("idle");
+}
+/* ---------------- one student's practice programs ----------------
+   The sandbox itself, in the frame, reading the programs out of localStorage
+   the way lesson.html reads a hand-in: it is the editor they were written in,
+   so a teacher sees the colouring, the files beside main.py and the console,
+   and can press Run to find out what the program actually does.
+
+   Nothing in the frame writes. What it does do is say which program is open,
+   because that is what the feedback down the right is about. */
+const INSPECT = "hub_sandbox_inspect";
+let progs = [];            // the open student's programs
+let progNotes = {};        // program id -> what has been written about it
+let openProg = "";         // which one the frame is showing
+
+function programsOf(row){
+  const list = (row && row.data && Array.isArray(row.data.programs)) ? row.data.programs : [];
+  return list.filter(p => p && typeof p === "object" && p.id);
+}
+function notesOf(row){
+  try{
+    const all = JSON.parse((row && row.feedback) || "{}") || {};
+    const p = all.programs;
+    return (p && typeof p === "object" && !Array.isArray(p)) ? p : {};
+  }catch(e){ return {}; }
+}
+
+function showPrograms(i){
+  idx = i;
+  paintPicker();
+  const st = roster[i];
+  const row = rows.find(r => r.username === st.username);
+  progs = programsOf(row);
+  progNotes = notesOf(row);
+  /* Whichever they were reading stays open where the next student has one of
+     their own; otherwise the list, which is the honest thing to show when
+     there is nothing in common between two children's programs. */
+  openProg = progs.some(p => p.id === openProg) ? openProg : "";
+  try{
+    localStorage.setItem(INSPECT, JSON.stringify({
+      name: st.display_name, username: st.username,
+      programs: progs, notes: progNotes, open: openProg }));
+  }catch(e){}
+  frameGo("sandbox.html?view=1&embed=1");
+  $("fbWho").textContent = st.display_name + " · " + st.username + (progs.length ? "" : ", no programs yet");
+  $("markWrap").hidden = true;
+  paintProgPick();
+  loadProgFeedback();
+  paintFb("idle");
+}
+
+function paintProgPick(){
+  const wrap = $("progWrap"), sel = $("progPick");
+  if (!wrap || !sel) return;
+  wrap.hidden = false;
+  sel.innerHTML = "";
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = progs.length ? "Choose a program" : "No programs yet";
+  sel.appendChild(none);
+  progs.forEach(p => {
+    const o = document.createElement("option");
+    o.value = p.id;
+    o.textContent = (p.name || "Program") + (progNotes[p.id] ? "  · feedback given" : "");
+    sel.appendChild(o);
+  });
+  sel.value = openProg;
+  sel.disabled = !progs.length;
+  fbBoxes(!!openProg);
+}
+/* The boxes are no use with no program chosen: feedback on a sandbox is
+   feedback on one of the programs in it. */
+function fbBoxes(on){
+  ["fbStrength","fbTarget","fbComment"].forEach(id => { const e = $(id); if (e) e.disabled = !on; });
+  const save = $("saveFb");
+  if (save) save.disabled = !on;
+  $("fbMsg").textContent = on ? "" :
+    (progs.length ? "Open a program to write about it." : "");
+}
+function loadProgFeedback(){
+  const note = progNotes[openProg] || {};
+  $("fbStrength").value = note.strength || "";
+  $("fbTarget").value = note.target || "";
+  $("fbComment").value = note.comment || "";
+  paintBank("Strength"); paintBank("Target");
+  $("fbMsg").textContent = "";
+}
+on("progPick", "change", () => {
+  openProg = $("progPick").value;
+  loadProgFeedback();
+  fbBoxes(!!openProg);
+  paintFb("idle");
+  const frame = $("workFrame");
+  if (frame && frame.contentWindow)
+    frame.contentWindow.postMessage({ hubSandboxShow: openProg }, "*");
+});
+/* and the other way round: the program opened in the frame is the one the
+   boxes are about */
+window.addEventListener("message", (e) => {
+  if (!PRACTICE || !e || !e.data || typeof e.data.hubSandboxOpen !== "string") return;
+  if (e.data.hubSandboxOpen === openProg) return;
+  openProg = e.data.hubSandboxOpen;
+  $("progPick").value = openProg;
+  loadProgFeedback();
+  fbBoxes(!!openProg);
+  paintFb("idle");
+});
+
+async function saveProgFeedback(){
+  const st = roster[idx];
+  if (!st || !openProg) return;
+  paintFb("saving");
+  $("fbMsg").textContent = "";
+  const note = { strength: $("fbStrength").value.trim(),
+                 target: $("fbTarget").value.trim(),
+                 comment: $("fbComment").value.trim() };
+  try{
+    const r = await fetch(API + "/api/teacher/feedback", { method:"POST", headers: HJ(),
+      body: JSON.stringify({ username: st.username, lesson: lessonId, program: openProg,
+                             strength: note.strength, target: note.target, text: note.comment }) });
+    if (!r.ok) throw new Error((await r.json()).error || "Could not save it.");
+    /* Kept here as well, so paging to another student and back shows what was
+       written rather than an empty box until the page is reloaded. */
+    if (note.strength || note.target || note.comment) progNotes[openProg] = note;
+    else delete progNotes[openProg];
+    let row = rows.find(x => x.username === st.username);
+    if (!row){ row = { username: st.username, display_name: st.display_name, data: {} }; rows.push(row); }
+    row.feedback = JSON.stringify({ programs: progNotes });
+    paintProgPick();
+    paintFb("saved");
+  }catch(e){ paintFb("idle"); $("fbMsg").textContent = e.message; }
+}
+
+on("prevStu", "click", () => showStudent(idx - 1));
+on("nextStu", "click", () => showStudent(idx + 1));
+on("stuPick", "change", () => showStudent(parseInt($("stuPick").value, 10) || 0));
+on("viewMode", "click", () => {
+  allPages = !allPages;
+  lastScroll = 0;           // a place on one page means nothing on all of them
+  $("viewMode").textContent = allPages ? "One page at a time" : "All on one page";
+  showStudent(idx);
+});
+on("openPdf", "click", () => {
+  showStudent(idx);
+  window.open("lesson.html?id=" + encodeURIComponent(lessonId) + "&view=1&pdf=1", "_blank");
+});
+/* ---------------- feedback ---------------- */
+function showing(which){ return !!$("fb" + which).value.trim(); }
+function loadFeedback(row){
+  let f = {};
+  if (row && row.feedback){
+    try{ f = JSON.parse(row.feedback); }catch(e){ f = { comment: row.feedback }; }
+  }
+  $("fbComment").value = f.comment || "";
+  /* An assessment marks itself and writes a strength and a target as it does.
+     A teacher is editing those rather than starting from nothing, so whatever
+     the assessment came up with fills the boxes until they write their own. */
+  const auto = (row && marks[row.username]) || {};
+  $("fbStrength").value = f.strength || auto.strength || "";
+  $("fbTarget").value = f.target || auto.target || "";
+  paintBank("Strength"); paintBank("Target");
+  $("fbMsg").textContent = "";
+}
+/* The sentences written in the builder, offered as a starting point. Picking
+   one fills the box, which the teacher can then reword. */
+function bankFor(which){
+  const topics = (lessonJson && lessonJson.topics) || {};
+  const out = [];
+  Object.keys(topics).forEach(k => {
+    const t = topics[k] || {};
+    const line = which === "Strength" ? t.strength : t.target;
+    if (line) out.push({ topic: t.label || k, line: line });
+  });
+  if (which === "Target" && lessonJson && lessonJson.perfectTarget)
+    out.push({ topic: "Full marks", line: lessonJson.perfectTarget });
+  if (which === "Strength" && lessonJson && lessonJson.zeroStrength)
+    out.push({ topic: "Made a start", line: lessonJson.zeroStrength });
+  return out;
+}
+function paintBank(which){
+  const holder = $("bank" + which);
+  if (!holder) return;
+  holder.innerHTML = "";
+  if (!bankFor(which).length) return;
+  const open2 = el("button","btn-ghost bmini2","From your bank\u2026");
+  open2.addEventListener("click", () => bankPopup(which));
+  holder.appendChild(open2);
+}
+
+/* Joins chosen sentences into one that reads properly, rather than a run of
+   full stops. A full sentence keeps its own punctuation; a fragment is
+   joined on with "and". */
+function joinSentences(lines){
+  const tidy = lines.map(t => String(t).trim()).filter(Boolean);
+  if (!tidy.length) return "";
+  if (tidy.length === 1) return tidy[0];
+  const ended = (t) => /[.!?]$/.test(t);
+  let out = "";
+  tidy.forEach((line, i) => {
+    if (!out){ out = line; return; }
+    if (ended(out)){
+      /* a new sentence: capital letter, and keep them apart */
+      out += " " + line.charAt(0).toUpperCase() + line.slice(1);
+    } else {
+      /* still mid-sentence: join with a comma, and "and" before the last */
+      const joiner = (i === tidy.length - 1) ? " and " : ", ";
+      out += joiner + line.charAt(0).toLowerCase() + line.slice(1);
+    }
+  });
+  if (!ended(out)) out += ".";
+  return out;
+}
+
+/* The bank, with a search box and tick boxes so several can be combined. */
+function bankPopup(which){
+  const items = bankFor(which);
+  const chosen = new Set();
+  openModal(box => {
+    box.classList.add("narrow");
+    box.appendChild(el("h2","", which === "Strength" ? "Strengths you have written"
+                                                     : "Targets you have written"));
+    box.appendChild(el("p","modal-text",
+      "Tick as many as you like. They are joined into one sentence, which you can then reword."));
+
+    const find = el("input","searchbox bankfind");
+    find.placeholder = "Search";
+    box.appendChild(find);
+
+    const list = el("div","banklist");
+    box.appendChild(list);
+
+    const preview = el("p","bankpreview","");
+    box.appendChild(preview);
+
+    function refresh(){
+      const text = joinSentences(items.filter(it => chosen.has(it.line)).map(it => it.line));
+      preview.textContent = text;
+      preview.hidden = !text;
+      add.disabled = !text;
+    }
+    function paint(){
+      const term = (find.value || "").trim().toLowerCase();
+      list.innerHTML = "";
+      const shown = items.filter(it =>
+        !term || it.line.toLowerCase().includes(term) || it.topic.toLowerCase().includes(term));
+      if (!shown.length) list.appendChild(el("p","hint","Nothing matches that."));
+      shown.forEach(it => {
+        const row = el("label","opt bankrow");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = chosen.has(it.line);
+        cb.addEventListener("change", () => {
+          if (cb.checked) chosen.add(it.line); else chosen.delete(it.line);
+          refresh();
+        });
+        row.appendChild(cb);
+        const words = el("span","bankwords");
+        words.appendChild(el("b","", it.topic));
+        words.appendChild(el("span","", it.line));
+        row.appendChild(words);
+        list.appendChild(row);
+      });
+    }
+    find.addEventListener("input", paint);
+
+    const add = el("button","btn-primary modal-cta","Add to the box");
+    add.disabled = true;
+    add.addEventListener("click", () => {
+      const target = $("fb" + which);
+      const text = joinSentences(items.filter(it => chosen.has(it.line)).map(it => it.line));
+      target.value = target.value.trim() ? joinSentences([target.value, text]) : text;
+      closeModal();
+      target.focus();
+    });
+    box.appendChild(add);
+    paint(); refresh();
+  });
+}
+/* There is nothing to save feedback against until a program is open, and it
+   is asked here rather than only where the boxes are set up: paintFb runs
+   after that as well as before it, and a plain `disabled = false` in the
+   line below was quietly turning the button back on over a student with no
+   programs at all. */
+function fbLocked(){ return PRACTICE && !openProg; }
+
+/* The Save button says where it is up to itself, the way a student's does,
+   rather than leaving a line of text underneath to be read. It stays saying
+   Saved until part of the feedback is changed. */
+function paintFb(state){
+  const btn = $("saveFb");
+  if (!btn) return;
+  if (state === "saving"){ btn.textContent = "Saving…"; btn.disabled = true; btn.dataset.saved = "no"; }
+  else if (state === "saved"){ btn.textContent = "✓ Saved"; btn.disabled = fbLocked(); btn.dataset.saved = "yes"; }
+  else { btn.textContent = "Save feedback"; btn.disabled = fbLocked(); btn.dataset.saved = "no"; }
+}
+["fbStrength","fbTarget","fbComment","fbScore","fbGrade"].forEach(id => {
+  const e = $(id);
+  if (!e) return;
+  const undo = () => { if ($("saveFb").dataset.saved === "yes") paintFb("idle"); };
+  e.addEventListener("input", undo);
+  e.addEventListener("change", undo);
+});
+
+on("saveFb", "click", () => {
+  /* Practice is not marked and a note on it is not a report: a teacher
+     writing one line about a program somebody made in their own time should
+     not be asked for the other half of it. */
+  if (PRACTICE) return saveProgFeedback();
+  /* Both boxes are on screen, so a missing one is a choice rather than an
+     oversight. Only say something when exactly one has been filled in. */
+  const hasS = !!$("fbStrength").value.trim(), hasT = !!$("fbTarget").value.trim();
+  if (hasS && !hasT) return askMissing("target", "strength");
+  if (hasT && !hasS) return askMissing("strength", "target");
+  saveFeedback();
+});
+function askMissing(missing, given){
+  openModal(box => {
+    box.appendChild(el("h2","", "Add a " + missing + " as well?"));
+    box.appendChild(el("p","modal-text",
+      "You have written a " + given + " but no " + missing + ". Students get the most from having both."));
+    const add = el("button","btn-primary modal-cta","Write a " + missing);
+    add.addEventListener("click", () => {
+      closeModal();
+      $("fb" + (missing === "target" ? "Target" : "Strength")).focus();
+    });
+    const anyway = el("button","btn-ghost modal-stay","Save feedback without " + missing);
+    anyway.addEventListener("click", () => { closeModal(); saveFeedback(); });
+    box.appendChild(add); box.appendChild(anyway);
+  });
+}
+let marks = {};
+function markFor(user){ return marks[user] || null; }
+/* A practical is marked either out of a total or with a grade, whichever the
+   lesson was built with. */
+function usesRubric(){ return !!(lessonJson && lessonJson.practical && lessonJson.marking === "rubric"); }
+function paintMarking(user){
+  const practical = !!(lessonJson && lessonJson.practical);
+  $("markWrap").hidden = !practical;
+  if (!practical) return;
+  const mk = markFor(user);
+  const rubric = usesRubric();
+  $("scoreRow").hidden = rubric;
+  $("fbGrade").hidden = !rubric;
+  $("markLabel").textContent = rubric ? "Grade" : "Mark";
+  if (rubric){
+    const sel = $("fbGrade");
+    sel.innerHTML = "";
+    const none = document.createElement("option");
+    none.value = ""; none.textContent = "Not graded yet";
+    sel.appendChild(none);
+    (lessonJson.rubric || []).forEach(g => {
+      const o = document.createElement("option");
+      o.value = g.name; o.textContent = g.name;
+      sel.appendChild(o);
+    });
+    sel.value = mk && mk.grade ? mk.grade : "";
+    showGradeHelp();
+  } else {
+    const total = lessonJson.outOf || 20;
+    $("outOfLabel").textContent = "out of " + total;
+    $("fbScore").max = String(total);
+    $("fbScore").value = mk && typeof mk.score === "number" ? mk.score : "";
+    $("gradeHelp").textContent = "";
+  }
+}
+function showGradeHelp(){
+  const pick = $("fbGrade").value;
+  const g = ((lessonJson && lessonJson.rubric) || []).find(x => x.name === pick);
+  $("gradeHelp").textContent = g && g.description ? g.description : "";
+}
+on("fbGrade", "change", showGradeHelp);
+async function saveFeedback(){
+  const st = roster[idx];
+  if (!st) return;
+  if (OFFLINE) return handBack();
+  paintFb("saving");
+  $("fbMsg").textContent = "";
+  try{
+    const r = await fetch(API + "/api/teacher/feedback", { method:"POST", headers: HJ(),
+      body: JSON.stringify({ username: st.username, lesson: lessonId,
+                             strength: showing("Strength") ? $("fbStrength").value : "",
+                             target: showing("Target") ? $("fbTarget").value : "",
+                             text: $("fbComment").value }) });
+    if (!r.ok) throw new Error((await r.json()).error || "Could not save it.");
+    /* the mark or grade goes with the feedback */
+    if (lessonJson && lessonJson.practical){
+      const rubric = usesRubric();
+      const grade = rubric ? $("fbGrade").value : "";
+      const total = lessonJson.outOf || 20;
+      const score = rubric ? 0 : (parseInt($("fbScore").value, 10) || 0);
+      const worth = rubric ? 1 : total;
+      if (rubric ? grade : $("fbScore").value !== ""){
+        const mr = await fetch(API + "/api/teacher/set-mark", { method:"POST", headers: HJ(),
+          body: JSON.stringify({ username: st.username, lesson: lessonId, overrides: {},
+                                 score: score, outOf: worth, grade: grade,
+                                 strength: showing("Strength") ? $("fbStrength").value : "",
+                                 target: showing("Target") ? $("fbTarget").value : "" }) });
+        if (!mr.ok) throw new Error((await mr.json()).error || "Could not save the mark.");
+        marks[st.username] = { score: score, outOf: worth, grade: grade };
+      }
+    }
+    let row = rows.find(x => x.username === st.username);
+    if (!row){ row = { username: st.username, display_name: st.display_name, data: {} }; rows.push(row); }
+    row.feedback = JSON.stringify({
+      strength: showing("Strength") ? $("fbStrength").value : "",
+      target: showing("Target") ? $("fbTarget").value : "",
+      comment: $("fbComment").value });
+    paintFb("saved");
+  }catch(e){ paintFb("idle"); $("fbMsg").textContent = e.message; }
+}
+
+/* ---------------- who opened this link ----------------
+   Resolves true for a teacher and false for the student it belongs to. The
+   code is a staff-room word rather than a password: it keeps a class out of
+   the marking screen, and it sits in this file where anyone could read it, so
+   it is never the only thing protecting anything. */
+const TEACHER_CODE = "memory4";
+
+function whoIsThis(name){
+  return new Promise(resolve => {
+    const back = el("div","modal-back whogate no-print");
+    const box = el("div","modal narrow");
+    box.appendChild(el("h2","","Who are you?"));
+
+    const mine = el("button","btn-primary modal-cta", name);
+    mine.addEventListener("click", () => { back.remove(); resolve(false); });
+    box.appendChild(mine);
+
+    const asTeacher = el("button","btn-ghost modal-stay","Teacher");
+    box.appendChild(asTeacher);
+
+    /* The code box only appears once Teacher is pressed, so a student is not
+       invited to have a go at it. */
+    const codeWrap = el("div","field whocode");
+    codeWrap.hidden = true;
+    codeWrap.appendChild(el("label","","Teacher code"));
+    const code = el("input");
+    code.type = "password"; code.autocomplete = "off";
+    codeWrap.appendChild(code);
+    const err = el("p","err","");
+    const go = el("button","btn-primary wide","Open the marking view");
+
+    const check = () => {
+      if (code.value.trim().toLowerCase() === TEACHER_CODE){ back.remove(); resolve(true); return; }
+      err.textContent = "That code is not right.";
+      code.select();
+    };
+    go.addEventListener("click", check);
+    code.addEventListener("keydown", (e) => { if (e.key === "Enter") check(); });
+    code.addEventListener("input", () => { err.textContent = ""; });
+    codeWrap.appendChild(err);
+    codeWrap.appendChild(go);
+    box.appendChild(codeWrap);
+
+    asTeacher.addEventListener("click", () => {
+      codeWrap.hidden = false;
+      asTeacher.hidden = true;
+      setTimeout(() => code.focus(), 30);
+    });
+
+    back.appendChild(box);
+    document.body.appendChild(back);
+    setTimeout(() => mine.focus(), 30);
+  });
+}
+
+/* Their own work, as they last left it, with no marking anywhere near it. */
+function openStudentView(){
+  const url = new URL("lesson.html", location.href);
+  url.search = "?id=" + encodeURIComponent(lessonId);
+  url.hash = location.hash.slice(1);
+  location.replace(url.href);
+}
+
+/* ---------------- handing marked work back (no server) ----------------
+   There is nowhere to save it to, so the marking goes into a new link and
+   the student opens that. It carries their work as well as the marking, so
+   what comes back is the whole thing rather than a note about it. */
+async function handBack(){
+  const st = roster[idx];
+  const row = rows.find(x => x.username === st.username) || {};
+  const fb = {
+    strength: showing("Strength") ? $("fbStrength").value : "",
+    target: showing("Target") ? $("fbTarget").value : "",
+    comment: $("fbComment").value
+  };
+  const box = { n: st.display_name, l: lessonId, d: row.data || {}, fb: fb };
+
+  if (lessonJson && lessonJson.practical){
+    const rubric = usesRubric();
+    const grade = rubric ? $("fbGrade").value : "";
+    const total = lessonJson.outOf || 20;
+    if (rubric ? grade : $("fbScore").value !== ""){
+      box.mk = { score: rubric ? 0 : (parseInt($("fbScore").value, 10) || 0),
+                 outOf: rubric ? 1 : total, grade: grade };
+      marks[st.username] = box.mk;
+    }
+  }
+  if (markOverrides) box.ov = markOverrides;
+  if (Object.keys(manualTicks).length) box.mt = manualTicks;
+  row.feedback = JSON.stringify(fb);
+
+  paintFb("saving");
+  $("fbMsg").textContent = "";
+  try{
+    const blob = await window.workLink.pack(box);
+    const url = new URL("lesson.html", location.href);
+    url.search = "?id=" + encodeURIComponent(lessonId);
+    url.hash = "f=" + blob;
+    markedLink = url.href;
+    if (markedLink.length > window.workLink.MAX){
+      paintFb("idle");
+      $("fbMsg").textContent = "That is too long to send as a link. Shorten the feedback.";
+      return;
+    }
+    paintFb("saved");
+    showMarkedLink();
+  }catch(e){ paintFb("idle"); $("fbMsg").textContent = "The link could not be made."; }
+}
+
+function showMarkedLink(){
+  let copied = false;
+  try{ navigator.clipboard.writeText(markedLink); copied = true; }catch(e){}
+  openModal(box => {
+    box.appendChild(el("h2","","Send this back"));
+    box.appendChild(el("p","modal-text",
+      roster[idx].display_name + " opens this to see their marked work."));
+    const field = el("input");
+    field.type = "text"; field.className = "worklink"; field.readOnly = true;
+    field.value = markedLink;
+    box.appendChild(field);
+    const note = el("p","handin");
+    if (copied){ note.dataset.state = "done"; note.textContent = "Copied \u2713"; }
+    box.appendChild(note);
+    const copy = el("button","btn-primary modal-cta", copied ? "Copy it again" : "Copy the link");
+    copy.addEventListener("click", async () => {
+      try{
+        await navigator.clipboard.writeText(markedLink);
+        note.dataset.state = "done"; note.textContent = "Copied \u2713";
+        copy.textContent = "Copy it again";
+      }catch(e){
+        field.focus(); field.select();
+        note.dataset.state = ""; note.textContent = "Press Ctrl and C to copy it.";
+      }
+    });
+    box.appendChild(copy);
+    const done = el("button","btn-ghost modal-stay","Done");
+    done.addEventListener("click", closeModal);
+    box.appendChild(done);
+    setTimeout(() => { field.focus(); field.select(); }, 30);
+  });
+}
+
+/* Marks the teacher changed question by question, sent up from the viewer. */
+let markOverrides = null;
+/* and the checklist lines they ticked off by hand */
+let manualTicks = {};
+window.addEventListener("message", (e) => {
+  if (!e || !e.data) return;
+  if (e.data.hubMarks) markOverrides = e.data.hubMarks;
+  /* Checklist lines only a teacher can judge, ticked in the viewer. Kept by
+     task so several coding tasks in one lesson do not overwrite each other. */
+  if (e.data.hubManual){
+    const m = e.data.hubManual;
+    if (m.id){ manualTicks[m.id] = m.flags || {}; }
+  }
+  /* An assessment marks itself and writes its own strength and target. They
+     arrive here so a teacher opens the boxes already holding them, ready to
+     be edited rather than written from nothing. Anything already typed, or
+     already saved against this student, is left alone. */
+  if (e.data.hubST){
+    const st = e.data.hubST;
+    if (st.strength && !$("fbStrength").value.trim()) $("fbStrength").value = st.strength;
+    if (st.target && !$("fbTarget").value.trim()) $("fbTarget").value = st.target;
+  }
+});
+
+if (window.initSettings) initSettings(null);
+boot();
+</script>
+</body>
+</html>

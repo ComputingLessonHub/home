@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Computing KS3</title>
+<link rel="stylesheet" href="style.css">
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<script src="config.js"></script>
+<script src="lessonfile.js"></script>
+<script src="lessonorder.js"></script>
+<script src="practice.js"></script>
+<script src="settings.js"></script>
+</head>
+<body>
+
+<div class="homebar">
+  <div class="title">Computing KS3</div>
+  <button class="btn-ghost iconbtn" id="helpBtn" title="Help" aria-label="Help" hidden>?</button>
+  <button class="btn-ghost settings-btn" id="setBtn"><span class="ico">&#9881;&#65038;</span><span class="lbl"> Settings</span></button>
+  <div class="auth" id="auth"></div>
+</div>
+
+<div class="page">
+
+  <div class="masthead">
+    <p class="eyebrow">Computing</p>
+    <h1 id="headline">Sign in</h1>
+  </div>
+
+  <section class="station" id="loginCard">
+    <div class="grid3">
+      <div><label for="u">Username</label><input type="text" id="u" autocomplete="username"></div>
+      <div><label for="p">Password</label><input type="password" id="p" autocomplete="current-password"></div>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn-primary" id="loginBtn">Sign in</button>
+      <button class="crumb" id="forgotBtn" style="margin-left:14px">Forgot password?</button>
+      <span class="err" id="loginErr" role="alert"></span>
+    </div>
+    <p class="hint" id="loginNote" style="margin:12px 0 0">First time? Leave the password box empty and press Sign in.</p>
+  </section>
+
+  <div class="tabs" id="tabs" hidden>
+    <button class="on" id="tabLessons">Lessons</button>
+    <button id="tabResults">Assessments &amp; STAR Feedback</button>
+    <button id="tabPractice">Practice</button>
+    <button class="btn-ghost iconbtn refresh" id="refTab" title="Check for anything new">&#8635;</button>
+  </div>
+  <div id="view-lessons" hidden>
+    <div class="subtabs">
+      <button class="on" id="tabActive">Active</button>
+      <button id="tabDone">Past</button>
+    </div>
+    <div id="lessonList"><div class="loading mid"><div class="load-dots"><span></span><span></span><span></span></div><span>Loading your lessons</span></div></div>
+  </div>
+  <div id="view-results" hidden>
+    <div id="resultList"><p class="hint"></p></div>
+  </div>
+  <!-- Extra things to have a go at, set by nobody and marked by nobody.
+       What is on offer is listed in practice.js. -->
+  <div id="view-practice" hidden>
+    <p class="hint" style="margin:0 0 18px">Extra activities to practise on your own.
+      Nothing here is marked or handed in.</p>
+    <div id="practiceList"></div>
+  </div>
+
+</div>
+
+<!-- Only offered while nobody is signed in. Half of it is about signing in,
+     and the other half clears this browser out, which is not something to put
+     within reach of a child in the middle of a lesson. -->
+<div class="modal-back no-print" id="helpModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2 style="margin-top:0">Help</h2>
+    <div class="modal-scroll">
+      <!-- Read through rather than glanced at, so it is ranged left under its
+           heading instead of centred the way a one line pop-up message is. -->
+      <div class="set-group" style="text-align:left">
+        <span class="set-label">How to sign in</span>
+        <p class="modal-text">Type in your computer username, and then a password you have set.</p>
+        <p class="modal-text">If this is your first time, leave the password box empty and press Sign in.
+          You will be asked to pick a password of your own.</p>
+        <p class="modal-text">If you have forgotten your password, press Forgot password and put your
+          hand up, so your teacher can let you back in.</p>
+      </div>
+      <div class="set-group">
+        <span class="set-label">Something not working?</span>
+        <button class="btn-ghost" id="helpFix">Fix problems on this device</button>
+        <p class="hint" id="helpFixMsg" style="margin-top:10px"></p>
+        <p class="subnote">This clears anything left over in this browser and loads the page again.
+          Your saved work is not deleted.</p>
+      </div>
+    </div>
+    <button class="btn-primary modal-cta" id="helpDone">Close</button>
+  </div>
+</div>
+
+<div class="modal-back no-print" id="sayModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2 id="sayTitle" style="margin-top:0"></h2>
+    <p class="modal-text" id="sayText"></p>
+    <button class="btn-primary modal-cta" id="sayOk">OK</button>
+  </div>
+</div>
+
+<div class="modal-back no-print" id="resetModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <div id="rsStep1">
+      <h2 style="margin-top:0">Reset your password</h2>
+      <p class="modal-text" id="rsWho"></p>
+      <div class="field"><label for="rp1">New password (12–25 characters)</label><input type="password" id="rp1" autocomplete="new-password"></div>
+      <div class="field"><label for="rp2">Type it again</label><input type="password" id="rp2" autocomplete="new-password"></div>
+      <p class="subnote">It must be at least 12 characters long.</p>
+      <button class="btn-primary modal-cta" id="rsGo">Update password</button>
+      <button class="btn-ghost modal-stay" id="rsCancel">Cancel</button>
+      <p class="hint" id="rsMsg" style="margin-top:10px"></p>
+    </div>
+    <div id="rsStep2" hidden>
+      <h2 style="margin-top:0">Waiting for your teacher</h2>
+      <div class="load-dots" style="margin:18px 0"><span></span><span></span><span></span></div>
+      <p class="modal-text">Put your hand up, your teacher needs to approve this. Keep this window open.</p>
+      <p class="handin" id="rsCount"></p>
+      <button class="btn-ghost modal-stay" id="rsGiveUp">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-back no-print" id="pwModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2 style="margin-top:0">Choose your password</h2>
+    <p class="modal-text" id="pwWho"></p>
+    <div class="field"><label for="np1">New password (12–25 characters)</label><input type="password" id="np1" autocomplete="new-password"></div>
+    <div class="field"><label for="np2">Type it again</label><input type="password" id="np2" autocomplete="new-password"></div>
+    <p class="subnote">It must be at least 12 characters long. Keep it to yourself.</p>
+    <button class="btn-primary modal-cta" id="npGo">Save my password</button>
+    <p class="hint" id="npMsg" style="margin-top:10px"></p>
+  </div>
+</div>
+
+<script>
+const API = (window.HUB && window.HUB.API) || "";
+const OFFLINE = !!(window.HUB && window.HUB.OFFLINE);
+const ready = !(window.HUB && window.HUB.OFFLINE) && API && API.indexOf("PASTE_") !== 0;
+const $ = (id) => document.getElementById(id);
+/* The order lessons are listed in, from lessonorder.js. A list keeps the
+   order it arrived in if that file did not, so one missing script leaves a
+   list in an odd order rather than leaving it empty. */
+const inOrder = (list, titleFor) => window.lessonOrder ? window.lessonOrder.sort(list, titleFor) : list;
+
+function el(tag, cls, text){ const e = document.createElement(tag); if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text; return e; }
+/* The waiting dots, the same three the lesson screen uses, for a list that is
+   still on its way. A plain "Loading" line read as if the page had finished
+   and there was simply nothing in the list. */
+function wait(box, what){
+  const b = typeof box === "string" ? $(box) : box;
+  if (!b) return null;
+  b.innerHTML = "";
+  const d = el("div","loading mid");
+  const dots = el("div","load-dots");
+  dots.appendChild(el("span")); dots.appendChild(el("span")); dots.appendChild(el("span"));
+  d.appendChild(dots);
+  d.appendChild(el("span","", what || "Loading"));
+  b.appendChild(d);
+  return b;
+}
+/* wiring a button that isn't there should not stop the rest of the page */
+function on(id, ev, fn){
+  const e = document.getElementById(id);
+  if (!e){ console.warn("Nothing on the page with id:", id); return; }
+  e.addEventListener(ev, fn);
+}
+
+/* Which tab is open. Declared up here because signing in shows that tab and
+   hides the rest, and renderAuth runs before the rest of this script has been
+   read: a `let` further down is not there yet when it is asked for. */
+let openTab = "lessons";
+/* The sandbox sends a student back here with ?tab=practice on the address, so
+   they land on the list they came from rather than on their lessons. */
+try{
+  if (new URLSearchParams(location.search).get("tab") === "practice") openTab = "practice";
+}catch(e){}
+
+/* Nothing about lessons is shown until a student has signed in.
+   One view at a time, rather than every view unhidden at once: they were all
+   empty until something was loaded into them, so nothing showed, and the
+   moment a tab had a word of its own on it that stopped being true. */
+function signedInView(inYet){
+  const tabs = $("tabs");
+  if (tabs) tabs.hidden = !inYet;
+  ["view-lessons","view-results","view-practice"].forEach(id => {
+    const e = $(id);
+    if (e) e.hidden = true;
+  });
+  if (inYet){ switchTab(openTab); return; }
+  const box = $("lessonList");
+  if (box) box.innerHTML = "";
+}
+
+/* ---------- home without a server ----------
+   Lessons are handed out as links that open straight into the lesson, so
+   this page is only the way back in when a link has not reached somebody:
+   they type the lesson's four digit code and go there. There is no list to
+   browse, no sign in, and nothing here knows their name — the lesson page
+   asks for that, because that is where the work happens. */
+function offlineHome(){
+  ["tabs","view-lessons","view-results","view-practice"].forEach(id => { const e = $(id); if (e) e.hidden = true; });
+  $("auth").innerHTML = "";
+  $("headline").textContent = "Open a lesson";
+  const card = $("loginCard");
+  card.hidden = false;
+  card.className = "station codepanel";
+  card.innerHTML = "";
+
+  const field = el("div","field");
+  field.appendChild(el("label","","Lesson code"));
+  const box = document.createElement("input");
+  box.type = "text";
+  box.id = "codeIn";
+  box.className = "codebox";
+  box.inputMode = "numeric";
+  box.maxLength = 4;
+  box.autocomplete = "off";
+  box.placeholder = "0000";
+  field.appendChild(box);
+  card.appendChild(field);
+
+  const msg = el("p","err","");
+  const go = el("button","btn-primary","Open lesson");
+  go.style.marginTop = "6px";
+
+  const open = async () => {
+    const code = box.value.replace(/\D/g, "");
+    if (code.length !== 4){ msg.textContent = "Lesson codes are four numbers."; box.focus(); return; }
+    msg.textContent = "";
+    go.disabled = true; go.textContent = "Looking…";
+    try{
+      const found = window.lessonFile.byCode(await window.lessonFile.load(true), code);
+      if (!found){
+        msg.textContent = "No lesson has the code " + code + ". Check it with your teacher.";
+        box.select();
+        return;
+      }
+      location.href = "lesson.html?id=" + encodeURIComponent(found.id);
+    }catch(e){
+      msg.textContent = "The lesson list could not be read. Tell your teacher.";
+    }finally{
+      go.disabled = false; go.textContent = "Open lesson";
+    }
+  };
+  go.addEventListener("click", open);
+  /* Only numbers go in, so a stray letter cannot sit there looking right. */
+  box.addEventListener("input", () => {
+    const only = box.value.replace(/\D/g, "").slice(0, 4);
+    if (only !== box.value) box.value = only;
+    msg.textContent = "";
+  });
+  box.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); });
+  card.appendChild(go);
+  card.appendChild(msg);
+  setTimeout(() => box.focus(), 30);
+}
+
+function renderAuth(){
+  const name = localStorage.getItem("hub_name");
+  const help = $("helpBtn");
+  if (OFFLINE){ offlineHome(); return; }
+  if (name && localStorage.getItem("hub_token")){
+    if (help) help.hidden = true;
+    $("auth").innerHTML = '<span class="who"><b></b></span> <button class="btn-ghost" id="outBtn"><span class="ico">&#9099;</span><span class="lbl"> Sign out</span></button>';
+    $("auth").querySelector("b").textContent = name;
+    on("outBtn", "click", () => {
+      ["hub_token","hub_name","hub_group"].forEach(k => localStorage.removeItem(k));
+      /* Not only the token. A teacher sign-in left on this machine goes stale
+         when the key changes or a second factor is switched on, and after that
+         the server refused the whole of a lesson request rather than answering
+         it as a student's: the list below still filled, being asked for with no
+         sign-in at all, but opening a finished lesson from Past said it could
+         not be found. Signing out used to leave it sitting there, which is why
+         signing out and back in never fixed it. Saved work still stays: the
+         same child coming back keeps working without waiting. */
+      try{ window.hubClearStrays(); }catch(e){}
+      forgetEverything();
+      renderAuth();
+    });
+    $("loginCard").hidden = true;
+    const hour = new Date().getHours();
+    const part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+    $("headline").textContent = part + ", " + name.split(" ")[0];
+    signedInView(true);
+  } else {
+    $("auth").innerHTML = "";
+    if (help) help.hidden = false;
+    $("loginCard").hidden = false;
+    $("headline").textContent = "Sign in";
+    signedInView(false);
+  }
+}
+
+/* ---- the help pop-up, on the sign-in page only ---- */
+on("helpBtn", "click", () => { $("helpModal").hidden = false; $("helpDone").focus(); });
+on("helpDone", "click", () => { $("helpModal").hidden = true; $("helpBtn").focus(); });
+$("helpModal").addEventListener("mousedown", (e) => {
+  if (e.target === $("helpModal")) $("helpModal").hidden = true;
+});
+/* The way out of anything this machine is holding that stops it working: a
+   teacher sign-in gone stale is the one that has actually happened, and it
+   made the server refuse a student's lesson requests on that machine alone.
+   Reached only from the sign-in page, so a child clearing things out has
+   already left their lesson rather than being sat in the middle of one. */
+on("helpFix", "click", () => {
+  const btn = $("helpFix");
+  btn.disabled = true;
+  $("helpFixMsg").textContent = "All tidied up. Loading the page again…";
+  try{ window.hubClearStrays(); }catch(e){}
+  setTimeout(() => location.reload(), 700);
+});
+renderAuth();
+
+on("loginBtn", "click", async () => {
+  $("loginErr").textContent = "";
+  if (!ready){ $("loginErr").textContent = "Site not connected to its server yet (config.js)."; return; }
+  try{
+    const r = await fetch(API + "/api/login", {
+      method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ username: $("u").value, password: $("p").value })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Sign-in failed.");
+    /* Shared computers: if this is a DIFFERENT student from the last one to
+       sign in here, drop the cached work so nobody sees someone else's answers.
+       (Signing out deliberately leaves the cache alone, the same student
+       coming back keeps working offline-fast.) */
+    const uname = $("u").value.trim().toLowerCase();
+    if (localStorage.getItem("hub_user") !== uname) clearStudentCache();
+    localStorage.setItem("hub_user", uname);
+    forgetEverything();          // never inherit the last student's data
+    localStorage.setItem("hub_token", d.token);
+    localStorage.setItem("hub_name", d.name);
+    localStorage.setItem("hub_group", d.group || "");
+    renderAuth();
+    if (d.mustSet) forcePassword(d.name);
+    else loadLessons();
+  }catch(e){ $("loginErr").textContent = e.message; }
+});
+on("p", "keydown", (e) => { if (e.key === "Enter") $("loginBtn").click(); });
+
+/* housekeeping: clear stored work for retired or stale lessons */
+const MAX_AGE_DAYS = 60;
+function pruneStorage(validIds){
+  const keep = new Set(validIds.map(id => "hub_work_" + id));
+  const cutoff = Date.now() - MAX_AGE_DAYS * 86400000;
+  const doomed = [];
+  for (let i = 0; i < localStorage.length; i++){
+    const k = localStorage.key(i);
+    if (!k || k.indexOf("hub_work_") !== 0) continue;
+    if (!keep.has(k)){ doomed.push(k); continue; }
+    try{
+      const d = JSON.parse(localStorage.getItem(k));
+      if (d.__saved && new Date(d.__saved).getTime() < cutoff) doomed.push(k);
+    }catch(e){ doomed.push(k); }
+  }
+  doomed.forEach(k => localStorage.removeItem(k));
+}
+
+let lessonTitles = {};
+let catalogue = null;      // what the teacher has published, and in which unit
+let lockedLessons = new Set();
+let doneLessons = new Set();
+let showing = "active";
+
+/* The lesson FILES stay on GitHub Pages (titles, descriptions, tasks); the
+   database only says which are published, which unit they belong to and what
+   is locked for this class. */
+let lessonsLoaded = false;
+async function loadLessons(force){
+  if (OFFLINE) return;              // no list to browse, only the code box
+  if (lessonsLoaded && !force){ paintLessons(lastById); return; }
+  /* Only count it as loaded once lessons have actually arrived. Marking it
+     loaded after a fetch that returned early, or failed, left the list empty
+     for the rest of the visit. */
+  const got = await fetchLessons();
+  lessonsLoaded = !!got;
+}
+let lastById = {};
+async function fetchLessons(){
+  let loadedOk = false;
+  const box = $("lessonList");
+  const token = localStorage.getItem("hub_token");
+  if (!token){ box.innerHTML = ""; return false; }               // signing in comes first
+  wait(box, "Loading your lessons");
+  const group = localStorage.getItem("hub_group") || "";
+  /* All three at once. Neither the locked list nor the finished list needs
+     anything from the catalogue, and asked for in turn they made this three
+     round trips deep, so a child at the start of a lesson watched the dots
+     for three times as long as they had to. Each one is given something to
+     do with a failure as it starts rather than later, or a refusal that
+     arrives while another is still in the air has nowhere to go.
+
+     Every lesson comes from the database. The lessons folder belongs to
+     offline mode, and this list is never shown there, so nothing here reads
+     it: a file left behind from a spell offline must not put a lesson in
+     front of a class that was never published to them. */
+  const catalogueComing = fetch(API + "/api/catalog" +
+    (group ? "?group=" + encodeURIComponent(group) : ""), { cache: "no-store" })
+    .then(r => r.json());
+  const lockedComing = (ready && token && group)
+    ? fetch(API + "/api/release?all=1&group=" + encodeURIComponent(group), { cache: "no-store" })
+        .then(r => r.json()).catch(() => null)
+    : Promise.resolve(null);
+  const doneComing = (ready && token)
+    ? fetch(API + "/api/work?done=1", { headers: { Authorization: "Bearer " + token }, cache: "no-store" })
+        .then(r => r.json()).catch(() => null)
+    : Promise.resolve(null);
+  try{
+    catalogue = await catalogueComing;
+
+    const byId = {};
+    (catalogue.lessons || []).forEach(c => {
+      byId[c.lesson_id] = { id: c.lesson_id, title: c.title || c.lesson_id,
+                            description: c.description || "" };
+      lessonTitles[c.lesson_id] = byId[c.lesson_id].title;
+    });
+    /* prune only once we know every valid id, or work on builder-made lessons
+       would be thrown away here */
+    try{ pruneStorage(Object.keys(byId)); }catch(e){}
+
+    lockedLessons = new Set();
+    const rel = await lockedComing;
+    if (rel) (rel.rows || []).forEach(r => { if (r.lessonLocked) lockedLessons.add(r.lesson); });
+
+    doneLessons = new Set();
+    Object.keys(byId).forEach(id => {         // this machine's own record
+      try{ const w = JSON.parse(localStorage.getItem("hub_work_" + id) || "null"); if (w && w.__done) doneLessons.add(id); }catch(e){}
+    });
+    const fin = await doneComing;             // and the authoritative one
+    if (fin) (fin.done || []).forEach(id => doneLessons.add(id));
+    lastById = byId;
+    loadedOk = true;
+    paintLessons(byId);
+  }catch(e){
+    console.error("lesson list failed:", e);
+    box.innerHTML = '<p class="hint">Could not load the lesson list. Pull down or press refresh to try again.</p>';
+  }
+  return loadedOk;
+}
+
+/* Closing dates seen so far, lesson id to date. The tab a lesson belongs in
+   is worked out from whatever the catalogue sent this time, and an answer
+   that came back with no dates on it at all (a database a column behind, so
+   the query fell back to one that does not ask for them) put every closed
+   lesson back on the home page and left it there. Once a lesson has been seen
+   to have a closing date, that date is remembered, so closed stays closed.
+   A date the catalogue does send always wins, which is what lets a teacher
+   push a closing date back and have the lesson return to Active. */
+const CLOSE_KEY = "hub_close";
+let closeDates = {};
+try{ closeDates = JSON.parse(localStorage.getItem(CLOSE_KEY) || "{}") || {}; }catch(e){ closeDates = {}; }
+function rememberCloses(cat, trustThis){
+  const fresh = {};
+  cat.forEach(c => {
+    /* An answer with dates in it is the whole truth: a lesson without one has
+       had its closing date taken off, so the old one is forgotten too.
+       An answer with no dates anywhere tells us nothing, so nothing is lost. */
+    const shut = trustThis ? (c.close_on || "") : (c.close_on || closeDates[c.lesson_id] || "");
+    if (shut) fresh[c.lesson_id] = shut;         // lessons no longer listed drop out
+  });
+  closeDates = fresh;
+  try{ localStorage.setItem(CLOSE_KEY, JSON.stringify(fresh)); }catch(e){}
+}
+
+/* The school's own day, not UTC. A closing date is a date on a timetable, and
+   through the summer the UTC day is still yesterday's until one in the
+   morning, which is the same day the console works out. */
+function todayHere(){
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function paintLessons(byId){
+  const box = $("lessonList"); box.innerHTML = "";
+  const cat = (catalogue && catalogue.lessons) || [];
+  // published, not locked for this class, and known in the lesson files
+  let visible = cat.filter(c => byId[c.lesson_id] && !lockedLessons.has(c.lesson_id));   // the server already filtered by class
+  /* A lesson is in the past once its closing date has gone by, or once the
+     student has finished it. Closed lessons can still be opened and edited.
+     Half finished work does not hold one back: the date closes it either way. */
+  const today = todayHere();
+  /* A remembered date is only used when this answer carried no dates at all.
+     Where the catalogue does have them, a lesson without one is a lesson
+     published without a closing date, and it stays where it is. */
+  const anyDates = cat.some(c => c.close_on);
+  const closeOf = (c) => c.close_on || (anyDates ? "" : (closeDates[c.lesson_id] || ""));
+  const isPast = (c) => { const shut = closeOf(c); return (shut && shut < today) || doneLessons.has(c.lesson_id); };
+  rememberCloses(cat, anyDates);
+  visible = visible.filter(c => showing === "done" ? isPast(c) : !isPast(c));
+
+  if (!visible.length){
+    box.innerHTML = '<p class="hint">' + (showing === "done"
+      ? "Nothing here yet, lessons move here once they close, or once you finish them."
+      : (cat.length ? "No lessons are open right now. Your teacher will publish them when you need them."
+                    : "No lessons have been published yet.")) + '</p>';
+    return;
+  }
+
+  // group by unit, in the teacher's unit order
+  const unitOrder = ((catalogue && catalogue.units) || []).map(u => u.name);
+  const groups = {};
+  visible.forEach(c => { (groups[c.unit || ""] = groups[c.unit || ""] || []).push(c); });
+  const names = Object.keys(groups).sort((a, b) => {
+    const ia = unitOrder.indexOf(a), ib = unitOrder.indexOf(b);
+    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b);
+  });
+
+  names.forEach((unit, unitIndex) => {
+    /* Past work piles up over a year, so each unit folds away. The one most
+       recently finished is left open; the rest start closed. */
+    const foldable = showing === "done" && unit;   // the Past tab
+    let body = box;
+    if (foldable){
+      const holder = document.createElement("div");
+      holder.className = "pastunit";
+      const head = document.createElement("button");
+      head.className = "pastunit-head";
+      head.type = "button";
+      head.appendChild(Object.assign(document.createElement("span"), { textContent: unit }));
+      const count = document.createElement("span");
+      count.className = "pastunit-count";
+      count.textContent = groups[unit].length + (groups[unit].length === 1 ? " lesson" : " lessons");
+      head.appendChild(count);
+      const inner = document.createElement("div");
+      inner.className = "pastunit-body";
+      const openFirst = unitIndex === 0;
+      inner.hidden = !openFirst;
+      if (openFirst) head.classList.add("open");
+      head.addEventListener("click", () => {
+        inner.hidden = !inner.hidden;
+        head.classList.toggle("open", !inner.hidden);
+      });
+      holder.appendChild(head);
+      holder.appendChild(inner);
+      box.appendChild(holder);
+      body = inner;
+    } else if (unit){
+      const h = document.createElement("p"); h.className = "unit-head"; h.textContent = unit; box.appendChild(h);
+    }
+    /* A unit of a GCSE or A Level course is one point of the specification,
+       and the lessons in it come in named groups: its sub-points. A KS3 unit
+       has none of those, so it stays the one list it has always been, and so
+       does a unit whose lessons all cover the whole of it. */
+    const partNames = [];
+    const parts = {};
+    groups[unit].slice().sort(bySubunit).forEach(c => {
+      const name = c.subunit || "";
+      if (!parts[name]){ parts[name] = []; partNames.push(name); }
+      parts[name].push(c);
+    });
+    /* Counted across the whole unit, not restarted in each group: the numbers
+       down the side are where a student is up to in this unit. */
+    let nth = 0;
+    partNames.forEach(part => {
+      /* A named sub-point always says so, even where the unit has only the
+         one. It used to be left off in that case, so a class given one lesson
+         out of 2.2.1 saw it under "2.2 Programming fundamentals" with no sign
+         of which part of it they were doing. The unit's own group has no name
+         and never gets a heading. */
+      if (part){
+        const sh = document.createElement("p");
+        sh.className = "sub-head"; sh.textContent = part;
+        body.appendChild(sh);
+      }
+    const wrap = document.createElement("div"); wrap.className = "lessons";
+    inOrder(parts[part]).forEach((c) => {
+      const i = nth++;
+      const l = byId[c.lesson_id];
+      const done = doneLessons.has(l.id);
+      const a = document.createElement("a");
+      a.className = "lessonCard";
+      a.href = "lesson.html?id=" + encodeURIComponent(l.id);
+
+      if (visible.length > 1){
+        const num = document.createElement("span");
+        num.className = "num"; num.textContent = String(i + 1).padStart(2, "0");
+        a.appendChild(num);
+      }
+
+      const bodyEl = document.createElement("span");
+      bodyEl.className = "body";
+      const nameEl = document.createElement("b");
+      nameEl.textContent = l.title || l.id;
+      const descEl = document.createElement("span");
+      descEl.textContent = l.description || "";
+      bodyEl.appendChild(nameEl); bodyEl.appendChild(descEl);
+      a.appendChild(bodyEl);
+
+      if (done){
+        const badge = document.createElement("span");
+        badge.className = "badge badge-done"; badge.textContent = "\u2713 Complete";
+        a.appendChild(badge);
+      }
+      if (l.assessment || c.assessment){
+        const badge = document.createElement("span");
+        badge.className = "badge"; badge.textContent = "Assessment";
+        a.appendChild(badge);
+      } else if (l.homework || c.homework){
+        const badge = document.createElement("span");
+        badge.className = "badge badge-home"; badge.textContent = "Home Learning";
+        a.appendChild(badge);
+      }
+      const go = document.createElement("span");
+      go.className = "go"; go.textContent = "\u2192";
+      a.appendChild(go);
+      wrap.appendChild(a);
+    });
+    body.appendChild(wrap);
+    });
+  });
+}
+
+/* Which sub-point of its unit a lesson is in. The number in the wording is
+   read as a number, so 2.2.10 comes after 2.2.9, and a lesson covering the
+   whole unit has no sub-point and comes first. */
+function bySubunit(a, b){
+  const x = String(a.subunit || ""), y = String(b.subunit || "");
+  if (x === y) return 0;
+  if (!x) return -1;
+  if (!y) return 1;
+  return window.lessonOrder ? window.lessonOrder.compareText(x, y)
+                            : (x < y ? -1 : 1);
+}
+
+on("tabActive", "click", () => { showing = "active"; paintSub(); });
+on("tabDone", "click", () => { showing = "done"; paintSub(); });
+function paintSub(){
+  $("tabActive").classList.toggle("on", showing === "active");
+  $("tabDone").classList.toggle("on", showing === "done");
+  loadLessons();
+}
+loadLessons();
+
+/* ---- My results tab ---- */
+on("refTab", "click", async () => {
+  const btn = $("refTab");
+  btn.disabled = true;
+  try{
+    if (openTab === "results") await loadResults(true);
+    else await loadLessons(true);
+  }catch(e){}
+  btn.disabled = false;
+});
+on("tabLessons", "click", () => switchTab("lessons"));
+on("tabResults", "click", () => switchTab("results"));
+on("tabPractice", "click", () => switchTab("practice"));
+let resultsLoaded = false;
+
+/* Signing out has to forget everything held in memory as well as the token.
+   Leaving these behind showed the next student the last one's marks. */
+function forgetEverything(){
+  lessonsLoaded = false;
+  resultsLoaded = false;
+  lastById = {};
+  lessonTitles = {};
+  doneLessons = new Set();
+  lockedLessons = new Set();
+  catalogue = null;
+  showing = "active";
+  openTab = "lessons";
+  const list = $("lessonList"), res = $("resultList");
+  if (list) list.innerHTML = "";
+  if (res) res.innerHTML = "";
+}
+
+function switchTab(which){
+  openTab = which;
+  $("tabLessons").classList.toggle("on", which === "lessons");
+  $("tabResults").classList.toggle("on", which === "results");
+  $("tabPractice").classList.toggle("on", which === "practice");
+  $("view-lessons").hidden = which !== "lessons";
+  $("view-results").hidden = which !== "results";
+  $("view-practice").hidden = which !== "practice";
+  /* Nothing on the Practice tab comes from the server, so there is nothing
+     to check for and no button to press. */
+  $("refTab").hidden = which === "practice";
+  if (which === "results" && !resultsLoaded) loadResults();
+  if (which === "practice") paintPractice();
+}
+
+/* What a student can practise, from practice.js. Everything that will ever
+   be here is listed there; only the ones with a page behind them are drawn,
+   so the quiz and the written answers appear the day they are written and
+   nothing on this page has to change. */
+function paintPractice(){
+  const box = $("practiceList");
+  if (!box) return;
+  box.innerHTML = "";
+  const acts = (window.practice && window.practice.live()) || [];
+  if (!acts.length){
+    box.innerHTML = '<p class="hint">Nothing to practise just yet.</p>';
+    return;
+  }
+  const wrap = el("div","lessons");
+  acts.forEach(a => {
+    const card = document.createElement("a");
+    card.className = "lessonCard";
+    card.href = a.href;
+    const icon = el("span","num pracIcon", a.icon || "");
+    icon.setAttribute("aria-hidden","true");
+    card.appendChild(icon);
+    const body = el("span","body");
+    body.appendChild(el("b","", a.title));
+    body.appendChild(el("span","", a.blurb));
+    card.appendChild(body);
+    card.appendChild(el("span","go","→"));
+    wrap.appendChild(card);
+  });
+  box.appendChild(wrap);
+}
+function clearStudentCache(){
+  try{
+    const doomed = [];
+    for (let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if (k && (k.startsWith("hub_work_") || k.startsWith("hub_rel_") ||
+                k === "hub_close" || k === "hub_inspect" ||
+                k === "hub_sandbox_inspect" ||
+                k === "hub_sandbox")) doomed.push(k);
+    }
+    doomed.forEach(k => localStorage.removeItem(k));   // display settings are kept
+  }catch(e){}
+}
+
+/* ---- first sign-in (or after a teacher approves a reset): choose a password ---- */
+function forcePassword(name){
+  $("pwWho").textContent = "Hello " + String(name || "").split(" ")[0] + ", before you start, pick a password only you know.";
+  $("pwModal").hidden = false;
+  $("np1").focus();
+}
+on("npGo", "click", async () => {
+  const a = $("np1").value, b = $("np2").value;
+  if (a.length < 12 || a.length > 25){ $("npMsg").textContent = "It must be 12 to 25 characters long."; return; }
+  if (a !== b){ $("npMsg").textContent = "The two boxes don't match."; return; }
+  $("npMsg").textContent = "Saving…";
+  try{
+    const r = await fetch(API + "/api/login", { method:"POST",
+      headers:{ "Content-Type":"application/json", Authorization: "Bearer " + localStorage.getItem("hub_token") },
+      body: JSON.stringify({ action:"set-password", newPassword: a }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Could not save it.");
+    $("pwModal").hidden = true;
+    $("np1").value = $("np2").value = "";
+    loadLessons();
+  }catch(e){ $("npMsg").textContent = e.message; }
+});
+
+/* our own message box, never the browser's grey pop-up */
+function say(title, text, then){
+  $("sayTitle").textContent = title;
+  $("sayText").textContent = text || "";
+  $("sayModal").hidden = false;
+  $("sayOk").onclick = () => { $("sayModal").hidden = true; if (then) then(); };
+  $("sayOk").focus();
+}
+on("sayModal", "mousedown", (e) => { if (e.target === $("sayModal")) $("sayModal").hidden = true; });
+
+/* ---- forgot password ----
+   Check the username, let them choose the new password there and then, and
+   hold it until their teacher approves it, no emails, no teacher typing. */
+let rsUser = "", rsTicket = "", rsPoll = null, rsDeadline = 0;
+
+on("forgotBtn", "click", async () => {
+  const u = $("u").value.trim();
+  if (!u){ $("loginErr").textContent = "Type your username first, then press Forgot password?"; return; }
+  if (!ready){ $("loginErr").textContent = "Site not connected to its server yet (config.js)."; return; }
+  $("loginErr").textContent = "";
+  $("forgotBtn").textContent = "Checking…";
+  try{
+    const r = await fetch(API + "/api/login", { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ action:"check-username", username: u }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Could not check that.");
+    if (!d.exists){
+      say("We can't find that username",
+          "There's no account called \u201c" + u + "\u201d. Check the spelling and try again, your teacher can tell you your exact username.");
+      return;
+    }
+    rsUser = u;
+    $("rsWho").textContent = "Signing in as " + u + ". Choose a new password, then your teacher will approve it.";
+    $("rsStep1").hidden = false; $("rsStep2").hidden = true;
+    $("rsMsg").textContent = ""; $("rp1").value = ""; $("rp2").value = "";
+    $("resetModal").hidden = false;
+    $("rp1").focus();
+  }catch(e){ $("loginErr").textContent = e.message; }
+  finally{ $("forgotBtn").textContent = "Forgot password?"; }
+});
+on("rsCancel", "click", () => { $("resetModal").hidden = true; });
+on("rsGiveUp", "click", stopReset);
+function stopReset(){
+  clearInterval(rsPoll); rsPoll = null;
+  $("resetModal").hidden = true;
+}
+on("rsGo", "click", async () => {
+  const a = $("rp1").value, b = $("rp2").value;
+  if (a.length < 12 || a.length > 25){ $("rsMsg").textContent = "It must be 12 to 25 characters long."; return; }
+  if (a !== b){ $("rsMsg").textContent = "The two boxes don't match."; return; }
+  $("rsMsg").textContent = "Sending to your teacher…";
+  try{
+    const r = await fetch(API + "/api/login", { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ action:"reset-request", username: rsUser, newPassword: a }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Could not send it.");
+    rsTicket = d.ticket;
+    $("rsStep1").hidden = true; $("rsStep2").hidden = false;
+    rsDeadline = Date.now() + 5*60*1000;
+    tickCountdown();
+    rsPoll = setInterval(pollReset, 5000);
+  }catch(e){ $("rsMsg").textContent = e.message; }
+});
+function tickCountdown(){
+  const left = Math.max(0, Math.ceil((rsDeadline - Date.now())/1000));
+  const m = Math.floor(left/60), sec = String(left%60).padStart(2,"0");
+  $("rsCount").textContent = left ? ("Time left: " + m + ":" + sec) : "";
+}
+async function pollReset(){
+  tickCountdown();
+  if (Date.now() > rsDeadline){
+    stopReset();
+    say("Time ran out", "Your teacher did not approve your new password within 5 minutes, so it has gone. Press Forgot password again to have another go.");
+    return;
+  }
+  try{
+    const r = await fetch(API + "/api/login", { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ action:"reset-status", username: rsUser, ticket: rsTicket }) });
+    const d = await r.json();
+    if (d.status === "approved"){
+      stopReset();
+      if (localStorage.getItem("hub_user") !== rsUser.toLowerCase()) clearStudentCache();
+      localStorage.setItem("hub_user", rsUser.toLowerCase());
+      forgetEverything();          // never inherit the last student's data
+    localStorage.setItem("hub_token", d.token);
+      localStorage.setItem("hub_name", d.name);
+      localStorage.setItem("hub_group", d.group || "");
+      renderAuth();
+      loadLessons();
+    } else if (d.status === "denied"){
+      stopReset();
+      say("Not approved", "Your teacher did not approve this password change. Ask them why, then try again.");
+    } else if (d.status === "expired"){
+      stopReset();
+      say("That request expired", "Please try to reset your password again.");
+    }
+  }catch(e){ /* a blip: keep polling until the deadline */ }
+}
+
+async function loadResults(force){
+  if (resultsLoaded && !force) return;
+  await fetchResults();
+  resultsLoaded = true;
+}
+/* every lesson a teacher has written feedback on */
+
+function paintResults(box, d){
+box.innerHTML = "";
+  /* Two lists, because they are two different things. An assessment is a
+     test somebody sat; exam practice is a lesson of past paper questions
+     that happened to add up to a mark. A row saved before there was a
+     difference has no kind on it and is an assessment, which is what it
+     was. */
+  const all = d.results || [];
+  const assessments = all.filter(r => String(r.kind || "") !== "exam");
+  const practice = all.filter(r => String(r.kind || "") === "exam");
+  if (!all.length) box.appendChild(el("p","hint","No assessment results yet."));
+  if (assessments.length) box.appendChild(el("p","unit-head","Assessments"));
+  paintResultRows(box, assessments);
+  if (practice.length) box.appendChild(el("p","unit-head","Exam questions"));
+  paintResultRows(box, practice);
+}
+function paintResultRows(box, rows){
+  rows.forEach(res => {
+    const card = document.createElement("a"); card.className = "result-card";
+    card.href = "lesson.html?id=" + encodeURIComponent(res.lesson_id);
+    card.innerHTML = '<span class="sc"></span><span class="body"><b></b><span></span></span><span class="st"></span>';
+    const when = new Date(res.updated_at + "Z").toLocaleDateString("en-GB");
+    /* A grade stands on its own: there is no percentage to work out. */
+    if (res.grade){
+      card.querySelector(".sc").textContent = res.grade;
+      card.querySelector(".sc").classList.add("sc-grade");
+      card.querySelector(".body span").textContent = when;
+    } else {
+      const pct = Math.round(100 * res.score / Math.max(1, res.out_of));
+      card.querySelector(".sc").textContent = res.score + " / " + res.out_of;
+      card.querySelector(".body span").textContent = pct + "% \u00b7 " + when;
+    }
+    card.querySelector("b").textContent = lessonTitles[res.lesson_id] || res.lesson_id;
+    const st = card.querySelector(".st");
+    if (res.strength || res.target){
+      st.innerHTML = (res.strength ? "<b>Strength:</b> " : "") + (res.strength || "") +
+                     (res.target ? "<br><i>Target:</i> " + res.target : "");
+    }
+    box.appendChild(card);
+  });
+}
+
+async function fetchResults(){
+  const token = localStorage.getItem("hub_token");
+  const box = $("resultList");
+  if (OFFLINE){
+    /* the browser is the only place results live */
+    let all = {};
+    try{ all = JSON.parse(localStorage.getItem("hub_results") || "{}"); }catch(e){}
+    const mine = Object.values(all).sort((a, b) =>
+      String(b.updated_at).localeCompare(String(a.updated_at)));
+    mine.forEach(r => { if (r.title) lessonTitles[r.lesson_id] = r.title; });
+    paintResults(box, { results: mine });
+    return;
+  }
+  if (!token){ box.innerHTML = ""; return; }
+  if (!ready){ box.innerHTML = '<p class="hint">Site not connected to its server yet.</p>'; return; }
+  wait(box, "Loading your results");
+  try{
+    const r = await fetch(API + "/api/results", { headers: { Authorization: "Bearer " + token } });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Could not load results.");
+    resultsLoaded = true;
+    paintResults(box, d);
+
+  }catch(e){ box.innerHTML = '<p class="hint">' + e.message + '</p>'; }
+}
+  if (window.initSettings) initSettings($("setBtn"));
+</script>
+</body>
+</html>

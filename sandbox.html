@@ -1,0 +1,1260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sandbox &middot; Computing KS3</title>
+<link rel="stylesheet" href="style.css">
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<script src="config.js"></script>
+<script src="pyhub.js"></script>
+<script src="webhub.js"></script>
+<script src="pyedit.js"></script>
+<script src="teacher.js"></script>
+<script src="practice.js"></script>
+<script src="settings.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="home" id="backLink" href="index.html?tab=practice">&larr; Practice</a>
+  <span class="sep">/</span>
+  <div class="title" id="crumb">Sandbox</div>
+  <button class="sb-save" id="saveState" hidden></button>
+  <button class="btn-ghost iconbtn" id="setBtn" title="Settings">&#9881;&#65038;</button>
+</div>
+
+<div class="sb-page">
+
+  <!-- Nobody is signed in. The sandbox belongs to an account, so there is
+       nothing to show and, more to the point, nothing of the last student's
+       to show either. -->
+  <section class="station" id="needIn" hidden>
+    <h2 style="margin-top:0">Sign in first</h2>
+    <p class="modal-text">Your programs are saved to your account, so they are
+      there on any computer you sign in on. Sign in and come back.</p>
+    <button class="btn-primary" id="goSignIn">Go to sign in</button>
+  </section>
+
+  <!-- what they have made so far -->
+  <div id="listView" hidden>
+    <div class="sb-top">
+      <button class="btn-primary" id="newBtn">+ New program</button>
+      <span class="sb-note" id="listCount"></span>
+    </div>
+    <div id="progList"></div>
+    <p class="sb-note sb-foot">Nothing here is marked or handed in. It is yours to play with.</p>
+  </div>
+
+  <!-- one of them, open -->
+  <div id="editView" hidden>
+    <div class="sb-fb" id="progFb" hidden></div>
+    <div id="holder"></div>
+  </div>
+
+</div>
+
+<!-- which kind of program to start -->
+<div class="modal-back" id="kindModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <button class="btn-ghost iconbtn modal-x" id="kindX" title="Close">&#10005;</button>
+    <h2 style="margin-top:0">What kind of program?</h2>
+    <div class="sb-kinds">
+      <button class="sb-kind" id="kindPython">
+        <span class="sb-kind-ico">&#9654;</span>
+        <b>Python</b>
+        <span>Write and run Python, with a console and turtle drawing. You can
+          upload a text or CSV file for your program to read.</span>
+      </button>
+      <button class="sb-kind" id="kindWeb">
+        <span class="sb-kind-ico">&#8249;&#8250;</span>
+        <b>HTML, CSS and JavaScript</b>
+        <span>Build a web page and watch it change as you type.</span>
+      </button>
+    </div>
+    <button class="btn-ghost modal-stay" id="kindCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- renaming one -->
+<div class="modal-back" id="nameModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2 style="margin-top:0">What should it be called?</h2>
+    <div class="field"><label for="nameIn">Name</label><input type="text" id="nameIn" autocomplete="off"></div>
+    <button class="btn-primary modal-cta" id="nameGo">Save the name</button>
+    <button class="btn-ghost modal-stay" id="nameCancel">Cancel</button>
+  </div>
+</div>
+
+<div class="modal-back" id="delModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2 style="margin-top:0">Delete this program?</h2>
+    <p class="modal-text" id="delWhat"></p>
+    <p class="subnote">This cannot be undone.</p>
+    <button class="btn-primary modal-cta" id="delYes">Delete it</button>
+    <button class="btn-ghost modal-stay" id="delNo">Keep it</button>
+  </div>
+</div>
+
+<!-- another file beside main.py: made here, or brought in from their computer -->
+<div class="modal-back" id="newFileModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <button class="btn-ghost iconbtn modal-x" id="nfX" title="Close">&#10005;</button>
+    <h2 style="margin-top:0">Add a file</h2>
+    <!-- Everything but the cross and the buttons scrolls, or on a phone the
+         upload half of this is below the bottom of the pop-up with no way to
+         reach it. -->
+    <div class="modal-scroll">
+      <div class="sb-kinds sb-kinds-row">
+        <button class="sb-kind sb-kind-small" id="nfPy">
+          <b>.py</b>
+          <span>More Python, to import from your program.</span>
+        </button>
+        <button class="sb-kind sb-kind-small" id="nfTxt">
+          <b>.txt</b>
+          <span>Writing, for your program to read with open().</span>
+        </button>
+        <button class="sb-kind sb-kind-small" id="nfCsv">
+          <b>.csv</b>
+          <span>A table of data, for your program to read.</span>
+        </button>
+      </div>
+      <div class="field"><label for="nfName">What should it be called?</label>
+        <input type="text" id="nfName" autocomplete="off" spellcheck="false"></div>
+      <p class="err" id="nfMsg" role="alert"></p>
+      <button class="btn-primary" id="nfGo">Make the file</button>
+
+      <div class="sb-drop" id="nfDrop">
+        <b>Or upload one</b>
+        <span>Drag a .py, .txt or .csv file here</span>
+        <button class="btn-ghost" id="nfBrowse">Browse my computer</button>
+      </div>
+    </div>
+    <button class="btn-ghost modal-stay" id="nfCancel">Cancel</button>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const OFFLINE = !!(window.HUB && window.HUB.OFFLINE);
+const store = window.practice.sandbox;
+const MAX = store.MAX_PROGRAMS;
+
+/* ---------- a teacher looking at somebody else's programs ----------
+   The same page, with nothing that writes. The work viewer puts the student's
+   programs in localStorage and opens this in its frame, the way it opens
+   lesson.html to show a lesson's work, so a teacher reads a program in the
+   editor it was written in and can run it to see what it does.
+
+   Nothing here saves: `changed()` returns before it reaches the store, and
+   the buttons that make, rename or delete a program are not drawn. */
+const VIEW = new URLSearchParams(location.search).get("view") !== null;
+const EMBED = new URLSearchParams(location.search).get("embed") !== null;
+
+/* ---------- a teacher's own sandbox ----------
+   The console's Practice tab opens this with ?teacher=1. It is the same page
+   a student has, writing to a sandbox of the teacher's own, filed under the
+   initials picked on the way into the console. `?view` wins if both are
+   given, because a page that only reads can never write to the wrong place. */
+const MINE_AS_TEACHER = !VIEW && new URLSearchParams(location.search).get("teacher") !== null;
+function teacherInitials(){
+  try{ return localStorage.getItem("hub_me") || ""; }catch(e){ return ""; }
+}
+if (MINE_AS_TEACHER) store.useTeacher(teacherInitials());
+/* Where the back link and the sandbox's own address go, which differ for a
+   teacher: their way home is the console, not a student's home page. */
+const HOME = MINE_AS_TEACHER ? "admin.html" : "index.html?tab=practice";
+const HERE = MINE_AS_TEACHER ? "sandbox.html?teacher=1" : "sandbox.html";
+const hereWith = (extra) => HERE + (HERE.indexOf("?") >= 0 ? "&" : "?") + extra;
+let viewing = null;         // { name, username, programs, notes }
+let notes = {};             // program id -> what the teacher wrote
+
+function el(tag, cls, text){
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+/* wiring a button that isn't there should not stop the rest of the page */
+function on(id, ev, fn){
+  const e = document.getElementById(id);
+  if (!e){ console.warn("Nothing on the page with id:", id); return; }
+  e.addEventListener(ev, fn);
+}
+
+/* What a new program opens with. A web page starts with something to press
+   Run on, because an empty page shows nothing at all. A Python program
+   starts empty: the line that used to be there was deleted first thing by
+   almost everyone, so it was one more thing to clear before starting. */
+const STARTERS = {
+  python: '',
+  html: '<h1>My page</h1>\n<p>Change this and press Run.</p>\n',
+  css: 'h1 {\n  color: teal;\n}\n',
+  js: ''
+};
+
+let programs = [];
+let openId = "";          // "" means the list is showing
+
+/* ---------- saying whether it is saved ----------
+   A pill in the top bar. Green once the server has everything, grey while it
+   has not: pressing the grey one sends it now rather than waiting for the
+   pause that normally does. */
+function paintSave(){
+  const btn = $("saveState");
+  if (!btn) return;
+  /* Nothing a teacher does here is saved, so a pill saying it was would be a
+     lie about somebody else's work. */
+  if (VIEW){ btn.hidden = true; return; }
+  btn.hidden = false;
+  if (OFFLINE){
+    btn.dataset.state = "local";
+    btn.textContent = "Kept on this computer";
+    btn.disabled = true;
+    btn.title = "";
+    return;
+  }
+  const waiting = store.waiting();
+  btn.dataset.state = waiting ? (store.stuck() ? "stuck" : "saving") : "saved";
+  btn.textContent = waiting
+    ? (store.stuck() ? "Not saved yet, still trying" : "Saving…")
+    : "Saved ✓";
+  btn.disabled = !waiting;
+  btn.title = waiting ? "Press to save it now" : "";
+}
+store.onState = paintSave;
+on("saveState", "click", () => { store.flush(); paintSave(); });
+
+/* Nothing stays only in this browser for long, but "long" is up to ten
+   seconds, and a child who closes the tab inside those ten seconds would lose
+   what they last typed. */
+window.addEventListener("beforeunload", (e) => {
+  if (VIEW || OFFLINE || !store.waiting()) return;
+  e.preventDefault();
+  e.returnValue = "";       // older browsers want this one instead
+});
+
+/* Anything changed on the page. `now` for the changes worth not losing to a
+   closed tab: a new program, a rename, a delete, a file uploaded. Typing
+   waits for the pause the store leaves, so a lesson is not hundreds of
+   writes. */
+function changed(p, now){
+  /* A teacher can type in the box to try something out. It belongs to the
+     student and is never written back. */
+  if (VIEW) return;
+  if (p) p.updated = Date.now();
+  store.keep(programs, now);
+  paintSave();
+}
+
+/* ---------- the list ---------- */
+const KINDS = {
+  python: { icon:"▶", label:"Python" },
+  web:    { icon:"‹›", label:"HTML, CSS and JavaScript" }
+};
+
+/* Thousands with a comma in them. Twenty thousand characters is a number a
+   child has to stop and count the noughts in when it is written 20000. */
+function count(n){ return Number(n).toLocaleString("en-GB"); }
+
+/* Last changed in words read at a glance, rather than a date to work out. */
+function when(ms){
+  if (!ms) return "Not saved yet";
+  const days = Math.floor((Date.now() - ms) / 86400000);
+  if (days <= 0) return "changed today";
+  if (days === 1) return "changed yesterday";
+  if (days < 7) return "changed " + days + " days ago";
+  return "changed " + new Date(ms).toLocaleDateString("en-GB");
+}
+
+function paintList(){
+  const box = $("progList");
+  box.innerHTML = "";
+  $("newBtn").hidden = VIEW;
+  $("newBtn").disabled = programs.length >= MAX;
+  $("listCount").textContent = VIEW
+    ? (programs.length === 1 ? "1 program" : programs.length + " programs")
+    : (programs.length >= MAX
+        ? "That is all " + MAX + ". Delete one you have finished with to start another."
+        : programs.length + " of " + MAX + " used");
+
+  if (!programs.length){
+    box.appendChild(el("p","hint", VIEW
+      ? (viewing && viewing.name ? viewing.name + " has not written any programs yet."
+                                 : "No programs here yet.")
+      : "Nothing here yet. Press New program to start one."));
+    return;
+  }
+  const wrap = el("div","lessons");
+  programs.forEach(p => {
+    const kind = KINDS[p.kind] || KINDS.python;
+    const row = el("div","lessonCard sb-card");
+
+    const open = el("button","sb-open");
+    open.type = "button";
+    const icon = el("span","num pracIcon", kind.icon);
+    icon.setAttribute("aria-hidden","true");
+    open.appendChild(icon);
+    const body = el("span","body");
+    body.appendChild(el("b","", p.name || "Program"));
+    body.appendChild(el("span","", kind.label + " · " + when(p.updated)));
+    /* Something to see from the list, so a note is not hidden behind opening
+       every program in turn to find out which one it was about. */
+    if (notes[p.id])
+      body.appendChild(el("span","sb-fbchip", VIEW ? "Feedback given"
+                                                   : "Your teacher has written something"));
+    open.appendChild(body);
+    open.addEventListener("click", () => openProgram(p.id));
+    row.appendChild(open);
+
+    if (!VIEW){
+      const rename = el("button","sb-icon","✎︎");
+      rename.type = "button";
+      rename.title = "Rename " + (p.name || "this program");
+      rename.setAttribute("aria-label", rename.title);
+      rename.addEventListener("click", () => askRename(p));
+      row.appendChild(rename);
+
+      const del = el("button","sb-icon sb-bin","🗑︎");
+      del.type = "button";
+      del.title = "Delete " + (p.name || "this program");
+      del.setAttribute("aria-label", del.title);
+      del.addEventListener("click", () => askDelete(p));
+      row.appendChild(del);
+    }
+
+    wrap.appendChild(row);
+  });
+  box.appendChild(wrap);
+}
+
+/* "Program 3" being the first number nobody is using, rather than the count
+   plus one: with two programs called 1 and 3, the count would make a second
+   Program 3. */
+function nextName(){
+  for (let n = 1; n <= MAX + 1; n++){
+    const name = "Program " + n;
+    if (!programs.some(p => p.name === name)) return name;
+  }
+  return "Program";
+}
+
+/* ---------- making one ---------- */
+function shutKind(){ $("kindModal").hidden = true; }
+on("newBtn", "click", () => {
+  if (programs.length >= MAX) return;
+  $("kindModal").hidden = false;
+  $("kindPython").focus();
+});
+on("kindX", "click", shutKind);
+on("kindCancel", "click", shutKind);
+on("kindModal", "mousedown", (e) => { if (e.target === $("kindModal")) shutKind(); });
+on("kindPython", "click", () => makeProgram("python"));
+on("kindWeb", "click", () => makeProgram("web"));
+
+function makeProgram(kind){
+  shutKind();
+  if (programs.length >= MAX) return;
+  const p = { id: store.newId(), name: nextName(), kind: kind, updated: Date.now() };
+  if (kind === "web"){
+    p.html = STARTERS.html; p.css = STARTERS.css; p.js = STARTERS.js;
+  } else {
+    p.code = STARTERS.python; p.files = [];
+  }
+  programs.push(p);
+  changed(p, true);
+  openProgram(p.id);
+}
+
+/* ---------- renaming ---------- */
+let renaming = "";
+function askRename(p){
+  renaming = p.id;
+  $("nameIn").value = p.name || "";
+  $("nameModal").hidden = false;
+  $("nameIn").focus();
+  $("nameIn").select();
+}
+function shutRename(){ $("nameModal").hidden = true; renaming = ""; }
+on("nameCancel", "click", shutRename);
+on("nameModal", "mousedown", (e) => { if (e.target === $("nameModal")) shutRename(); });
+on("nameIn", "keydown", (e) => { if (e.key === "Enter") $("nameGo").click(); });
+on("nameGo", "click", () => {
+  const p = programs.find(x => x.id === renaming);
+  if (!p){ shutRename(); return; }
+  /* An empty box would leave a row with nothing on it to press, so it goes
+     back to a name rather than saving a blank one. */
+  const typed = $("nameIn").value.trim().slice(0, store.MAX_NAME);
+  p.name = typed || p.name || nextName();
+  shutRename();
+  paintList();
+  if (p.id === openId) $("crumb").textContent = p.name;
+  changed(p, true);
+});
+
+/* ---------- deleting ---------- */
+let deleting = "";
+function askDelete(p){
+  deleting = p.id;
+  $("delWhat").textContent = "“" + (p.name || "Program") + "” and everything in it will be gone.";
+  $("delModal").hidden = false;
+  $("delYes").focus();
+}
+function shutDelete(){ $("delModal").hidden = true; deleting = ""; }
+on("delNo", "click", shutDelete);
+on("delModal", "mousedown", (e) => { if (e.target === $("delModal")) shutDelete(); });
+on("delYes", "click", () => {
+  const gone = deleting;
+  shutDelete();
+  const at = programs.findIndex(p => p.id === gone);
+  if (at < 0) return;
+  programs.splice(at, 1);
+  changed(null, true);
+  /* Deleting the one that is open drops back to the list, because there is
+     nothing left to look at. Deleting another from the list stays there. */
+  if (openId === gone) showList();
+  else paintList();
+});
+
+/* ---------- which of the two screens is showing ----------
+   The list and one open program are two views of one page rather than two
+   pages, so opening a program does not start Python again: it is tens of
+   megabytes off a CDN and it is already here. The address still changes, so
+   the browser's own Back button does what it looks like it does. */
+function showList(push){
+  openId = "";
+  $("listView").hidden = false;
+  $("editView").hidden = true;
+  $("holder").innerHTML = "";
+  $("crumb").textContent = VIEW && viewing ? viewing.name + " · Sandbox" : "Sandbox";
+  $("backLink").hidden = VIEW;
+  $("backLink").textContent = MINE_AS_TEACHER ? "← Console" : "← Practice";
+  $("backLink").href = HOME;
+  paintList();
+  paintFeedback(null);
+  tellOutside();
+  if (push !== false) go(HERE);
+}
+
+function openProgram(id, push){
+  const p = programs.find(x => x.id === id);
+  if (!p) return showList();
+  openId = id;
+  $("listView").hidden = true;
+  $("editView").hidden = false;
+  $("crumb").textContent = p.name || "Program";
+  $("backLink").hidden = false;
+  $("backLink").textContent = "← Sandbox";
+  $("backLink").href = HERE;
+  paintFeedback(p);
+  drawEditor(p);
+  tellOutside();
+  if (push !== false) go(hereWith("open=" + encodeURIComponent(id)));
+}
+
+function go(url){
+  /* Inside the work viewer's frame the address bar belongs to the page
+     around it, and pushing here would put the teacher's Back button through
+     every program they had opened before it left the viewer. */
+  if (EMBED) return;
+  try{ history.pushState({ open: openId }, "", url); }catch(e){}
+}
+
+/* ---------- what the teacher wrote ----------
+   Shown above the editor, where the program it is about is. A strength and a
+   target are the same two boxes the marking screen has for a lesson, so
+   feedback on a program reads the same way as feedback on anything else. */
+function paintFeedback(p){
+  const box = $("progFb");
+  if (!box) return;
+  box.innerHTML = "";
+  /* A teacher has the boxes themselves on the other side of the frame.
+     Showing the saved copy here as well would sit there disagreeing with
+     whatever they were part way through typing. */
+  const note = (!VIEW && p) ? notes[p.id] : null;
+  if (!note){ box.hidden = true; return; }
+  box.hidden = false;
+  box.appendChild(el("b","sb-fbhead","What your teacher said"));
+  if (note.strength){
+    const line = el("p","sb-fbline");
+    line.appendChild(el("span","sb-fblabel","Strength"));
+    line.appendChild(el("span","", note.strength));
+    box.appendChild(line);
+  }
+  if (note.target){
+    const line = el("p","sb-fbline");
+    line.appendChild(el("span","sb-fblabel","Target"));
+    line.appendChild(el("span","", note.target));
+    box.appendChild(line);
+  }
+  if (note.comment) box.appendChild(el("p","sb-fbline", note.comment));
+}
+
+/* The work viewer draws its own list of programs beside this one and writes
+   feedback against whichever is open, so it has to be told which that is. */
+function tellOutside(){
+  if (!EMBED || window.parent === window) return;
+  try{ window.parent.postMessage({ hubSandboxOpen: openId }, "*"); }catch(e){}
+}
+/* and it can ask for one to be opened, from that list */
+window.addEventListener("message", (e) => {
+  if (!EMBED || !e || !e.data || typeof e.data.hubSandboxShow !== "string") return;
+  const id = e.data.hubSandboxShow;
+  if (!id) showList(false);
+  else if (id !== openId && programs.some(p => p.id === id)) openProgram(id, false);
+});
+window.addEventListener("popstate", () => {
+  const id = new URLSearchParams(location.search).get("open") || "";
+  if (id && programs.some(p => p.id === id)) openProgram(id, false);
+  else showList(false);
+});
+/* The way back out of a program is in the page, not a page load. Leaving for
+   the home page does go somewhere, so anything not yet sent goes first: the
+   browser's own "are you sure" is for a tab being closed, not for a button
+   that could simply have saved. */
+on("backLink", "click", async (e) => {
+  if (openId){ e.preventDefault(); showList(); return; }
+  if (OFFLINE || !store.waiting()) return;
+  e.preventDefault();
+  const where = $("backLink").href;
+  try{ await store.flush(); }catch(err){}
+  location.href = where;
+});
+
+/* ---------- the shell both editors share ---------- */
+function editorShell(p){
+  const s = el("section","ide sb-ide" + (p.kind === "web" ? " web" : ""));
+  const wrap = el("div","ide-wrap");
+  const pane = el("div","ide-pane");
+  const bar = el("div","ide-bar");
+  pane.appendChild(bar);
+  const ideSet = window.pyEdit.idePanel(s);
+  pane.appendChild(ideSet.panel);
+  const side = el("div","ide-side");
+  const outBar = el("div","ide-bar ide-outbar");
+  side.appendChild(outBar);
+  wrap.appendChild(pane);
+  wrap.appendChild(side);
+  s.appendChild(wrap);
+  $("holder").innerHTML = "";
+  $("holder").appendChild(s);
+
+  const gearBtn = el("button","ide-small","⚙");
+  gearBtn.title = "Editor settings";
+  gearBtn.addEventListener("click", ideSet.toggle);
+  const runBtn = el("button","btn-primary ide-run","▶ Run");
+  return { s, wrap, pane, bar, side, outBar, gearBtn, runBtn };
+}
+
+/* A search box over a dictionary of words, used by both editors. `groups` is
+   a list of [heading, {word: meaning}], and the headings only appear when
+   there is more than one. */
+function helpPanel(groups, dress){
+  const box = el("div","ide-help");
+  box.hidden = true;
+  const search = document.createElement("input");
+  search.type = "search";
+  search.className = "ide-helpsearch";
+  search.placeholder = "Search for a word or what it does…";
+  box.appendChild(search);
+  const list = el("div","ide-helplist");
+  box.appendChild(list);
+  function paint(){
+    const term = (search.value || "").trim().toLowerCase();
+    list.innerHTML = "";
+    let shown = 0;
+    groups.forEach(pair => {
+      const head = pair[0], dict = pair[1] || {};
+      const words = Object.keys(dict).sort().filter(w =>
+        !term || w.toLowerCase().includes(term) || String(dict[w]).toLowerCase().includes(term));
+      if (!words.length) return;
+      if (groups.length > 1) list.appendChild(el("p","ide-helphead", head));
+      words.forEach(w => {
+        shown++;
+        const row = el("div","ide-helprow");
+        row.appendChild(el("code","ide-helpword", dress ? dress(head, w) : w));
+        row.appendChild(el("span","ide-helptext", dict[w]));
+        list.appendChild(row);
+      });
+    });
+    if (!shown) list.appendChild(el("p","ide-helplead","Nothing matches that word."));
+  }
+  search.addEventListener("input", paint);
+  paint();
+  return box;
+}
+
+function drawEditor(p){
+  if (p.kind === "web") webEditor(p);
+  else pythonEditor(p);
+}
+
+/* ======================================================================
+   PYTHON
+   ====================================================================== */
+function pythonEditor(p){
+  const shell = editorShell(p);
+  const s = shell.s, pane = shell.pane, bar = shell.bar, side = shell.side,
+        outBar = shell.outBar, runBtn = shell.runBtn;
+  const MAIN = store.MAIN;
+  let current = MAIN;
+
+  /* The files across the top, the way the web editor shows its three. A
+     Python program is main.py plus whatever they have added beside it: more
+     Python to import, or writing to read. */
+  const fileTabs = el("span","web-files");
+  bar.appendChild(fileTabs);
+  bar.appendChild(shell.gearBtn);
+  bar.appendChild(runBtn);
+
+  const fileByName = (name) => (p.files || []).find(f => f.name === name);
+  const textOf = (name) => name === MAIN ? (p.code || "") : ((fileByName(name) || {}).text || "");
+  function setText(name, value){
+    if (name === MAIN){ p.code = value; return; }
+    const f = fileByName(name);
+    if (f) f.text = value;
+  }
+  const langOf = (name) => store.isCode(name) ? window.pyEdit.pythonLang : window.pyEdit.plainLang;
+  const capOf = (name) => store.isCode(name) ? store.MAX_CODE : store.MAX_FILE_CHARS;
+
+  const ed = window.pyEdit.attach({
+    value: p.code || "",
+    help: window.pyEdit.PY_HELP,
+    /* The click-a-word explanations belong to the lesson page, which has the
+       bubble that shows them. Underlining words here with nothing behind them
+       would be a promise this page cannot keep, so the Help tab beside the
+       console does that job instead. */
+    tips: false,
+    onInput: () => { setText(current, ed.ta.value); changed(p); paintRoom(); }
+  });
+  /* A hard stop rather than a message after the event: the browser simply
+     stops taking more, so nothing a student typed is thrown away for being
+     too long. */
+  ed.ta.maxLength = store.MAX_CODE;
+  pane.appendChild(ed.editor);
+  pane.appendChild(ed.probs);
+
+  const room = el("p","sb-room");
+  room.hidden = true;
+  pane.appendChild(room);
+  function paintRoom(){
+    const cap = capOf(current);
+    const left = cap - ed.ta.value.length;
+    room.hidden = left > 800;
+    room.textContent = left > 0
+      ? "Room for about " + count(left) + " more characters in " + current + "."
+      : current + " is full.";
+  }
+
+  const note = el("p","ide-note"); note.hidden = true;
+  function say(words, bad){
+    note.hidden = false;
+    note.className = "ide-note " + (bad ? "no" : "ok");
+    note.textContent = words;
+  }
+
+  function openFile(name){
+    if (name !== current) setText(current, ed.ta.value);
+    current = name;
+    ed.ta.value = textOf(name);
+    ed.ta.maxLength = capOf(name);
+    ed.setLang(langOf(name));
+    paintTabs();
+    paintRoom();
+  }
+
+  function paintTabs(){
+    fileTabs.innerHTML = "";
+    const names = [MAIN].concat((p.files || []).map(f => f.name));
+    names.forEach(name => {
+      const tab = el("button","web-file" + (name === current ? " on" : ""), name);
+      tab.type = "button";
+      tab.addEventListener("click", () => openFile(name));
+      if (name !== MAIN && !VIEW){
+        /* main.py is the program itself and has no cross. */
+        const x = el("span","web-x","×");
+        x.title = "Delete " + name;
+        x.addEventListener("click", (e) => {
+          e.stopPropagation();
+          askDeleteFile(name);
+        });
+        tab.appendChild(x);
+      }
+      fileTabs.appendChild(tab);
+    });
+    if (VIEW) return;              // a teacher is reading, not adding files
+    const full = (p.files || []).length >= store.MAX_FILES;
+    const add = el("button","web-add", full ? "That is all " + store.MAX_FILES : "+ New file");
+    add.type = "button";
+    add.disabled = full;
+    add.title = full ? "Delete one to add another" : "Another .py, .txt or .csv beside your program";
+    add.addEventListener("click", () => askNewFile(addFile));
+    fileTabs.appendChild(add);
+  }
+
+  /* Made, or uploaded, from the pop-up. Comes back with a message when it
+     cannot be added, which the pop-up shows without closing. */
+  function addFile(name, text){
+    if ((p.files || []).length >= store.MAX_FILES)
+      return "There is only room for " + store.MAX_FILES + " files beside your program.";
+    if (name === MAIN) return "main.py is your program. Give this one another name.";
+    if (fileByName(name)) return "There is already a file called " + name + ".";
+    const cap = capOf(name);
+    if (text.length > cap)
+      return "That is too long. " + name + " can hold " + count(cap) + " characters and that one has " + count(text.length) + ".";
+    p.files = (p.files || []).concat([{ name: name, text: text }]);
+    changed(p, true);
+    openFile(name);
+    say(name + " is ready. " + (store.isCode(name)
+      ? "Bring it into your program with import " + name.replace(/\.py$/, "") + "."
+      : "Read it with open(\"" + name + "\")."));
+    return "";
+  }
+
+  function askDeleteFile(name){
+    const back = el("div","modal-back");
+    const box = el("div","modal");
+    const x = el("button","btn-ghost iconbtn modal-x","✕");
+    x.title = "Close";
+    x.addEventListener("click", () => back.remove());
+    box.appendChild(x);
+    box.appendChild(el("h2","","Delete " + name + "?"));
+    box.appendChild(el("p","modal-text","Everything in that file will be gone. This cannot be undone."));
+    const yes = el("button","btn-primary modal-cta","Delete it");
+    yes.addEventListener("click", () => {
+      p.files = (p.files || []).filter(f => f.name !== name);
+      if (current === name) openFile(MAIN);
+      else paintTabs();
+      changed(p, true);
+      back.remove();
+    });
+    const no = el("button","btn-ghost modal-stay","Keep it");
+    no.addEventListener("click", () => back.remove());
+    box.appendChild(yes); box.appendChild(no);
+    back.appendChild(box);
+    back.addEventListener("mousedown", (e) => { if (e.target === back) back.remove(); });
+    document.body.appendChild(back);
+    yes.focus();
+  }
+
+  /* --- the output side --- */
+  const cwrap = el("div","ide-canvaswrap");
+  const canvas = el("canvas","ide-canvas");
+  canvas.width = 480; canvas.height = 360;
+  cwrap.appendChild(canvas);
+  cwrap.hidden = true;              // only once a program actually draws
+  side.insertBefore(cwrap, outBar);
+
+  const tabConsole = el("button","ide-tab on","Console");
+  const tabHelp = el("button","ide-tab","Help");
+  outBar.appendChild(tabConsole);
+  outBar.appendChild(tabHelp);
+  outBar.appendChild(el("span","ide-file",""));      // pushes Clear to the right
+  const clearBtn = el("button","ide-small","Clear");
+  outBar.appendChild(clearBtn);
+
+  const consoleBox = el("div","ide-console");
+  const out = el("pre","ide-out"); out.setAttribute("aria-live","polite");
+  const askRow = el("div","ide-ask"); askRow.hidden = true;
+  const askText = el("span","ide-askprompt");
+  const askIn = document.createElement("input");
+  askIn.type = "text"; askIn.className = "ide-askin";
+  askIn.autocomplete = "off"; askIn.spellcheck = false;
+  askRow.appendChild(askText); askRow.appendChild(askIn);
+  consoleBox.appendChild(out); consoleBox.appendChild(askRow);
+  side.appendChild(consoleBox);
+
+  const helpBox = helpPanel([["Python", window.pyEdit.PY_HELP]],
+    (head, w) => w + (window.pyEdit.PY_FN.has(w) ? "()" : ""));
+  side.appendChild(helpBox);
+
+  function showTab(which){
+    const help = which === "help";
+    consoleBox.hidden = help;
+    helpBox.hidden = !help;
+    tabConsole.classList.toggle("on", !help);
+    tabHelp.classList.toggle("on", help);
+  }
+  tabConsole.addEventListener("click", () => showTab("console"));
+  tabHelp.addEventListener("click", () => showTab("help"));
+
+  s.appendChild(note);
+  paintTabs();
+  paintRoom();
+
+  /* --- running ---
+     The same playback the lesson's coding task uses. Python runs at full
+     speed and hands back a list of what happened in order, because nothing
+     can appear on the page while Python is using the only thread there is.
+     The waiting is done out here, between the pieces, where the browser is
+     free to paint. */
+  let answers = [], shownSteps = 0, playRun = 0;
+  const pause = (secs) => new Promise(go => setTimeout(go, Math.max(0, secs) * 1000));
+
+  /* Whether this program draws. A turtle needs somewhere to draw, and an
+     empty white rectangle beside a program that only prints is a puzzle, so
+     the canvas appears when the code asks for one. */
+  function drawsThings(){ return /^\s*(import\s+turtle|from\s+turtle\s+import)/m.test(p.code || ""); }
+
+  async function playback(events){
+    const mine = ++playRun;
+    const list = events || [];
+    out.textContent = "";
+    for (let i = 0; i < list.length; i++){
+      const ev = list[i];
+      if (ev[0] === "out"){
+        out.textContent += ev[1];
+        out.scrollTop = out.scrollHeight;
+      } else if (ev[0] === "wait"){
+        /* Answering a question runs the whole program again from the top, so
+           the part already sat through must not be waited out a second
+           time. */
+        if (i >= shownSteps) await pause(ev[1]);
+      } else if (ev[0] === "draw"){
+        if (window.hubDraw) window.hubDraw.apply(null, [ev[1]].concat(ev[2] || []));
+      } else if (ev[0] === "clear"){
+        if (window.hubTurtleClear) window.hubTurtleClear();
+      }
+      if (playRun !== mine) return false;    // Run or Clear was pressed meanwhile
+    }
+    shownSteps = list.length;
+    return true;
+  }
+
+  async function execute(){
+    const py = await window.hubPython.start(out);
+    await window.hubPython.loadImports(py, p.code || "", out);
+    putFiles(py, p.files || []);
+    py.globals.set("_hub_next_inputs", answers.join("\u0000"));
+    py.runPython("_hub_set_inputs(_hub_next_inputs.split(chr(0)) if _hub_next_inputs != '' else [])");
+    py.globals.set("_hub_src", p.code || "");
+    const res = JSON.parse(py.runPython("_hub_run(_hub_src, 10.0)"));
+    if (!await playback(res.events)) return true;    // something newer is running now
+    out.classList.toggle("has-error", res.status === "done" && !res.ok);
+    if (res.status === "input"){
+      askText.textContent = res.prompt || ">";
+      askRow.hidden = false; askIn.value = ""; askIn.focus();
+      return false;
+    }
+    askRow.hidden = true;
+    if (!res.out) out.textContent = "(your program printed nothing)";
+    return true;
+  }
+
+  async function run(){
+    /* Whatever is in the box belongs to the file that is open, and Run always
+       runs main.py, so it is put back first: pressing Run while looking at
+       helper.py used to run the main.py of a moment ago. */
+    setText(current, ed.ta.value);
+    runBtn.disabled = true;
+    const label = runBtn.textContent;
+    runBtn.textContent = "Running…";
+    note.hidden = true;
+    answers = [];
+    shownSteps = 0;
+    out.textContent = "";
+    showTab("console");
+    const wantsCanvas = drawsThings();
+    cwrap.hidden = !wantsCanvas;
+    try{
+      if (window.hubTurtleAttach) window.hubTurtleAttach(wantsCanvas ? canvas : null);
+      await execute();
+    }catch(e){
+      out.textContent = "";
+      say("Python could not start here: " + (e.message || "unknown problem") + ".", true);
+    }finally{
+      runBtn.disabled = false; runBtn.textContent = label;
+    }
+  }
+  runBtn.addEventListener("click", run);
+  askIn.addEventListener("keydown", async (e) => {
+    if (e.key !== "Enter") return;
+    answers.push(askIn.value);
+    askRow.hidden = true;
+    try{
+      if (window.hubTurtleAttach) window.hubTurtleAttach(cwrap.hidden ? null : canvas);
+      await execute();
+    }catch(err){ askRow.hidden = true; }
+  });
+  clearBtn.addEventListener("click", () => {
+    playRun++;              // stops anything still arriving from the run before
+    shownSteps = 0;
+    out.textContent = ""; out.classList.remove("has-error"); askRow.hidden = true;
+  });
+}
+
+/* ---------- the Add a file pop-up ----------
+   One pop-up for both ways in: typing a name, or bringing a file over from
+   their own computer by dragging it or browsing for it. `take(name, text)`
+   belongs to whichever program is open and comes back with a message when it
+   will not have the file, which is shown without the pop-up closing. */
+let takeFile = null;
+let newKind = "py";
+
+function askNewFile(take){
+  takeFile = take;
+  $("nfMsg").textContent = "";
+  $("newFileModal").hidden = false;
+  pickKind("py");
+  $("nfName").focus();
+  $("nfName").select();
+}
+function shutNewFile(){ $("newFileModal").hidden = true; takeFile = null; }
+const SUGGESTED = { py: "helper.py", txt: "data.txt", csv: "data.csv" };
+function pickKind(kind){
+  newKind = kind;
+  $("nfPy").classList.toggle("on", kind === "py");
+  $("nfTxt").classList.toggle("on", kind === "txt");
+  $("nfCsv").classList.toggle("on", kind === "csv");
+  /* A name they have already typed is theirs; only the suggestion changes. */
+  const box = $("nfName");
+  const typed = box.value.trim();
+  if (!typed || Object.keys(SUGGESTED).some(k => SUGGESTED[k] === typed))
+    box.value = SUGGESTED[kind];
+}
+on("nfPy", "click", () => pickKind("py"));
+on("nfTxt", "click", () => pickKind("txt"));
+on("nfCsv", "click", () => pickKind("csv"));
+on("nfX", "click", shutNewFile);
+on("nfCancel", "click", shutNewFile);
+on("newFileModal", "mousedown", (e) => { if (e.target === $("newFileModal")) shutNewFile(); });
+on("nfName", "keydown", (e) => { if (e.key === "Enter") $("nfGo").click(); });
+on("nfGo", "click", () => {
+  if (!takeFile) return shutNewFile();
+  const name = store.fileName($("nfName").value, newKind);
+  if (!name){ $("nfMsg").textContent = "Give the file a name first."; $("nfName").focus(); return; }
+  const trouble = takeFile(name, "");
+  if (trouble){ $("nfMsg").textContent = trouble; return; }
+  shutNewFile();
+});
+
+/* ---- bringing one in from their computer ---- */
+const dropPicker = document.createElement("input");
+dropPicker.type = "file";
+dropPicker.accept = ".txt,.py,.csv,text/plain,text/csv";
+dropPicker.className = "sb-picker";
+document.body.appendChild(dropPicker);
+on("nfBrowse", "click", () => dropPicker.click());
+dropPicker.addEventListener("change", () => {
+  const file = dropPicker.files && dropPicker.files[0];
+  dropPicker.value = "";                 // so the same file can be chosen again
+  if (file) readIn(file);
+});
+
+/* A file dragged onto the pop-up. The whole page has to refuse dropped files
+   as well, or one let go a little wide of the box replaces the sandbox with
+   whatever was dropped, which is what a browser does by default. */
+["dragenter","dragover","drop"].forEach(kind => {
+  window.addEventListener(kind, (e) => {
+    if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") < 0) return;
+    e.preventDefault();
+  });
+});
+function dropZone(){
+  const zone = $("nfDrop");
+  if (!zone) return;
+  zone.addEventListener("dragenter", () => zone.classList.add("over"));
+  zone.addEventListener("dragover", () => zone.classList.add("over"));
+  zone.addEventListener("dragleave", () => zone.classList.remove("over"));
+  zone.addEventListener("drop", (e) => {
+    zone.classList.remove("over");
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) readIn(file);
+  });
+}
+dropZone();
+
+/* Checked before it is read rather than after: a 40MB file read into a string
+   to find out it is 40MB is 40MB sitting in the tab. The characters are
+   counted again once it is here, because a file can hold more bytes than it
+   has characters. */
+function readIn(file){
+  if (!takeFile) return;
+  const name = store.fileName(file.name);
+  const cap = store.isCode(name) ? store.MAX_CODE : store.MAX_FILE_CHARS;
+  if (file.size > cap * 2){
+    $("nfMsg").textContent = "That file is too big. " + name + " can hold " +
+      count(cap) + " characters, which is about " + count(Math.floor(cap / 6000) * 1000 || Math.floor(cap / 6)) + " words.";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onerror = () => { $("nfMsg").textContent = "That file could not be read. Try saving it again as a .txt or .csv."; };
+  reader.onload = () => {
+    if (!takeFile) return;
+    const trouble = takeFile(name, String(reader.result || ""));
+    if (trouble){ $("nfMsg").textContent = trouble; return; }
+    shutNewFile();
+  };
+  reader.readAsText(file);
+}
+
+/* Python keeps a small filesystem of its own inside the tab, and open() looks
+   in there. The uploaded files are written into it just before the program
+   runs, and anything left from a program that is no longer open is taken out
+   again: one Python is shared by the whole page, so without this a file
+   belonging to a program a student closed ten minutes ago would still answer
+   to open() in this one. */
+const written = new Set();
+function putFiles(py, files){
+  let home = "/home/pyodide";
+  try{ home = py.runPython("import os\nos.getcwd()"); }catch(e){}
+  const wanted = new Set();
+  files.forEach(f => {
+    const path = home + "/" + f.name;
+    wanted.add(path);
+    try{ py.FS.writeFile(path, f.text, { encoding: "utf8" }); written.add(path); }
+    catch(e){ console.warn("Could not put", f.name, "where Python can read it:", e); }
+  });
+  Array.from(written).forEach(path => {
+    if (wanted.has(path)) return;
+    try{ py.FS.unlink(path); }catch(e){}
+    written.delete(path);
+  });
+}
+
+
+/* ======================================================================
+   HTML, CSS and JavaScript
+   ====================================================================== */
+function webEditor(p){
+  const shell = editorShell(p);
+  const pane = shell.pane, bar = shell.bar, side = shell.side,
+        outBar = shell.outBar, runBtn = shell.runBtn;
+  const FILES = [["html","index.html"], ["css","style.css"], ["js","script.js"]];
+  let current = "html";
+
+  const fileTabs = el("span","web-files");
+  bar.appendChild(fileTabs);
+  bar.appendChild(shell.gearBtn);
+  bar.appendChild(runBtn);
+
+  const ed = window.pyEdit.attach({
+    value: p.html || "",
+    lang: window.pyEdit.webLang("html"),
+    onInput: () => { p[current] = ed.ta.value; changed(p); paintRoom(); }
+  });
+  ed.ta.maxLength = store.MAX_CODE;
+  pane.appendChild(ed.editor);
+  pane.appendChild(ed.probs);
+  /* What the suggestions in script.js look in for ids and classes: the HTML
+     file, which is not the one being typed in at the time. */
+  window.webPageCode = () => (current === "html" ? ed.ta.value : (p.html || ""));
+
+  const room = el("p","sb-room");
+  room.hidden = true;
+  pane.appendChild(room);
+  function paintRoom(){
+    const left = store.MAX_CODE - ed.ta.value.length;
+    room.hidden = left > 800;
+    room.textContent = left > 0
+      ? "Room for about " + left + " more characters in this file."
+      : "This file is full. Put the rest in one of the others.";
+  }
+
+  function paintTabs(){
+    fileTabs.innerHTML = "";
+    FILES.forEach(pair => {
+      const t = el("button","web-file" + (pair[0] === current ? " on" : ""), pair[1]);
+      t.type = "button";
+      t.addEventListener("click", () => openFile(pair[0]));
+      fileTabs.appendChild(t);
+    });
+  }
+  /* The three files share one box. What is in it belongs to whichever file is
+     open, so it is put back before the next one is fetched, and the colouring
+     is told which language it is now looking at. */
+  function openFile(key){
+    p[current] = ed.ta.value;
+    current = key;
+    ed.ta.value = p[key] || "";
+    ed.setLang(window.pyEdit.webLang(key));
+    paintTabs();
+    paintRoom();
+  }
+  paintTabs();
+  paintRoom();
+
+  /* --- the preview side --- */
+  const tabPreview = el("button","ide-tab on","Preview");
+  const tabConsole = el("button","ide-tab","Console");
+  const tabHelp = el("button","ide-tab","Help");
+  outBar.appendChild(tabPreview);
+  outBar.appendChild(tabConsole);
+  outBar.appendChild(tabHelp);
+  outBar.appendChild(el("span","ide-file",""));
+  const clearBtn = el("button","ide-small","Clear");
+  outBar.appendChild(clearBtn);
+
+  const frame = document.createElement("iframe");
+  frame.className = "web-preview";
+  frame.setAttribute("scrolling","auto");
+  /* No allow-same-origin: what a student writes runs walled off from the site
+     around it, so nothing it does can reach their sign-in. */
+  frame.setAttribute("sandbox","allow-scripts allow-forms allow-modals");
+  frame.title = "What your page looks like";
+  side.appendChild(frame);
+
+  const consoleBox = el("div","ide-console");
+  consoleBox.hidden = true;
+  const out = el("pre","ide-out"); out.setAttribute("aria-live","polite");
+  consoleBox.appendChild(out);
+  side.appendChild(consoleBox);
+
+  const helpBox = helpPanel([
+    ["HTML", (window.WEB_HELP || {}).html],
+    ["CSS", (window.WEB_HELP || {}).css],
+    ["JavaScript", (window.WEB_HELP || {}).js]
+  ], (head, w) => head === "HTML" ? "<" + w + ">" : w);
+  side.appendChild(helpBox);
+
+  function showTab(which){
+    frame.hidden = which !== "preview";
+    consoleBox.hidden = which !== "console";
+    helpBox.hidden = which !== "help";
+    tabPreview.classList.toggle("on", which === "preview");
+    tabConsole.classList.toggle("on", which === "console");
+    tabHelp.classList.toggle("on", which === "help");
+    if (which === "console") tabConsole.classList.remove("shout");
+  }
+  tabPreview.addEventListener("click", () => showTab("preview"));
+  tabConsole.addEventListener("click", () => showTab("console"));
+  tabHelp.addEventListener("click", () => showTab("help"));
+  clearBtn.addEventListener("click", () => { out.innerHTML = ""; tabConsole.classList.remove("shout"); });
+
+  /* Anything the page prints, or gets wrong, arrives as a message from the
+     frame: a page in a sandbox has no console of its own that anyone out here
+     can see. */
+  window.addEventListener("message", (e) => {
+    const d = e && e.data;
+    if (!d || !d.hubConsole) return;
+    if (frame.contentWindow && e.source !== frame.contentWindow) return;
+    out.appendChild(el("div","con-" + (d.kind === "error" ? "err" : d.kind === "warn" ? "warn" : "log"), d.text));
+    if (d.kind === "error" && consoleBox.hidden) tabConsole.classList.add("shout");
+  });
+
+  function show(){
+    p[current] = ed.ta.value;
+    frame.srcdoc = window.webAssemble
+      ? window.webAssemble(p.html || "", p.css || "", p.js || "")
+      : (p.html || "");
+  }
+  runBtn.addEventListener("click", () => {
+    out.innerHTML = "";
+    tabConsole.classList.remove("shout");
+    showTab("preview");
+    show();
+  });
+  show();          // something to look at before anything is pressed
+}
+
+/* ---------- starting up ---------- */
+on("goSignIn", "click", () => { location.href = MINE_AS_TEACHER ? "admin.html" : "index.html"; });
+
+/* The notes belonging to these programs, out of the store, by id. */
+function noteMap(list){
+  const out = {};
+  list.forEach(p => { const n = store.noteFor(p.id); if (n) out[p.id] = n; });
+  return out;
+}
+
+async function start(){
+  if (VIEW) return startViewing();
+  const signedIn = OFFLINE || (MINE_AS_TEACHER
+    ? !!(window.teacherAuth && window.teacherAuth.have())
+    : !!localStorage.getItem("hub_token"));
+  if (MINE_AS_TEACHER){
+    /* A teacher's sign-in is the console's, so that is where to send them,
+       and the line under the list is a reassurance meant for a child. */
+    const foot = document.querySelector(".sb-foot");
+    if (foot) foot.textContent = "Your own programs, for trying things out. Students cannot see them.";
+    const why = $("needIn").querySelector(".modal-text");
+    if (why) why.textContent = "Your programs are kept with your console sign-in. Sign in to the console, then open the sandbox again from Practice.";
+    $("goSignIn").textContent = "Go to the console";
+  }
+  $("needIn").hidden = signedIn;
+  if (!signedIn) return;
+
+  /* What this browser already has goes on the screen at once, so a student is
+     reading their list rather than watching dots. The real one arrives
+     underneath. */
+  programs = store.localCopy();
+  /* Anything the teacher said last time came down with them and is kept
+     beside them, so the list arrives with its chips on rather than growing
+     one a second later when the server answers. */
+  notes = noteMap(programs);
+  const wanted = new URLSearchParams(location.search).get("open") || "";
+  if (wanted && programs.some(p => p.id === wanted)) openProgram(wanted, false);
+  else showList(false);
+  paintSave();
+
+  try{
+    const up = await store.load();
+    const arrived = noteMap(up);
+    const saidSomething = JSON.stringify(arrived) !== JSON.stringify(notes);
+    notes = arrived;
+    /* Only worth redrawing when the server knew something this browser did
+       not. Redrawing regardless would throw away whatever was typed in the
+       second or two it took to answer. */
+    if (JSON.stringify(up) !== JSON.stringify(programs)){
+      programs = up;
+      if (openId && programs.some(p => p.id === openId)) openProgram(openId, false);
+      else showList(false);
+    } else if (saidSomething){
+      /* A note that arrived on its own needs no new editor, and drawing one
+         would take the last second's typing with it. */
+      if (openId) paintFeedback(programs.find(p => p.id === openId));
+      else paintList();
+    }
+  }catch(e){
+    /* The browser's copy is already on the screen, which is the whole point
+       of putting it there first. Nothing to say. */
+    console.warn("Could not load saved programs:", e);
+  }
+  paintSave();
+}
+
+/* ---------- starting up as a teacher ----------
+   Everything is already in localStorage, put there by the work viewer before
+   it opened this frame: one fetch of the whole class is what that page does
+   anyway, so asking the server again here would be a second request for
+   something already in hand. */
+const INSPECT = "hub_sandbox_inspect";
+function startViewing(){
+  let box = null;
+  try{ box = JSON.parse(localStorage.getItem(INSPECT) || "null"); }catch(e){ box = null; }
+  $("needIn").hidden = true;
+  const foot = document.querySelector(".sb-foot");
+  if (foot) foot.hidden = true;
+  const cog = $("setBtn");
+  if (cog && EMBED) cog.hidden = true;
+  if (!box || !Array.isArray(box.programs)){
+    $("listView").hidden = false;
+    $("progList").innerHTML = "";
+    $("newBtn").hidden = true;
+    $("listCount").textContent = "";
+    $("progList").appendChild(el("p","hint",
+      "There is nothing to show. Open a student from the teacher console."));
+    return;
+  }
+  viewing = box;
+  programs = box.programs;
+  notes = box.notes || {};
+  const wanted = box.open || "";
+  if (wanted && programs.some(p => p.id === wanted)) openProgram(wanted, false);
+  else showList(false);
+}
+
+/* Leaving the page, or even flicking to another tab, is the moment to make
+   sure the server has everything. On a phone, hidden is often the last thing
+   that happens before the tab is thrown away, so it matters more than
+   pagehide does. */
+document.addEventListener("visibilitychange", () => {
+  if (!VIEW && document.visibilityState === "hidden") store.flush(true);
+});
+window.addEventListener("pagehide", () => { if (!VIEW) store.flush(true); });
+
+if (window.initSettings) initSettings($("setBtn"));
+start();
+</script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "title": "Example Lesson",
+  "blocks": [
+    {
+      "type": "page",
+      "id": "page1",
+      "title": "Example Task",
+      "task": "",
+      "startLocked": false,
+      "blocks": [
+        {
+          "type": "ide",
+          "id": "page1_1",
+          "starter": "print(\"Hello World!\")",
+          "key": "cmtimqna51",
+          "title": "Python",
+          "task": "Write your code, then press Run.",
+          "required": false
+        },
+        {
+          "type": "question",
+          "id": "page1_2",
+          "prompt": "What does print do?",
+          "minWords": 20,
+          "extra": [
+            {
+              "prompt": "Why do you need to use variables?",
+              "minWords": 20,
+              "required": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "unit": "Example Unit",
+  "year": "Year X"
+}
