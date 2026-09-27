@@ -9,6 +9,7 @@
    wants to know whether the thing they noticed is meant to be there, not a
    full account of the work. */
 window.CHANGES = [
+  { v:"11.2.2", text:"Pressing Finish now shows a rocket and a progress bar while the work is sent, and the summary only appears once it has arrived. Each student's work waits a moment of up to three seconds before sending, so a whole room finishing at once is spread out a little. Tests work the same way." },
   { v:"11.2.1", text:"When several classes hand in at the same moment, their work now waits its turn and goes through, rather than some of the room being told it could not reach the server. If it is ever too busy even for that, the finished screen says their work is safe and has a Try again button." },
   { v:"11.2", text:"The site now keeps its data in Microsoft Azure, in the UK. Nothing looks different. A backup now also holds the task bank, the specification, pictures and teachers' practice programs, and the storage check measures against the 25GB now available." },
   { v:"11.1", text:"A class's page now has a Progress tab alongside Units & lessons and Students: pick a unit and see the class average lesson by lesson, which students have scored under half in more than one lesson of it, and which task type has lagged across the whole unit, with a button on each lesson straight into its own markbook. The Progress tab on a lesson's own work screen now says how that lesson compares with the one before it in the unit." },

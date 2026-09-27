@@ -2223,6 +2223,161 @@ async function submitWork(){
   }catch(e){ return "failed"; }
 }
 
+/* ---------- handing in at the end: the rocket ----------
+   A whole class presses Finish within the same few seconds, and the free
+   database can only take so much a second. So each hand-in waits a random
+   nought to three seconds first, which spreads a room out a little, and
+   while it waits and while it sends, this screen is up: a bar, a rocket, and
+   a plain instruction not to sign out, because signing out is the one thing
+   that would stop the work arriving.
+
+   The screen stays until the answer comes back, however long the database
+   keeps it queued, and the summary only appears after that, so "Sent to your
+   teacher" on it is always true.
+
+   Everything that decides WHEN is timers and promises. The rocket is drawn
+   on animation frames, which a hidden tab or a paused pane stops giving, so
+   it only ever looks at the clock and never holds anything up. It is moved
+   from JavaScript rather than CSS on purpose: the school has reduced motion
+   on for every machine, and style.css turns every CSS animation off for
+   that, which would leave the rocket standing on the pad. */
+/* Three seconds, not ten. Ten was tried against the live database: it added
+   up to ten seconds for every student in an ordinary lesson and took almost
+   nothing off the worst case, because a database with a queue writes no
+   faster for having been asked later. The queueing in _store.js is what
+   stops a burst failing; this only takes the edge off the first second. */
+const ROCKET_STAGGER_MS = 3000;
+const ROCKET_WORDS = ["Saving", "Almost there", "Sending your work to your teacher", "Stay patient",
+                      "Just a few more seconds"];
+const pause = (ms) => new Promise(go => setTimeout(go, ms));
+
+function rocketScreen(){
+  const back = el("div", "rocket-save no-print");
+  back.setAttribute("role", "status");
+  back.setAttribute("aria-live", "polite");
+  back.innerHTML =
+    '<div class="rs-sky">' +
+      '<div class="rs-stars"></div>' +
+      '<svg class="rs-rocket" viewBox="0 0 80 190" aria-hidden="true">' +
+        '<g class="rs-flame">' +
+          '<path class="rs-flame-out" d="M26 138 Q40 200 54 138 Z"/>' +
+          '<path class="rs-flame-in" d="M32 138 Q40 176 48 138 Z"/>' +
+        '</g>' +
+        '<path class="rs-fin" d="M22 102 L6 140 L24 132 Z"/>' +
+        '<path class="rs-fin" d="M58 102 L74 140 L56 132 Z"/>' +
+        '<path class="rs-body" d="M40 4 C60 24 62 60 60 132 L20 132 C18 60 20 24 40 4 Z"/>' +
+        '<path class="rs-nose" d="M40 4 C50 14 55 26 57 38 L23 38 C25 26 30 14 40 4 Z"/>' +
+        '<circle class="rs-window" cx="40" cy="66" r="11"/>' +
+        '<circle class="rs-glint" cx="36" cy="62" r="3.5"/>' +
+        '<rect class="rs-base" x="20" y="126" width="40" height="8" rx="3"/>' +
+      '</svg>' +
+      '<div class="rs-pad"></div>' +
+    '</div>' +
+    '<div class="rs-panel">' +
+      '<div class="rs-bar"><div class="rs-fill"></div></div>' +
+      '<p class="rs-warn">Saving your work, DO NOT sign out yet!</p>' +
+      '<p class="rs-msg">Saving</p>' +
+    '</div>';
+  document.body.appendChild(back);
+  const rocket = back.querySelector(".rs-rocket"), flame = back.querySelector(".rs-flame");
+  const fill = back.querySelector(".rs-fill"), msg = back.querySelector(".rs-msg");
+  const sky = back.querySelector(".rs-sky"), stars = back.querySelector(".rs-stars");
+
+  /* Smoke, a few puffs rolling out from the pad. */
+  const puffs = [];
+  for (let i = 0; i < 7; i++){ const p = el("div", "rs-puff"); sky.appendChild(p); puffs.push(p); }
+
+  const t0 = performance.now();
+  let leaveAt = 0, word = 0, frame = 0, stopped = false;
+  const words = setInterval(() => { word = (word + 1) % ROCKET_WORDS.length; msg.textContent = ROCKET_WORDS[word]; }, 3000);
+
+  /* How far along the bar is. Nobody can know how long the database will
+     queue a hand-in, so the bar creeps towards nine tenths and waits there,
+     and only the answer arriving fills the rest. */
+  const barAt = (now) => leaveAt ? Math.min(1, 0.9 + (now - leaveAt) / 700)
+                                 : 0.9 * (1 - Math.exp(-(now - t0) / 6000));
+  function draw(now){
+    if (stopped) return;
+    const p = barAt(now), t = (now - t0) / 1000;
+    fill.style.width = (p * 100).toFixed(1) + "%";
+    let lift, shake, tilt, flameSize;
+    if (leaveAt){
+      /* Off it goes: a moment of full power shaking on the spot, then faster
+         and faster, straight up and out of the top. Quicker than this and it
+         was gone before anybody had seen it go. */
+      const s = (now - leaveAt) / 1000;
+      const climb = Math.max(0, s - 0.3);
+      lift = 60 + 950 * climb * climb;
+      shake = s < 0.3 ? 4.5 : 0; tilt = 0; flameSize = s < 0.3 ? 1.5 : 1.8;
+    } else if (p < 0.3){
+      /* Launching: the engine lights and it strains a little off the pad. */
+      const k = p / 0.3;
+      lift = 22 * k * k; shake = 1.2 * k; tilt = 0; flameSize = 0.25 + 0.85 * k;
+    } else {
+      /* Half way: hanging just above the pad, shaking with the effort. */
+      lift = 22 + 38 * Math.min(1, (p - 0.3) / 0.6); shake = 3.2; tilt = 1.6; flameSize = 1.1;
+    }
+    const jx = shake ? (Math.sin(t * 47) + Math.sin(t * 31)) * shake / 2 : 0;
+    const jy = shake ? Math.sin(t * 53) * shake / 2 : 0;
+    const r = tilt ? Math.sin(t * 23) * tilt : 0;
+    rocket.style.transform = "translate(" + jx.toFixed(2) + "px," + (jy - lift).toFixed(1) + "px) rotate(" + r.toFixed(2) + "deg)";
+    const flicker = 1 + Math.sin(t * 61) * 0.08 + Math.sin(t * 37) * 0.06;
+    flame.style.transform = "scale(" + (flameSize * 0.9 + 0.1).toFixed(2) + "," + (flameSize * flicker).toFixed(2) + ")";
+    /* The stars rush downwards once it is away, which is what flying looks like. */
+    stars.style.transform = "translateY(" + (leaveAt ? ((now - leaveAt) / 2) : 0).toFixed(0) + "px)";
+    puffs.forEach((pf, i) => {
+      const life = ((t * 0.55 + i / puffs.length) % 1);
+      const side = i % 2 ? 1 : -1;
+      const strength = leaveAt ? Math.max(0, 1 - (now - leaveAt) / 900) : Math.min(1, p / 0.2);
+      pf.style.transform = "translate(" + (side * (10 + life * 110)).toFixed(0) + "px," + (-life * 26).toFixed(0) + "px) scale(" +
+                           (0.4 + life * 1.3).toFixed(2) + ")";
+      pf.style.opacity = ((1 - life) * 0.65 * strength).toFixed(2);
+    });
+    frame = requestAnimationFrame(draw);
+  }
+  frame = requestAnimationFrame(draw);
+
+  return {
+    /* Sent: the rocket leaves, and the summary comes once it is off the top.
+       Not sent: no launch to celebrate, straight to the summary, which says
+       what happened and offers Try again. */
+    async finish(sent){
+      if (sent){
+        leaveAt = performance.now();
+        msg.textContent = "Sent to your teacher";
+        clearInterval(words);
+        await pause(1700);
+      }
+      stopped = true;
+      cancelAnimationFrame(frame);
+      clearInterval(words);
+      back.remove();
+    }
+  };
+}
+
+/* The wait, the send, and the screen over both. `send` is whatever hands the
+   work in and answers "done" when it has arrived. */
+let rocketUp = false;
+async function rocketSave(send){
+  rocketUp = true;
+  const screen = rocketScreen();
+  let result = "failed";
+  try{
+    await pause(Math.random() * ROCKET_STAGGER_MS);
+    result = await send();
+  }catch(e){ result = "failed"; }
+  await screen.finish(result === "done");
+  rocketUp = false;
+  return result;
+}
+/* Only when something is actually going to a server. Offline, a teacher
+   looking round, or a lesson not yet read back from the server has nothing
+   to send, and nothing to wait for. */
+function rocketWanted(){
+  return !OFFLINE && !spectate && !!token && apiReady && restoreDone;
+}
+
 /* ---------- exam questions in an ordinary lesson ----------
    An assessment already writes a results row and works out its own strength
    and target. A lesson does not, and a lesson of exam questions still has to
@@ -2363,11 +2518,19 @@ async function tryFinish(){
   }
   finishLesson();
 }
-function finishLesson(){
+async function finishLesson(){
+  if (rocketUp) return;              // already on its way: a second press waits with it
   if (lesson && lesson.assessment){ assessmentFinish(); return; }
   finished = true;
   save();
   sendExamMarks();                   // a lesson of exam questions still has a mark
+  /* Sent first, behind the rocket, and the summary drawn with the answer,
+     rather than the summary drawn and the work sent from it. */
+  if (rocketWanted()){
+    const sent = await rocketSave(submitWork);
+    showLessonComplete(false, true, sent);
+    return;
+  }
   showLessonComplete(false, true);   // they have just pressed Finish
 }
 
@@ -5698,14 +5861,21 @@ async function assessmentFinish(){
      it took is still worth recording. */
   if (lesson.practical){
     const secs = Math.round((Date.now() - assessStarted) / 1000);
-    try{
-      await fetch(API + "/api/assessment", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json", Authorization:"Bearer " + token },
-        body: JSON.stringify({ lesson: lessonId, score: 0, outOf: 1, breakdown: {},
-                               strength: "", target: "", seconds: secs })
-      });
-    }catch(e){}
+    const sendTime = async () => {
+      try{
+        const r = await fetch(API + "/api/assessment", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json", Authorization:"Bearer " + token },
+          body: JSON.stringify({ lesson: lessonId, score: 0, outOf: 1, breakdown: {},
+                                 strength: "", target: "", seconds: secs })
+        });
+        return r.ok ? "done" : "failed";
+      }catch(e){ return "failed"; }
+    };
+    /* A test ends with the whole room pressing Finish together, which is the
+       busiest moment there is, so it goes behind the rocket the same way. */
+    if (rocketWanted()) await rocketSave(async () => (await Promise.all([submitWork(), sendTime()]))[1]);
+    else await sendTime();
     renderPracticalComplete();
     return;
   }
@@ -5713,9 +5883,7 @@ async function assessmentFinish(){
   const st = computeST(res.byTopic);
   if (OFFLINE) keepResultLocally(res, st);
 
-  submitWork().then(() => {});
-  let sent = "offline";
-  if (token && apiReady){
+  const sendMark = async () => {
     try{
       const r = await fetch(API + "/api/assessment", {
         method: "POST",
@@ -5724,8 +5892,17 @@ async function assessmentFinish(){
                                breakdown: res.byTopic, strength: st.strength, target: st.target,
                                seconds: Math.round((Date.now() - assessStarted) / 1000) })
       });
-      sent = r.ok ? "done" : "failed";
-    }catch(e){ sent = "failed"; }
+      return r.ok ? "done" : "failed";
+    }catch(e){ return "failed"; }
+  };
+  let sent = "offline";
+  /* The mark and the work both go behind the rocket, and it waits for both:
+     the results page saying the mark was sent should mean it was. What it
+     reports is the mark, which is what that page is about. */
+  if (rocketWanted()) sent = await rocketSave(async () => (await Promise.all([submitWork(), sendMark()]))[1]);
+  else if (token && apiReady){
+    submitWork().then(() => {});
+    sent = await sendMark();
   }
   renderAssessmentComplete(true, res, st, sent);
 }
@@ -6653,7 +6830,7 @@ function achievementCard(){
   }
   return card;
 }
-function showLessonComplete(revisit, justFinished){
+function showLessonComplete(revisit, justFinished, sentAlready){
   const words = doneWords();
   const box = doneShell(words);
   const hero = heroBits(words, lesson.title + " complete");
@@ -6719,7 +6896,9 @@ function showLessonComplete(revisit, justFinished){
 
   if (justFinished) confetti();      // only the moment they finish, not every visit
   if (!revisit && !spectate){
-    submitWork().then(st => { paintStatus(status, st); paintSaveButtons(st === "done" ? "saved" : "idle"); });
+    /* Sent behind the rocket already: say how that went, do not send again. */
+    if (sentAlready){ paintStatus(status, sentAlready); paintSaveButtons(sentAlready === "done" ? "saved" : "idle"); }
+    else submitWork().then(st => { paintStatus(status, st); paintSaveButtons(st === "done" ? "saved" : "idle"); });
   }
   else if (revisit && token && !spectate){
     status.dataset.state = "done";
