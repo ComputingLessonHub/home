@@ -2211,6 +2211,10 @@ async function submitWork(){
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
       body: JSON.stringify({ lesson: lessonId, data: JSON.parse(payload) })
     });
+    /* 503 is the server saying the database is too busy to take this right
+       now, after queueing as long as it can. That is not the same as not
+       reaching it, and the child is told so, with a way to try again. */
+    if (r.status === 503) return "busy";
     if (!r.ok) return "failed";
     lastSubmittedPayload = payload;
     if (typedAt === mark) unsavedTyping = false;   // it has reached the teacher
@@ -6427,7 +6431,24 @@ function paintStatus(elm, state){
   elm.dataset.state = state;
   elm.textContent = state === "done" ? "\u2713 Sent to your teacher"
                   : state === "offline" ? "Sign in so your work can be sent to your teacher"
+                  : state === "busy" ? "The server is very busy just now. Your work is safe on this computer."
                   : "Could not reach the server, press Save Work to try again";
+  /* Busy clears in a minute or so, when a few classes have finished handing
+     in at once. The button is right beside the words that explain it, so
+     nobody has to work out that Save Work is the way to try again. */
+  if (state === "busy"){
+    const again = el("button", "btn-ghost handin-retry", "Try again");
+    again.addEventListener("click", async () => {
+      again.disabled = true;
+      again.textContent = "Trying again\u2026";
+      paintSaveButtons("saving");
+      const st = await submitWork();
+      if (st === "done") noteSaved(false);
+      paintStatus(elm, st);
+      paintSaveButtons(st === "done" ? "saved" : "idle");
+    });
+    elm.appendChild(again);
+  }
 }
 
 /* How well one task went, the same rules work.html's Progress tab marks by,

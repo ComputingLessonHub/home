@@ -529,7 +529,10 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:13p
 .signin-hint a{color:var(--muted)}
 .handin{font-size:14px; font-weight:600; margin:14px 0 0; min-height:18px}
 .handin[data-state=done]{color:var(--mint)}
-.handin[data-state=failed],.handin[data-state=offline]{color:var(--amber)}
+.handin[data-state=failed],.handin[data-state=offline],.handin[data-state=busy]{color:var(--amber)}
+/* Sits on the line after the words, centred with them, rather than tucked
+   on the end of a sentence that wraps differently on every screen. */
+.handin .handin-retry{display:block; margin:10px auto 0}
 
 /* ---- teacher hand-in cards ---- */
 .handin-card{background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:0 0 14px}
@@ -766,7 +769,7 @@ textarea.code{background:var(--code-bg) !important; color:var(--code-fg) !import
 .handin{font-weight:700}
 .handin[data-state=done]{color:var(--mint)}
 .handin[data-state=done]{color:var(--mint)}
-.handin[data-state=offline],.handin[data-state=failed]{color:var(--amber-dark)}
+.handin[data-state=offline],.handin[data-state=failed],.handin[data-state=busy]{color:var(--amber-dark)}
 .counter[data-stage=good]{color:var(--mint)}
 .st-strength b{color:var(--mint)}
 
