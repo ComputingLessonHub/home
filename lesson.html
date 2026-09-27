@@ -2251,6 +2251,13 @@ const ROCKET_WORDS = ["Saving", "Almost there", "Sending your work to your teach
                       "Just a few more seconds"];
 const pause = (ms) => new Promise(go => setTimeout(go, ms));
 
+/* How long an attempt is given before the rocket runs out of fuel. The
+   server queues a busy hand-in for up to 35 seconds (_store.js) and then
+   says so, and the page gives up listening at 45 (config.js). An attempt
+   still out at 35 seconds is not written off: if it arrives later, the
+   rocket picks itself up and goes. */
+const ROCKET_GIVE_UP_MS = 35000;
+
 function rocketScreen(){
   const back = el("div", "rocket-save no-print");
   back.setAttribute("role", "status");
@@ -2277,30 +2284,42 @@ function rocketScreen(){
       '<div class="rs-bar"><div class="rs-fill"></div></div>' +
       '<p class="rs-warn">Saving your work, DO NOT sign out yet!</p>' +
       '<p class="rs-msg">Saving</p>' +
+      '<div class="rs-actions" hidden>' +
+        '<button class="btn-primary rs-again">Try again</button>' +
+        '<button class="btn-ghost rs-leave">Go to my summary</button>' +
+      '</div>' +
     '</div>';
   document.body.appendChild(back);
   const rocket = back.querySelector(".rs-rocket"), flame = back.querySelector(".rs-flame");
   const fill = back.querySelector(".rs-fill"), msg = back.querySelector(".rs-msg");
+  const warn = back.querySelector(".rs-warn"), actions = back.querySelector(".rs-actions");
   const sky = back.querySelector(".rs-sky"), stars = back.querySelector(".rs-stars");
 
   /* Smoke, a few puffs rolling out from the pad. */
   const puffs = [];
   for (let i = 0; i < 7; i++){ const p = el("div", "rs-puff"); sky.appendChild(p); puffs.push(p); }
 
-  const t0 = performance.now();
-  let leaveAt = 0, word = 0, frame = 0, stopped = false;
-  const words = setInterval(() => { word = (word + 1) % ROCKET_WORDS.length; msg.textContent = ROCKET_WORDS[word]; }, 3000);
+  let t0 = performance.now();
+  let leaveAt = 0, fallAt = 0, fallFrom = null, lastLift = 0;
+  let word = 0, words = 0, frame = 0, stopped = false;
+  const startWords = () => {
+    clearInterval(words); word = 0; msg.textContent = ROCKET_WORDS[0];
+    words = setInterval(() => { word = (word + 1) % ROCKET_WORDS.length; msg.textContent = ROCKET_WORDS[word]; }, 3000);
+  };
+  startWords();
 
   /* How far along the bar is. Nobody can know how long the database will
      queue a hand-in, so the bar creeps towards nine tenths and waits there,
-     and only the answer arriving fills the rest. */
+     and only the answer arriving fills the rest. Out of fuel, it stops
+     where it was. */
   const barAt = (now) => leaveAt ? Math.min(1, 0.9 + (now - leaveAt) / 700)
-                                 : 0.9 * (1 - Math.exp(-(now - t0) / 6000));
+                       : fallAt ? fallFrom.p
+                       : 0.9 * (1 - Math.exp(-(now - t0) / 6000));
   function draw(now){
     if (stopped) return;
     const p = barAt(now), t = (now - t0) / 1000;
     fill.style.width = (p * 100).toFixed(1) + "%";
-    let lift, shake, tilt, flameSize;
+    let lift, shake, tilt, flameSize, lean = 0, slide = 0, dust = 0;
     if (leaveAt){
       /* Off it goes: a moment of full power shaking on the spot, then faster
          and faster, straight up and out of the top. Quicker than this and it
@@ -2309,6 +2328,32 @@ function rocketScreen(){
       const climb = Math.max(0, s - 0.3);
       lift = 60 + 950 * climb * climb;
       shake = s < 0.3 ? 4.5 : 0; tilt = 0; flameSize = s < 0.3 ? 1.5 : 1.8;
+    } else if (fallAt){
+      /* Out of fuel. The flame coughs and dies, it hangs for a moment, drops
+         back onto the pad, and topples over on its side with a puff of dust.
+         Then it lies there until somebody presses Try again. */
+      const s = (now - fallAt) / 1000;
+      shake = 0; tilt = 0;
+      if (s < 0.8){
+        lift = fallFrom.lift; shake = 2.2;
+        const dying = 1 - s / 0.8;
+        flameSize = dying * (Math.sin(t * 90) > 0.2 ? 1 : 0.15);
+      } else if (s < 1.25){
+        const k = (s - 0.8) / 0.45;
+        lift = fallFrom.lift * (1 - k * k); flameSize = 0;
+      } else {
+        const k = Math.min(1, (s - 1.25) / 0.6);
+        /* Tips past where it will rest, then settles back. */
+        const back = 1.70158;
+        const eased = 1 + (back + 1) * Math.pow(k - 1, 3) + back * Math.pow(k - 1, 2);
+        /* It turns about a point near its base, which sits a good way above
+           the pad once it is on its side, so it also comes down the last
+           few pixels as it goes over: lying on the pad, not floating by it.
+           Measured in the browser: 36px down, 24px across. */
+        lean = 78 * eased; slide = 24 * k; flameSize = 0;
+        lift = (k < 0.5 ? 5 * Math.sin(Math.PI * k * 2) : 0) - 36 * Math.min(1, k * 1.2);
+        dust = Math.max(0, 1 - (s - 1.6) / 1.0) * (s > 1.5 ? 1 : 0);
+      }
     } else if (p < 0.3){
       /* Launching: the engine lights and it strains a little off the pad. */
       const k = p / 0.3;
@@ -2317,18 +2362,21 @@ function rocketScreen(){
       /* Half way: hanging just above the pad, shaking with the effort. */
       lift = 22 + 38 * Math.min(1, (p - 0.3) / 0.6); shake = 3.2; tilt = 1.6; flameSize = 1.1;
     }
+    if (!fallAt) lastLift = lift;
     const jx = shake ? (Math.sin(t * 47) + Math.sin(t * 31)) * shake / 2 : 0;
     const jy = shake ? Math.sin(t * 53) * shake / 2 : 0;
-    const r = tilt ? Math.sin(t * 23) * tilt : 0;
-    rocket.style.transform = "translate(" + jx.toFixed(2) + "px," + (jy - lift).toFixed(1) + "px) rotate(" + r.toFixed(2) + "deg)";
+    const r = (tilt ? Math.sin(t * 23) * tilt : 0) + lean;
+    rocket.style.transform = "translate(" + (jx + slide).toFixed(2) + "px," + (jy - lift).toFixed(1) + "px) rotate(" + r.toFixed(2) + "deg)";
     const flicker = 1 + Math.sin(t * 61) * 0.08 + Math.sin(t * 37) * 0.06;
-    flame.style.transform = "scale(" + (flameSize * 0.9 + 0.1).toFixed(2) + "," + (flameSize * flicker).toFixed(2) + ")";
+    flame.style.transform = "scale(" + (flameSize * 0.9 + (flameSize ? 0.1 : 0)).toFixed(2) + "," + (flameSize * flicker).toFixed(2) + ")";
     /* The stars rush downwards once it is away, which is what flying looks like. */
     stars.style.transform = "translateY(" + (leaveAt ? ((now - leaveAt) / 2) : 0).toFixed(0) + "px)";
     puffs.forEach((pf, i) => {
       const life = ((t * 0.55 + i / puffs.length) % 1);
       const side = i % 2 ? 1 : -1;
-      const strength = leaveAt ? Math.max(0, 1 - (now - leaveAt) / 900) : Math.min(1, p / 0.2);
+      const strength = leaveAt ? Math.max(0, 1 - (now - leaveAt) / 900)
+                     : fallAt ? dust
+                     : Math.min(1, p / 0.2);
       pf.style.transform = "translate(" + (side * (10 + life * 110)).toFixed(0) + "px," + (-life * 26).toFixed(0) + "px) scale(" +
                            (0.4 + life * 1.3).toFixed(2) + ")";
       pf.style.opacity = ((1 - life) * 0.65 * strength).toFixed(2);
@@ -2338,6 +2386,33 @@ function rocketScreen(){
   frame = requestAnimationFrame(draw);
 
   return {
+    /* Out of fuel: the rocket falls, and Try again comes up on this same
+       screen. Answers "again", "summary", or "done" when an attempt that was
+       still out arrives after all. `late` is that attempt, if there is one. */
+    fall(late, why){
+      fallFrom = { lift: lastLift, p: barAt(performance.now()) };
+      fallAt = performance.now();
+      clearInterval(words);
+      back.classList.add("fallen");
+      warn.textContent = why === "failed" ? "We could not reach the server." : "The server is very busy just now.";
+      msg.textContent = "Your work is safe on this computer.";
+      actions.hidden = false;
+      return new Promise(answer => {
+        let settled = false;
+        const settle = (choice) => { if (settled) return; settled = true; actions.hidden = true; answer(choice); };
+        actions.querySelector(".rs-again").onclick = () => settle("again");
+        actions.querySelector(".rs-leave").onclick = () => settle("summary");
+        if (late) late.then(r => { if (r === "done") settle("done"); });
+      });
+    },
+    /* Back on the pad with the engine lit, for another go. */
+    relaunch(){
+      fallAt = 0; fallFrom = null; t0 = performance.now();
+      back.classList.remove("fallen");
+      warn.textContent = "Saving your work, DO NOT sign out yet!";
+      actions.hidden = true;
+      startWords();
+    },
     /* Sent: the rocket leaves, and the summary comes once it is off the top.
        Not sent: no launch to celebrate, straight to the summary, which says
        what happened and offers Try again. */
@@ -2357,20 +2432,39 @@ function rocketScreen(){
 }
 
 /* The wait, the send, and the screen over both. `send` is whatever hands the
-   work in and answers "done" when it has arrived. */
+   work in and answers "done" when it has arrived.
+
+   An attempt that comes back busy, or has not come back in 35 seconds, makes
+   the rocket fall, and the student chooses: Try again, which waits its short
+   random moment and sends again, or Go to my summary, which is there because
+   nothing on this site traps a child on a screen (CLAUDE.md), and where the
+   summary says the work is safe and has its own Try again. */
 let rocketUp = false;
 async function rocketSave(send){
   rocketUp = true;
   const screen = rocketScreen();
   let result = "failed";
-  try{
+  for (;;){
     await pause(Math.random() * ROCKET_STAGGER_MS);
-    result = await send();
-  }catch(e){ result = "failed"; }
+    const attempt = Promise.resolve().then(send).catch(() => "failed");
+    result = await Promise.race([attempt, pause(ROCKET_GIVE_UP_MS).then(() => "slow")]);
+    if (result === "done") break;
+    const choice = await screen.fall(result === "slow" ? attempt : null, result);
+    if (choice === "done"){
+      /* The slow one got there after all: up off its side and away. */
+      result = "done";
+      screen.relaunch();
+      await pause(600);
+      break;
+    }
+    if (choice === "summary"){ if (result === "slow") result = "busy"; break; }
+    screen.relaunch();
+  }
   await screen.finish(result === "done");
   rocketUp = false;
   return result;
 }
+
 /* Only when something is actually going to a server. Offline, a teacher
    looking round, or a lesson not yet read back from the server has nothing
    to send, and nothing to wait for. */

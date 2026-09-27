@@ -9,6 +9,7 @@
    wants to know whether the thing they noticed is meant to be there, not a
    full account of the work. */
 window.CHANGES = [
+  { v:"11.2.3", text:"If handing in has not gone through after 35 seconds, or the server is too busy, the rocket runs out of fuel and falls over, and a Try again button appears on the same screen. Go to my summary is there too, and the work stays safe on the computer either way." },
   { v:"11.2.2", text:"Pressing Finish now shows a rocket and a progress bar while the work is sent, and the summary only appears once it has arrived. Each student's work waits a moment of up to three seconds before sending, so a whole room finishing at once is spread out a little. Tests work the same way." },
   { v:"11.2.1", text:"When several classes hand in at the same moment, their work now waits its turn and goes through, rather than some of the room being told it could not reach the server. If it is ever too busy even for that, the finished screen says their work is safe and has a Try again button." },
   { v:"11.2", text:"The site now keeps its data in Microsoft Azure, in the UK. Nothing looks different. A backup now also holds the task bank, the specification, pictures and teachers' practice programs, and the storage check measures against the 25GB now available." },
