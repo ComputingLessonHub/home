@@ -2321,26 +2321,14 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
    A row of categories across the top; pressing one drops its tasks out
    underneath. Anything that will not fit on the line goes behind More at
    the end, which opens sideways instead. */
-.pageadd{display:flex; flex-direction:column; gap:8px; margin-top:12px}
-.pageadd-bar{display:flex; flex-wrap:wrap; gap:6px; align-items:flex-start}
-.pageadd-chip{padding:8px 13px; border:1.5px solid var(--line-2); border-radius:999px;
-  background:var(--panel); color:var(--text); font-family:var(--body);
-  font-size:13.5px; font-weight:700; cursor:pointer; white-space:nowrap}
-.pageadd-chip:hover{border-color:var(--amber); color:var(--amber)}
-.pageadd-chip.open{border-color:var(--amber); background:var(--amber); color:var(--amber-ink)}
-.pageadd-tray{display:flex; flex-wrap:wrap; gap:6px; padding:10px 12px;
-  border:1.5px solid var(--line-2); border-radius:12px; background:var(--panel-2)}
-.pageadd-tray[hidden]{display:none}
-
-/* the ones that did not fit, in a small stack beside More */
-/* Held to two lines on a phone. Only ever clipped, never rearranged, so a
-   measurement taken before the column has its width cannot hide anything. */
-.pageadd-bar.clamped{overflow:hidden}
-.pageadd-more{align-self:flex-start; padding:6px 13px; border:1.5px dashed var(--line-2);
-  border-radius:999px; background:none; color:var(--muted); cursor:pointer;
-  font-family:var(--body); font-size:13px; font-weight:700}
-.pageadd-more:hover{border-color:var(--amber); color:var(--amber)}
-.pageadd-more[hidden]{display:none}
+/* + Add task, under every list of tasks. One button; the list of every kind
+   of task is in the pop-up it opens. */
+.pageadd{display:flex; margin-top:10px}
+.pageadd-btn{padding:9px 16px; border:1.5px dashed var(--line-2); border-radius:12px;
+  background:transparent; color:var(--muted); font-family:var(--body);
+  font-size:14px; font-weight:700; cursor:pointer; width:100%; text-align:left}
+.pageadd-btn:hover, .pageadd-btn:focus-visible{border-color:var(--amber); color:var(--amber-dark);
+  background:rgba(220,138,62,.06); outline:none}
 
 /* the lesson code, big enough to read off a teacher's screen */
 .sharecode{ font-family:var(--mono); font-size:38px; letter-spacing:.22em; text-indent:.22em;
@@ -3686,6 +3674,11 @@ html[data-bg=dark] kbd{background:#2A303B; border-color:#4A515F}
 .checkrow select, .morecond select{text-overflow:ellipsis}
 .bfield.wide input{width:100%}
 .addcond{flex:none; white-space:nowrap}
+/* the output checks: a box of several lines, set in the same type as the
+   console so the lines up as they will be printed */
+.checkfield.outfield{flex:1 1 100%}
+.checkfield textarea.outtext{width:100%; min-width:0; font-family:var(--mono); font-size:13px;
+  line-height:1.45; resize:vertical; white-space:pre; overflow-x:auto}
 
 /* Aa, the way a search bar shows it: struck through while capitals are being
    ignored, solid and marked when they have to match. */
@@ -5005,3 +4998,94 @@ html[data-build=compact] .homebar .title{flex:1 1 0; min-width:0}
 .dragline{position:fixed; z-index:120; pointer-events:none; border-radius:2px;
   background:var(--amber); box-shadow:0 0 0 1px var(--bg), 0 1px 4px rgba(0,0,0,.28)}
 .dragline[hidden]{display:none}
+
+
+/* =====================================================================
+   The lesson builder's page of tasks
+   ===================================================================== */
+
+/* The page being edited: its title is a heading, not a box in a card, and its
+   tasks are the list itself rather than a list inside that card. */
+.pageview{margin:0 0 14px}
+.pv-top{padding:4px 2px 12px}
+.pv-eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--dim); margin:0 0 2px}
+.pv-row{display:flex; align-items:center; gap:10px}
+.pv-title{flex:1; min-width:0; font-family:var(--display); font-size:24px; font-weight:800;
+  color:var(--text); background:transparent; border:1.5px solid transparent; border-radius:10px;
+  padding:4px 8px; margin-left:-9px}
+.pv-title:hover{border-color:var(--line)}
+.pv-title:focus{border-color:var(--amber); background:var(--panel); outline:none}
+.pv-title::placeholder{color:var(--dim)}
+.pv-tools{flex:none; align-items:center}
+.pv-morebtn{font-size:18px; padding:3px 10px}
+.pv-menu{min-width:220px}
+.pv-menu button.danger{color:var(--red)}
+.pv-menu-note{margin:6px 12px 4px; padding-top:8px; border-top:1px solid var(--line);
+  font-size:12px; line-height:1.45; color:var(--dim); max-width:240px}
+.pv-flags{display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 0}
+.pv-flag{font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px;
+  background:var(--panel-2); border:1px solid var(--line-2); color:var(--muted)}
+.pv-sub{margin-top:8px}
+.pageview > .pagekids{margin:0; padding:0; border-left:none}
+.pageview > .pagekids > .bcard{background:var(--panel)}
+.pageview > .pagekids.over{background:rgba(220,138,62,.06); border-radius:12px}
+
+/* The + between two tasks. It sits in the gap and only shows while the
+   pointer is there, or while it has the keyboard's focus. */
+.binsert{position:relative; height:0}
+.binsert-btn{position:absolute; left:0; right:0; top:-11px; height:14px; z-index:3;
+  border:none; background:transparent; cursor:pointer; opacity:0; padding:0;
+  font-size:0; color:transparent}
+.binsert-btn::before{content:""; position:absolute; left:12px; right:12px; top:6px; height:2px;
+  border-radius:2px; background:var(--amber)}
+.binsert-btn::after{content:"+"; position:absolute; left:50%; top:-4px; transform:translateX(-50%);
+  width:22px; height:22px; line-height:21px; border-radius:50%; text-align:center;
+  background:var(--amber); color:var(--amber-ink); font-size:16px; font-weight:800}
+.binsert-btn:hover, .binsert-btn:focus-visible{opacity:1; outline:none}
+@media (hover:none){ .binsert{display:none} }
+
+/* An optional box with nothing in it, shown as a link to it. Runs of them
+   share a line. */
+.optrow{display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px}
+.optlink{padding:5px 11px; border:1.5px dashed var(--line-2); border-radius:999px;
+  background:transparent; color:var(--muted); font-family:var(--body);
+  font-size:13px; font-weight:700; cursor:pointer}
+.optlink:hover, .optlink:focus-visible{border-color:var(--amber); color:var(--amber-dark); outline:none}
+
+/* A task's settings, folded under one line at the bottom of it. */
+.bsettings{margin:4px 0 0; border-top:1px solid var(--line); padding-top:8px}
+.bset-head{display:flex; align-items:center; gap:8px; width:100%; min-width:0; padding:6px 4px;
+  border:none; background:transparent; cursor:pointer; text-align:left;
+  font-family:var(--body); font-size:14px; color:var(--text); border-radius:8px}
+.bset-head:hover{background:var(--panel-2)}
+.bset-arrow{flex:none; width:14px; color:var(--dim)}
+.bset-head b{flex:none}
+.bset-sum{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-size:12.5px; color:var(--dim)}
+.bset-body{padding:10px 0 0}
+.bset-body[hidden]{display:none}
+
+/* The pop-up + Add task opens. */
+.modal.taskpicker{max-width:720px}
+.tp-find{width:100%; margin:4px 0 14px; padding:10px 12px; font-size:15px}
+.tp-group{margin:0 0 14px}
+.tp-group[hidden]{display:none}
+.tp-head{font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--dim); margin:0 0 6px}
+.tp-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:6px}
+.tp-item{display:block; text-align:left; padding:9px 12px; border:1.5px solid var(--line);
+  border-radius:12px; background:var(--panel); cursor:pointer; font-family:var(--body); color:var(--text)}
+.tp-item[hidden]{display:none}
+.tp-item:hover, .tp-item:focus-visible{border-color:var(--amber); outline:none}
+.tp-item b{display:block; font-size:14.5px}
+.tp-item span{display:block; font-size:12.5px; color:var(--muted); margin-top:1px}
+
+/* The formatting bar on a box in the builder only while that box is being
+   written in, and under it rather than over it, so the words do not jump
+   down the moment the box is clicked. */
+.rt.rt-auto{display:flex; flex-direction:column}
+.rt.rt-auto > .rt-bar{order:2; display:none; border-bottom:none; border-top:1px solid var(--line);
+  position:static}
+.rt.rt-auto.rt-on > .rt-bar{display:flex}
+.rt.rt-auto .rt-box{order:1}

@@ -3679,7 +3679,7 @@ function rPython(b){
 /* ======================================================================
    BUILT-IN PYTHON IDE ,  replaces Trinket
    {"type":"ide", "task":"...", "starter":"...", "turtle":true,
-    "inputs":"Ada\n12", "expect":"Hello", "height":320, "readOnly":false}
+    "inputs":"Ada\n12", "height":320, "readOnly":false}
    Runs entirely in the browser through Pyodide. Turtle graphics, input()
    and a guard against endless loops all come from pyhub.js.
    ====================================================================== */
@@ -4177,12 +4177,6 @@ function rIDE(b){
     ran = true; runs++;
     if (checklist) checklist.refresh(cheerNext ? side : null);
     cheerNext = false;
-    if (b.expect && res.ok){
-      const good = lastOut.toLowerCase().includes(String(b.expect).toLowerCase());
-      note.hidden = false;
-      note.className = "ide-note " + (good ? "ok" : "no");
-      note.textContent = good ? "That's the output we were looking for \u2713" : "Not quite yet, keep going.";
-    }
     markDirty();
     return true;
   }
@@ -4387,8 +4381,6 @@ function rIDE(b){
            check:() => {
              if (!canRun) return { ok:true };            // nothing to run, nothing to wait for
              if (!ran) return { ok:false, message:"Press Run to try your code" };
-             if (b.expect && !lastOut.toLowerCase().includes(String(b.expect).toLowerCase()))
-               return { ok:false, message:"Keep going until the output is right" };
              return { ok:true };
            },
            brief:{ eyebrow:"Code", title:b.title || "", text:b.task || "" } };
