@@ -5367,3 +5367,40 @@ body.has-rail .page, body.has-rail .crumbbar{margin-left:228px}
 .heat th.heat-col{color:var(--muted); font-weight:700}
 .heat-avg th.heat-name{color:var(--amber-dark)}
 .stusort{height:auto; padding:8px 10px; font-size:14px; line-height:1.3}
+
+/* =====================================================================
+   Viewing work: who is left, the answers panel, the comment bank, keys
+   ===================================================================== */
+.onlyunmarked{display:inline-flex; align-items:center; gap:6px; font-size:13.5px; font-weight:700; color:var(--muted);
+  cursor:pointer; white-space:nowrap}
+.markcount{font-size:13px; font-weight:700; color:var(--mint); white-space:nowrap}
+.keyhelp{margin-left:auto}
+.answerpanel{border:1.5px solid var(--line); border-radius:12px; margin:0 0 14px; background:var(--panel-2)}
+.ans-head{display:flex; align-items:center; gap:8px; width:100%; padding:10px 12px; border:none; background:transparent;
+  cursor:pointer; text-align:left; font-family:var(--body); font-size:14px; color:var(--text)}
+.ans-arrow{color:var(--dim); width:12px}
+.answerpanel.shut .ans-body{display:none}
+.ans-body{padding:0 12px 12px; max-height:42vh; overflow-y:auto}
+.ans-page{margin:10px 0 4px; font-size:11px; font-family:var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--dim)}
+.ans-task{padding:8px 0; border-top:1px solid var(--line)}
+.ans-task:first-child{border-top:none}
+.ans-row{font-size:13px; line-height:1.4; margin:2px 0}
+.ans-row b{display:block; font-weight:700}
+.ans-row span{display:block; color:var(--amber-dark); white-space:pre-line}
+.ans-row.theirs span{color:var(--muted)}
+.ans-row.ok b{color:var(--mint)}
+.ans-row.no b{color:var(--red)}
+.reusewrap{display:inline-flex; margin-left:6px}
+.bank{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
+.reuselist{display:flex; flex-direction:column; gap:6px; margin:10px 0}
+.reuseitem{display:flex; align-items:flex-start; gap:10px; width:100%; text-align:left; padding:10px 12px;
+  border:1.5px solid var(--line); border-radius:10px; background:var(--panel); cursor:pointer;
+  font-family:var(--body); font-size:14px; color:var(--text)}
+.reuseitem[hidden]{display:none}
+.reuseitem:hover{border-color:var(--amber)}
+.reuseitem > span:first-child{flex:1}
+.reusen{flex:none; font-size:12px; font-weight:700; color:var(--dim)}
+.keylist{display:flex; flex-direction:column; gap:8px; margin:6px 0 16px}
+.keyrow{display:flex; align-items:center; gap:12px; font-size:14px}
+.keyrow kbd{min-width:110px; font-family:var(--mono); font-size:12.5px; padding:4px 8px; border-radius:6px;
+  border:1px solid var(--line-2); background:var(--panel-2); text-align:center}
