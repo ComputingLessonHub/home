@@ -16,6 +16,8 @@
 <script src="menus.js"></script>
 <script src="dragline.js"></script>
 <script src="author-editors.js"></script>
+<script src="author-extras.js"></script>
+<script src="ui.js"></script>
 <script src="settings.js"></script>
 </head>
 <body>
@@ -100,7 +102,8 @@
     <select id="lSub" title="Sub-point" hidden></select>
   </div>
   <div class="build-actions">
-    <button class="btn-primary" id="saveSite">Save to the site</button>
+    <span class="savestate" id="saveState" aria-live="polite"></span>
+    <button class="btn-primary" id="saveSite" title="Save to the site (Ctrl+S)">Save to the site</button>
     <span class="menuwrap">
       <button class="btn-ghost iconbtn" id="moreBtn" title="More">&#8942;</button>
       <span class="menu" id="moreMenu" hidden>
@@ -734,6 +737,7 @@ function saveDraft(){
      nothing being edited that put "Saving..." up over an empty pane. */
   if (bankOpen && bankTask && bankTask.block){ bankTouch(); return; }
   dirty = true;
+  builderChanged();                    // undo, the draft and the save status
 }
 function loadDraft(){ /* deliberately empty, see the note above */ }
 try{
@@ -870,6 +874,7 @@ function compile(){
     if (extras.length) out.extensions = extras;
   }
   firstPageOpen();
+  resetCompiledIds();                  // so the preview and the builder can find each other's tasks
   lesson.blocks.forEach((b, i) => compileOne(b, b.type + (i + 1), out.blocks));
   idsUsed = null;
   return out;
@@ -910,6 +915,7 @@ function answerLines(b){
 }
 function compileOne(b, id, target){
   id = blockId(b, id);
+  noteCompiledId(b, id);
   /* "can be skipped" is remembered on whatever the task compiles to */
   const push = (x) => {
     if (x && b && b.required === false) x.required = false;
@@ -1425,6 +1431,7 @@ function render(){
   const keepList = list ? list.scrollTop : 0;
   const keepPage = window.scrollY;
   renderNow();
+  builderRendered();
   const want = scrollToBlock; scrollToBlock = null;
   if (!list) return;
   if (want){
@@ -2084,6 +2091,11 @@ function card(b, i, arr){
       saveDraft(); render();
     });
   }
+  /* Something a student would get stuck on, marked on the line itself. */
+  if (b.type !== "page"){
+    const dot = problemDot(b);
+    if (dot) head.appendChild(dot);
+  }
   const paintHead = () => { btype.textContent = headLabel(b, i); };
   const tools = el("span","btools");
   /* A page in the task builder is a shape to fill in, not a page of a
@@ -2122,10 +2134,13 @@ function card(b, i, arr){
   const acts = (b === bankRoot) ? [] :
                [["\u2191","Move up", () => move(arr, i, -1)],
                 ["\u2193","Move down", () => move(arr, i, 1)],
-                ["\u29C9","Duplicate", () => { arr.splice(i + 1, 0, JSON.parse(JSON.stringify(b))); render(); schedulePreview(); }],
+                ["\u29C9","Duplicate", () => { arr.splice(i + 1, 0, JSON.parse(JSON.stringify(b))); render(); schedulePreview(); saveDraft(); }],
+                ["copy","Copy to paste into another lesson", () => clipCopy(b)],
                 ["\u2715","Delete", () => askDelete(LABEL[b.type], () => { arr.splice(i, 1); render(); schedulePreview(); })]];
   acts.forEach(a => {
-    const btn = el("button","btn-ghost bmini", a[0]); btn.title = a[1];
+    const btn = el("button","btn-ghost bmini", a[0] === "copy" ? "" : a[0]); btn.title = a[1];
+    if (a[0] === "copy" && window.hubUI) btn.innerHTML = window.hubUI.icon("copy", 15);
+    btn.setAttribute("aria-label", a[1]);
     btn.addEventListener("click", a[2]);
     tools.appendChild(btn);
   });
@@ -2301,10 +2316,13 @@ function say(title, message, opts){
 function askDelete(what, done){
   openModal(box => {
     box.appendChild(el("h2","","Delete this " + String(what || "task").toLowerCase() + "?"));
-    box.appendChild(el("p","modal-text","It will be removed from the lesson. You can undo it only by adding it again."));
+    box.appendChild(el("p","modal-text","It will be removed from the lesson. Ctrl+Z, or Undo in the message afterwards, brings it back."));
     const yes = el("button","btn-primary modal-cta","Delete");
     yes.style.background = "var(--red)";
-    yes.addEventListener("click", () => { closeModal(); done(); });
+    yes.addEventListener("click", () => {
+      closeModal(); done();
+      if (window.hubUI) window.hubUI.toast(String(what || "Task") + " deleted", { action:"Undo", onAction: builderUndo });
+    });
     const no = el("button","btn-ghost modal-stay","Keep it");
     no.addEventListener("click", closeModal);
     box.appendChild(yes); box.appendChild(no);
@@ -6418,6 +6436,7 @@ async function saveToSite(){
     if (!r.ok) throw new Error(d.error || "Could not save it.");
     lesson.savedAs = d.id;
     dirty = false;                       // saved, and nothing changed since
+    builderSaved();
     if (lesson.versionOf){
       say("Saved as a version", "It is under \u201C" + parentTitle() + "\u201D in the lesson hub, behind the "
           + "Versions button. Give it to a class from your teacher console.");
@@ -6432,8 +6451,9 @@ async function saveToSite(){
 }
 on("saveSite", "click", () => {
   /* On a narrow screen Save is a button in the corner rather than a wide
-     one that says where it is sending the lesson, so it confirms first. */
-  if (isCompact()) savePopup(); else saveToSite();
+     one that says where it is sending the lesson, so it confirms first.
+     Either way anything a student would get stuck on is listed first. */
+  checkBeforeSave(() => { if (isCompact()) savePopup(); else saveToSite(); });
 });
 
 /* deleting from here asks twice too, it is the same job as in the console */

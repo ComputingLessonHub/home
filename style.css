@@ -5123,3 +5123,92 @@ html[data-build=compact] .homebar .title{flex:1 1 0; min-width:0}
 .pv-sublabel{margin-top:10px}
 .pv-sublabel label{font-size:13.5px; font-weight:700; color:var(--muted)}
 .pv-sub{margin-top:0}
+
+/* =====================================================================
+   Shared pieces from ui.js: icons, toasts, loading shapes, switches
+   ===================================================================== */
+.hi{display:inline-block; vertical-align:middle; flex:none}
+.hi-wrap{display:inline-flex; align-items:center; justify-content:center}
+.iconbtn .hi{margin:0}
+
+.toasts{position:fixed; right:18px; bottom:18px; z-index:10000; display:flex; flex-direction:column;
+  gap:8px; align-items:flex-end; pointer-events:none; max-width:min(420px, calc(100vw - 36px))}
+.toast{pointer-events:auto; display:flex; align-items:center; gap:10px; padding:10px 10px 10px 14px;
+  border-radius:12px; background:var(--text); color:var(--panel); font-size:14px; font-weight:600;
+  box-shadow:0 8px 24px rgba(0,0,0,.22); animation:toastIn .18s ease-out}
+.toast.error{background:var(--red); color:#fff}
+.toast.going{opacity:0; transform:translateY(6px); transition:opacity .2s, transform .2s}
+.toast-words{flex:1; min-width:0}
+.toast-act{border:none; background:transparent; color:inherit; font:inherit; font-weight:800;
+  text-decoration:underline; text-underline-offset:3px; cursor:pointer; padding:4px 6px}
+.toast-x{border:none; background:transparent; color:inherit; opacity:.7; cursor:pointer; padding:4px;
+  display:inline-flex; border-radius:6px}
+.toast-x:hover{opacity:1}
+@keyframes toastIn{from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none}}
+@media (max-width:640px){ .toasts{left:12px; right:12px; bottom:12px; align-items:stretch; max-width:none} }
+
+.skel{display:grid; gap:14px}
+.skel-tiles{grid-template-columns:repeat(auto-fill, minmax(210px, 1fr))}
+.skel-rows{grid-template-columns:minmax(0,1fr); gap:8px}
+.skel-lines{gap:10px}
+.skel-item{display:flex; flex-direction:column; gap:10px; padding:18px; border-radius:16px;
+  background:var(--panel); border:1.5px solid var(--line)}
+.skel-rows .skel-item{flex-direction:row; align-items:center; padding:14px 16px; border-radius:12px}
+.skel-bar{display:block; height:12px; border-radius:6px; background:var(--panel-2);
+  animation:skelPulse 1.4s ease-in-out infinite}
+.skel-item .skel-bar.w60{width:60%; height:16px}
+.skel-item .skel-bar.w35{width:35%}
+.skel-lines .skel-item.skel-bar{padding:0; border:none; height:12px}
+@keyframes skelPulse{0%,100%{opacity:1} 50%{opacity:.45}}
+@media (prefers-reduced-motion:reduce){ .skel-bar{animation:none} }
+
+.set-switches{display:flex; flex-direction:column; gap:6px}
+.set-switch{display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:10px 12px;
+  border:1.5px solid var(--line); border-radius:12px; background:var(--panel); cursor:pointer;
+  font-family:var(--body); color:var(--text)}
+.set-switch:hover{border-color:var(--line-2)}
+.set-switch-words{flex:1; min-width:0}
+.set-switch-words b{display:block; font-size:14px}
+.set-switch-words span{display:block; font-size:12.5px; color:var(--muted)}
+.set-switch-knob{flex:none; width:38px; height:22px; border-radius:999px; background:var(--line-2);
+  position:relative; transition:background .15s}
+.set-switch-knob::after{content:""; position:absolute; top:3px; left:3px; width:16px; height:16px;
+  border-radius:50%; background:#fff; transition:transform .15s; box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.set-switch.on .set-switch-knob{background:var(--amber)}
+.set-switch.on .set-switch-knob::after{transform:translateX(16px)}
+
+/* =====================================================================
+   Lesson builder: save state, problems, quieter task lines
+   ===================================================================== */
+.savestate{font-size:13px; font-weight:700; color:var(--muted); white-space:nowrap; margin-right:4px}
+.savestate:empty{display:none}
+.savestate.unsaved{color:var(--amber-dark)}
+.savestate.unsaved::before{content:""; display:inline-block; width:8px; height:8px; border-radius:50%;
+  background:var(--amber); margin-right:6px; vertical-align:1px}
+.savestate.saved{color:var(--mint)}
+
+.probdot{flex:none; display:inline-flex; color:var(--amber-dark); cursor:help}
+.problist{display:flex; flex-direction:column; gap:6px; margin:6px 0 14px}
+.probrow{display:flex; align-items:flex-start; gap:10px; width:100%; text-align:left; padding:10px 12px;
+  border:1.5px solid var(--line); border-radius:12px; background:var(--panel); cursor:pointer;
+  font-family:var(--body); font-size:14px; color:var(--text)}
+.probrow:hover{border-color:var(--amber)}
+.probrow .hi{color:var(--amber-dark); margin-top:2px}
+.probrow b{margin-right:4px}
+
+/* The buttons along a task's line stay faint until the pointer is on that
+   line or one of them has the keyboard, so a page of folded tasks reads as a
+   list of tasks rather than a column of buttons. A gate that is set stays
+   bright: it is saying something about the page. */
+@media (hover:hover){
+  .bhead > .btools > *{opacity:.32; transition:opacity .15s}
+  .bhead:hover > .btools > *, .bhead:focus-within > .btools > *,
+  .bhead > .btools > .gatebtn.on{opacity:1}
+  .bhead > .bgrip{opacity:.4}
+  .bhead:hover > .bgrip{opacity:1}
+}
+
+/* the builder's preview: a task can be clicked to open it in the builder */
+html.inbuilder .pg-item{border-radius:12px}
+html.inbuilder .pg-item:hover{outline:2px dashed rgba(220,138,62,.45); outline-offset:6px}
+.build-actions{align-items:center}
