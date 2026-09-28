@@ -9,6 +9,7 @@
 <script src="config.js"></script>
 <script src="lessonfile.js"></script>
 <script src="shortmatch.js"></script>
+<script>window.richTextBarOnFocus = true;   /* see richtext.js */</script>
 <script src="richtext.js"></script>
 <script src="pyedit.js"></script>
 <script src="teacher.js"></script>
@@ -1546,8 +1547,11 @@ function renderNow(){
     openPageRef = at >= 0 ? lesson.blocks[at] : pages[0];
     lastPageAt = Math.max(0, lesson.blocks.indexOf(openPageRef));
   }
-  const shown = viewAll ? lesson.blocks : [openPageRef];
-  shown.forEach(b => list.appendChild(card(b, lesson.blocks.indexOf(b), lesson.blocks)));
+  /* One page is not a card of its own: its title is the heading over its
+     tasks and they are the list. All pages keeps a card for each page, which
+     is what folds there. */
+  if (viewAll) lesson.blocks.forEach((b, n) => list.appendChild(card(b, n, lesson.blocks)));
+  else list.appendChild(pageView(openPageRef));
   saveDraft();
 }
 
@@ -1952,6 +1956,43 @@ function passMarkEditor(b){
   return pw;
 }
 
+/* The padlock on a page, and without a server the passcode beside it. Drawn
+   on a page's card in All pages and at the top of the page being edited. */
+function pageLockTools(b, tools){
+  const isFirst = lesson.blocks.indexOf(b) === 0;
+  if (isFirst) b.startLocked = false;     // students must be able to begin
+  const locked = b.startLocked !== false;
+  const lk = el("button","btn-ghost bmini lockbtn" + (locked ? "" : " open"), locked ? "\u{1F512}" : "\u{1F513}");
+  lk.title = isFirst ? "The first page always starts unlocked"
+           : locked ? (OFFLINE ? "Locked until the passcode is typed, click to leave it open"
+                               : "Starts locked when a class gets this lesson, click to start it unlocked")
+                    : "Starts unlocked, click to start it locked";
+  lk.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (isFirst){
+      say("The first page stays unlocked",
+          "Students need somewhere to begin, so the first page of a lesson is always open. " +
+          "Move another page to the front if you want that one open instead.");
+      return;
+    }
+    b.startLocked = !locked;
+    if (b.startLocked === false){ delete b.passCode; delete b.passHash; }
+    render(); schedulePreview();
+  });
+  tools.appendChild(lk);
+  /* Without a server nothing releases a page: the passcode is the release,
+     so a locked page without one would simply be shut for ever. The pill
+     says which it is, and saving is refused until they all have one. */
+  if (OFFLINE && locked && !isFirst){
+    const set = !!b.passHash;
+    const pill = el("button","passpill " + (set ? "set" : "unset"),
+                     set ? "Passcode set" : "Set a passcode");
+    pill.title = set ? "Change the passcode for this page"
+                     : "This page cannot be opened until it has one";
+    pill.addEventListener("click", (e) => { e.stopPropagation(); askPasscode(b); });
+    tools.appendChild(pill);
+  }
+}
 function card(b, i, arr){
   const c = el("div","bcard");
   c.draggable = false;
@@ -2033,41 +2074,7 @@ function card(b, i, arr){
   /* A page in the task builder is a shape to fill in, not a page of a
      lesson: there is nothing for it to be locked against and no class to
      release it to. Those buttons appear when it is put into a lesson. */
-  if (b.type === "page" && b !== bankRoot){
-    const isFirst = lesson.blocks.indexOf(b) === 0;
-    if (isFirst) b.startLocked = false;     // students must be able to begin
-    const locked = b.startLocked !== false;
-    const lk = el("button","btn-ghost bmini lockbtn" + (locked ? "" : " open"), locked ? "\u{1F512}" : "\u{1F513}");
-    lk.title = isFirst ? "The first page always starts unlocked"
-             : locked ? (OFFLINE ? "Locked until the passcode is typed, click to leave it open"
-                                 : "Starts locked when a class gets this lesson, click to start it unlocked")
-                      : "Starts unlocked, click to start it locked";
-    lk.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (isFirst){
-        say("The first page stays unlocked",
-            "Students need somewhere to begin, so the first page of a lesson is always open. " +
-            "Move another page to the front if you want that one open instead.");
-        return;
-      }
-      b.startLocked = !locked;
-      if (b.startLocked === false){ delete b.passCode; delete b.passHash; }
-      render(); schedulePreview();
-    });
-    tools.appendChild(lk);
-    /* Without a server nothing releases a page: the passcode is the release,
-       so a locked page without one would simply be shut for ever. The pill
-       says which it is, and saving is refused until they all have one. */
-    if (OFFLINE && locked && !isFirst){
-      const set = !!b.passHash;
-      const pill = el("button","passpill " + (set ? "set" : "unset"),
-                       set ? "Passcode set" : "Set a passcode");
-      pill.title = set ? "Change the passcode for this page"
-                       : "This page cannot be opened until it has one";
-      pill.addEventListener("click", (e) => { e.stopPropagation(); askPasscode(b); });
-      tools.appendChild(pill);
-    }
-  }
+  if (b.type === "page" && b !== bankRoot) pageLockTools(b, tools);
   /* Dragging a task onto another page needs both pages on screen, which only
      the All pages view has. Everywhere else this is the way across. */
   const onAPage = b.type !== "page"
@@ -3672,146 +3679,25 @@ function taskGroups(){
        lists say different things about what a teacher may add */
     kinds: Array.from(group.querySelectorAll(".pal[data-add]")).filter(btn => !btn.hidden).map(btn => ({
       kind: btn.dataset.add,
-      label: (btn.querySelector("b") || {}).textContent || btn.dataset.add
+      label: (btn.querySelector("b") || {}).textContent || btn.dataset.add,
+      note: (btn.querySelector("span") || {}).textContent || ""
     }))
   })).filter(g => g.kinds.length);
 }
 
-/* The containers a task is added from. Given whichever list is being looked
-   at: the tasks on a page, the questions in an assessment, or the practice
-   under one topic. */
+/* Where a task is added from, under whichever list is being looked at: the
+   tasks on a page, the questions in an assessment, or the practice under one
+   topic. One button, which opens the full list of tasks with a search box.
+   It used to be a row of nine containers repeating the palette on the left,
+   which was two lines of buttons under every list of tasks. */
 function addTaskRow(target, inside){
   const wrap = el("div","pageadd");
-  const bar = el("div","pageadd-bar");        // the containers, side by side
-  const tray = el("div","pageadd-tray");      // whichever one is open, below
-  tray.hidden = true;
-  wrap.appendChild(bar); wrap.appendChild(tray);
-  /* Containers do not go inside themselves. A choice inside extension tasks is
-     fine and useful; a choice inside a choice is a maze. */
-  const groups = taskGroups().map(g => ({
-    name: g.name,
-    kinds: g.kinds.filter(k => {
-      if (inside === "choice") return k.kind !== "choice" && k.kind !== "extension";
-      /* Extension tasks are a page's own "finished early?" flap, so they go
-         on a page and nowhere else. A group inside either of these is fine,
-         and a group inside a group is the whole point of one. */
-      if (inside === "extension" || inside === "group") return k.kind !== "extension";
-      return true;
-    })
-  })).filter(g => g.kinds.length);
-
-  function openGroup(group, chip){
-    const already = chip.classList.contains("open");
-    bar.querySelectorAll(".pageadd-chip").forEach(c => c.classList.remove("open"));
-    tray.innerHTML = "";
-    if (already){ tray.hidden = true; return; }
-    chip.classList.add("open");
-    group.kinds.forEach(item => {
-      const btn = el("button","btn-ghost bmini2", item.label);
-      btn.addEventListener("click", () => {
-        const made = newBlock(item.kind);
-        if (!made) return;
-        target.push(made);
-        openOnly(target, made);
-        viewAll = false;
-        scrollToBlock = made;
-        render(); schedulePreview();
-      });
-      tray.appendChild(btn);
-    });
-    tray.hidden = false;
-  }
-
-  const chips = groups.map(group => {
-    const chip = el("button","pageadd-chip","+ " + group.name);
-    chip.type = "button";
-    chip.addEventListener("click", () => openGroup(group, chip));
-    bar.appendChild(chip);
-    return { group, chip };
-  });
-
-  /* On a wide screen the containers wrap onto as many lines as they need and
-     that is the end of it. On a phone that would push the page's own tasks a
-     long way down, so the row is held to two lines with a button that grows it
-     one line at a time, and shrinks it again the same way once it is all out.
-
-     What was here before moved whatever spilled into a More pop-up. Deciding
-     what had spilled meant measuring the row, and when that measurement landed
-     before the middle column had its width every chip looked wrapped, so a
-     desktop builder would show one container and hide the other eight behind
-     More. Nothing is moved now: the bar is only ever clipped, so a bad
-     measurement can no longer rearrange anything. */
-  const LIMIT = 2;                    // lines shown before a phone hides any
-  let shown = LIMIT;
-  const more = el("button","pageadd-more","More");
-  more.type = "button";
-  more.hidden = true;
-  wrap.insertBefore(more, tray);      // above the open container, not below it
-
-  /* Where each line of chips begins. Clipping the bar does not change how they
-     wrap, so this reads the same whether the row is open or held down. */
-  function lineTops(){
-    const tops = [];
-    chips.forEach(c => {
-      const t = c.chip.offsetTop;
-      if (!tops.some(v => Math.abs(v - t) < 4)) tops.push(t);
-    });
-    return tops.sort((a, b) => a - b);
-  }
-
-  function fit(){
-    if (!wrap.isConnected) return;
-    const tops = lineTops();
-    if (!tops.length) return;
-    const loose = () => {
-      more.hidden = true;
-      bar.classList.remove("clamped");
-      bar.style.removeProperty("max-height");
-    };
-    if (!isCompact() || tops.length <= LIMIT) return loose();
-    shown = Math.max(LIMIT, Math.min(shown, tops.length));
-    if (shown >= tops.length){
-      /* everything is out, so the button turns round */
-      bar.classList.remove("clamped");
-      bar.style.removeProperty("max-height");
-      more.hidden = false;
-      more.textContent = "Less";
-      return;
-    }
-    more.hidden = false;
-    more.textContent = "More";
-    bar.classList.add("clamped");
-    /* The bottom of the lowest chip on the last line being shown. Chips are not
-       all one height, because a long name wraps to two lines inside its own
-       pill on a narrow screen, so taking the first chip's height here left the
-       row a line short of what it was meant to be showing. */
-    const cut = tops[shown - 1];
-    let bottom = 0;
-    chips.forEach(c => {
-      if (c.chip.offsetTop <= cut + 4){
-        bottom = Math.max(bottom, c.chip.offsetTop + c.chip.offsetHeight);
-      }
-    });
-    bar.style.maxHeight = (bottom - tops[0]) + "px";
-  }
-  more.addEventListener("click", () => {
-    shown += (shown >= lineTops().length) ? -1 : 1;
-    fit();
-  });
-  wrap._fit = fit;
-  /* after the browser has laid the row out: until then nothing has a width and
-     every chip reads as though it had wrapped */
-  setTimeout(fit, 0);
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  const btn = el("button","pageadd-btn","+ Add task");
+  btn.type = "button";
+  btn.addEventListener("click", () => openTaskPicker(target, inside));
+  wrap.appendChild(btn);
   return wrap;
 }
-
-/* One listener for every row on the page rather than one per row per render.
-   The builder rebuilds its cards on every change and the old per-row resize
-   listeners were never taken off again, so they gathered all session. */
-window.addEventListener("resize", () => {
-  document.querySelectorAll(".pageadd").forEach(w => { if (w._fit) w._fit(); });
-});
 
 /* a small prompt that returns what was typed */
 function askNew(title, label){

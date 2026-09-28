@@ -345,11 +345,42 @@
     menu.style.left = Math.max(EDGE, left) + "px";
   }
 
+  /* The formatting bar only while a box is being written in. A page asks for
+     it with window.richTextBarOnFocus, or one box with barOnFocus: the lesson
+     builder does, where a page of tasks held a dozen bars at once and most of
+     the height of a short task was buttons. One pair of listeners for every
+     box, since boxes are built and thrown away all the time. The colour, key
+     and table menus are put on the page rather than in the box, so pressing
+     inside one of those does not count as leaving. */
+  let autoWired = false;
+  const inRtMenu = (t) => !!(t && t.closest && t.closest(".rt-palette, .rt-menu, .rt-imgsize"));
+  function wireAutoBars(){
+    if (autoWired) return;
+    autoWired = true;
+    const settle = (t) => {
+      if (inRtMenu(t)) return;
+      const rt = t && t.closest ? t.closest(".rt.rt-auto") : null;
+      document.querySelectorAll(".rt.rt-auto.rt-on").forEach(w => { if (w !== rt) w.classList.remove("rt-on"); });
+      if (rt) rt.classList.add("rt-on");
+    };
+    document.addEventListener("focusin", (e) => settle(e.target));
+    document.addEventListener("pointerdown", (e) => {
+      const rt = e.target && e.target.closest ? e.target.closest(".rt.rt-auto") : null;
+      /* a press inside a box leaves it to focusin, which knows where the
+         focus actually went */
+      if (!rt) settle(e.target);
+    }, true);
+  }
+
   /* Build the editor. onChange gets the cleaned HTML. */
   window.richText = function(initialHtml, onChange, opts){
     const o = opts || {};
     const wrap = document.createElement("div");
     wrap.className = "rt";
+    if (o.barOnFocus !== undefined ? o.barOnFocus : window.richTextBarOnFocus){
+      wrap.classList.add("rt-auto");
+      wireAutoBars();
+    }
 
     const bar = document.createElement("div");
     bar.className = "rt-bar";
