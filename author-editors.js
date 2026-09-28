@@ -135,10 +135,17 @@ function editorKit(b, body, ctx){
     w.appendChild(el("label","", label));
     const shell = el("div","ide bfield-ide");
     window.pyEdit.follow(shell);
+    /* As tall as the code in it, within reason: a one-line starter no
+       longer sits in a box ten lines tall, and a long one is seen whole. */
+    const fit = (text) => {
+      const lines = String(text || "").split("\n").length;
+      ed.editor.style.height = Math.max(78, Math.min(460, lines * 22 + 30)) + "px";
+    };
     const ed = window.pyEdit.attach({
       value: b[key] === undefined ? "" : String(b[key]),
-      onInput: () => { b[key] = ed.ta.value; saveDraft(); schedulePreview(); }
+      onInput: () => { b[key] = ed.ta.value; fit(ed.ta.value); saveDraft(); schedulePreview(); }
     });
+    fit(b[key]);
     shell.appendChild(ed.editor);
     shell.appendChild(ed.probs);
     w.appendChild(withHelp(shell, o.help));
@@ -378,6 +385,7 @@ const TASK_ICONS = {
   image:     '<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/>',
   pastelink: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9.5 4V3h5v1M10 13.5a2 2 0 0 0 2.8 0l1.5-1.5a2 2 0 0 0-2.8-2.8M14 13.5"/><path d="M12.5 12.3a2 2 0 0 0-2.8 0l-1 1a2 2 0 0 0 2.8 2.8"/>',
   exam:      '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 15l1.5-4.5L12 15M9.5 13.5h2M15.5 11.5v3M14 13h3"/>',
+  paste:     '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9.5 4V3h5v1M9 11h6M9 15h4"/>',
   bank:      '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/>',
   _:         '<rect x="4" y="4" width="16" height="16" rx="3"/>'
 };
@@ -535,9 +543,22 @@ function openTaskPicker(arr, inside, at){
       });
       none.hidden = !words.length || tiles.some(x => !x.btn.hidden);
     }
+    /* Something copied from another lesson goes first, whichever list is up. */
+    function paintClip(){
+      const c = clipGet();
+      if (!c || c.what !== "task" || !c.block) return;
+      bodyEl.appendChild(el("h3","tp-head","Copied"));
+      const g = grid();
+      const name = (LABEL[c.block.type] || c.block.type);
+      const said = taskSummary(c.block);
+      g.appendChild(tile("paste", "Paste: " + name, (said ? said + "  \u00B7  " : "") + (c.from ? "from " + c.from : ""),
+        () => { closeModal(); clipPasteTask(arr, at === undefined ? -1 : at); }));
+      bodyEl.appendChild(g);
+    }
     function paint(){
       tiles = [];
       bodyEl.innerHTML = "";
+      paintClip();
       h.textContent = mode === "bank" ? "Add a pre-made task" : "Add a custom task";
       swap.textContent = mode === "bank" ? "Custom task types →" : "← Pre-made tasks";
       find.placeholder = mode === "bank" ? "Search the pre-made tasks…"
@@ -644,6 +665,9 @@ function pageView(p){
       lesson.blocks.splice(lesson.blocks.indexOf(p) + 1, 0, copy);
       tellPreview(copy); render();
     }],
+    ["Copy page to paste into another lesson", () => clipCopy(p)],
+    (clipGet() || {}).what === "page" &&
+      ["Paste copied page after this one", () => clipPastePage(p)],
     ["Delete page", () => askDelete("Page", () => {
       const i = lesson.blocks.indexOf(p);
       if (i >= 0) lesson.blocks.splice(i, 1);

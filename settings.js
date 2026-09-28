@@ -129,6 +129,15 @@
       '<div class="set-group"><span class="set-label">Font</span><div class="font-opts" id="setFo">' +
       FONTS.map(f => '<button class="font-opt" data-font="' + f[0] + '" style="font-family:' + f[2] + '">' + f[1] + '</button>').join("") +
       '</div></div>' +
+      /* The console's layout choices, each a way of trying a new layout
+         out. Only on the teacher's pages, and only once ui.js is there. */
+      (onConsole && window.hubUI
+        ? '<div class="set-group"><span class="set-label">Console layout</span><div class="set-switches">' +
+          window.hubUI.prefNames.map(n => '<button class="set-switch" type="button" role="switch" data-ui="' + n + '">' +
+            '<span class="set-switch-words"><b>' + window.hubUI.prefLabels[n][0] + '</b><span>' +
+            window.hubUI.prefLabels[n][1] + '</span></span><span class="set-switch-knob" aria-hidden="true"></span></button>').join("") +
+          '</div></div>'
+        : "") +
       '<div class="set-group" id="pwGroup" hidden><span class="set-label">Your password</span>' +
       '<div class="field"><label>New password (12\u201325 characters)</label><input type="password" id="pwNew" autocomplete="new-password"></div>' +
       '<div class="field"><label>Type it again</label><input type="password" id="pwNew2" autocomplete="new-password"></div>' +
@@ -149,6 +158,11 @@
       if (amt2){ amt2.value = String(p.tintAmt === undefined ? 25 : p.tintAmt); }
       if (out) out.textContent = (p.tintAmt === undefined ? 25 : p.tintAmt) + "%";
       back.querySelectorAll(".font-opt").forEach(b => b.classList.toggle("on", (p.font || "") === b.dataset.font));
+      back.querySelectorAll(".set-switch[data-ui]").forEach(b => {
+        const on = window.hubUI.pref(b.dataset.ui);
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-checked", on ? "true" : "false");
+      });
       /* the lesson page may have changed it since this was last opened */
       const nb = back.querySelector("#setName");
       if (nb && document.activeElement !== nb) nb.value = localStorage.getItem("hub_name") || "";
@@ -163,6 +177,10 @@
       p.tintColour = tint ? (TINTS.find(t => t[0] === tint) || ["","",""])[2] : "";
       if (p.tintAmt === undefined) p.tintAmt = 25;
       save(p); paint();
+    }));
+    back.querySelectorAll(".set-switch[data-ui]").forEach(b => b.addEventListener("click", () => {
+      window.hubUI.setPref(b.dataset.ui, !window.hubUI.pref(b.dataset.ui));
+      paint();
     }));
     const amt = back.querySelector("#tintAmt");
     if (amt) amt.addEventListener("input", () => {

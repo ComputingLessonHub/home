@@ -1397,6 +1397,28 @@ function highlightBlock(id){
     setTimeout(() => item.classList.remove("justopened"), 1800);
   }, 80);
 }
+/* Inside the builder's preview the two sides follow each other: a task
+   opened in the builder is shown and flashed here, and clicking a task here
+   opens it in the builder. Only ever talks to the page it is framed by. */
+if (builderParam !== null && window.parent && window.parent !== window){
+  document.documentElement.classList.add("inbuilder");
+  window.addEventListener("message", (e) => {
+    if (e.source !== window.parent) return;
+    const id = e.data && e.data.hubFocus;
+    if (!id) return;
+    const at = steps.findIndex(st => st && st.section &&
+      Array.from(st.section.querySelectorAll(".pg-item")).some(x => x.dataset.blockId === id));
+    if (at >= 0 && at !== step) showStep(at);
+    highlightBlock(id);
+  });
+  document.addEventListener("click", (e) => {
+    const item = e.target.closest && e.target.closest(".pg-item");
+    if (!item || !item.dataset.blockId) return;
+    /* trying the task out is not asking to edit it */
+    if (e.target.closest("input, textarea, select, button, a, [contenteditable], .ide, iframe, canvas, label")) return;
+    try{ window.parent.postMessage({ hubPick: item.dataset.blockId }, location.origin === "null" ? "*" : location.origin); }catch(err){}
+  });
+}
 function showStep(i){
   /* inside the builder's preview, keep a note of the page so a refresh comes
      back to it rather than jumping to the beginning */
