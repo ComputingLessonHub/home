@@ -63,7 +63,7 @@
   /* ================= side menu ================= */
   const RAIL = [
     ["home",     "home",     "Home",              () => toHome()],
-    ["hub",      "lessons",  "Lesson hub",        () => toHub()],
+    ["hub",      "lessons",  "Lesson hub",        () => { const t = $("openHub"); if (t && !OFFLINE) t.click(); else toHub(); }],
     ["classes",  "classes",  "Classes",           () => toClasses()],
     ["practice", "practice", "Practice",          () => toPractice()],
     ["pw",       "key",      "Password updates",  () => $("pwBtn") && $("pwBtn").click()],
