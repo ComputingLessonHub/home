@@ -5066,20 +5066,43 @@ html[data-build=compact] .homebar .title{flex:1 1 0; min-width:0}
 .bset-body{padding:10px 0 0}
 .bset-body[hidden]{display:none}
 
-/* The pop-up + Add task opens. */
-.modal.taskpicker{max-width:720px}
-.tp-find{width:100%; margin:4px 0 14px; padding:10px 12px; font-size:15px}
-.tp-group{margin:0 0 14px}
-.tp-group[hidden]{display:none}
+/* The pop-up + Add task opens: a search box across the top and every choice
+   in a grid of three. */
+.modal.taskpicker{max-width:980px; width:min(980px, calc(100vw - 32px))}
+.tp-top{display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding-right:44px}
+.tp-top h2{flex:1; margin:0}
+.tp-swap{flex:none}
+.tp-swap[hidden]{display:none}
+.tp-find{display:block; width:100%; box-sizing:border-box; margin:14px 0 16px; padding:12px 14px;
+  font-size:16px; border-radius:12px}
 .tp-head{font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.08em;
-  text-transform:uppercase; color:var(--dim); margin:0 0 6px}
-.tp-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:6px}
-.tp-item{display:block; text-align:left; padding:9px 12px; border:1.5px solid var(--line);
-  border-radius:12px; background:var(--panel); cursor:pointer; font-family:var(--body); color:var(--text)}
+  text-transform:uppercase; color:var(--dim); margin:4px 0 8px}
+.tp-head[hidden]{display:none}
+.tp-grid{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; margin:0 0 16px}
+.tp-grid[hidden]{display:none}
+@media (max-width:760px){ .tp-grid{grid-template-columns:repeat(2, minmax(0,1fr))} }
+@media (max-width:480px){ .tp-grid{grid-template-columns:minmax(0,1fr)} }
+.tp-item{display:flex; align-items:center; gap:12px; text-align:left; padding:12px 14px; min-width:0;
+  border:1.5px solid var(--line); border-radius:14px; background:var(--panel); cursor:pointer;
+  font-family:var(--body); color:var(--text)}
 .tp-item[hidden]{display:none}
-.tp-item:hover, .tp-item:focus-visible{border-color:var(--amber); outline:none}
-.tp-item b{display:block; font-size:14.5px}
-.tp-item span{display:block; font-size:12.5px; color:var(--muted); margin-top:1px}
+.tp-item:hover, .tp-item:focus-visible{border-color:var(--amber); background:rgba(220,138,62,.05); outline:none}
+.tp-icon{flex:none; display:inline-flex; color:var(--muted)}
+.tp-item:hover .tp-icon, .tp-item:focus-visible .tp-icon{color:var(--amber-dark)}
+.tp-words{min-width:0}
+.tp-words b{display:block; font-size:14.5px; overflow-wrap:anywhere}
+.tp-words span{display:block; font-size:12.5px; color:var(--muted); margin-top:1px; overflow-wrap:anywhere}
+.tp-more{margin:0 0 16px}
+.tp-none[hidden]{display:none}
+
+/* No palette down the left any more: + Add task and the + between tasks are
+   how a task is added, and the room goes to the tasks being written. The
+   palette stays in the page, hidden, as the list the pop-up reads from. */
+.build-palette{display:none !important}
+.build{grid-template-columns:minmax(0,1fr) minmax(0,460px)}
+@media (max-width:1180px){ .build{grid-template-columns:minmax(0,1fr)} }
+.emptylesson{display:flex; flex-direction:column; gap:10px}
+.emptylesson p{margin:0}
 
 /* The formatting bar on a box in the builder only while that box is being
    written in, and under it rather than over it, so the words do not jump
@@ -5089,3 +5112,13 @@ html[data-build=compact] .homebar .title{flex:1 1 0; min-width:0}
   position:static}
 .rt.rt-auto.rt-on > .rt-bar{display:flex}
 .rt.rt-auto .rt-box{order:1}
+
+/* An optional box that is showing: its label, and a cross that empties it and
+   folds it back to its + link. */
+.optlabel{display:flex; align-items:center; gap:8px; margin-bottom:4px}
+.optlabel label{margin-bottom:0}
+.optremove{padding:2px 7px; font-size:11px; line-height:1.4; opacity:.7}
+.optremove:hover, .optremove:focus-visible{opacity:1; border-color:var(--red); color:var(--red)}
+.pv-sublabel{margin-top:10px}
+.pv-sublabel label{font-size:13.5px; font-weight:700; color:var(--muted)}
+.pv-sub{margin-top:0}

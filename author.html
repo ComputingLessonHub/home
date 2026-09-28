@@ -551,28 +551,27 @@ let lesson = { title:"", intro:"", unit:"", subunit:"", year:"", point:"", asses
 
 const BLANK = {
   text:     () => ({ type:"text", heading:"", html:"" }),
-  picture:  () => ({ type:"picture", title:"Have a look at this", url:"", caption:"", note:"",
+  picture:  () => ({ type:"picture", title:"", url:"", caption:"", note:"",
                      alt:"", size:"full", width:"", align:"left", beside:"", frame:true }),
-  pastelink:() => ({ type:"pastelink", heading:"Paste your link", task:"", note:"" }),
+  pastelink:() => ({ type:"pastelink", heading:"", task:"", note:"" }),
   code:     () => ({ type:"code", lang:"" }),        // they pick Python or web next
-  ide:      () => ({ type:"ide", title:"Python", task:"Write your code, then press Run.",
+  ide:      () => ({ type:"ide", title:"", task:"",
                      starter:'print("Hello World!")', turtle:false, run:true, edit:true,
                      autocomplete:true }),
-  web:      () => ({ type:"web", title:"Build a web page", task:"Edit the files, then press Run.",
+  web:      () => ({ type:"web", title:"", task:"",
                      html:'<h1>My page</h1>\n<p>Hello!</p>',
                      css:'h1 {\n  color: navy;\n}',
                      js:'console.log("Ready");',
                      run:true, edit:true, help:true, tooltips:true, autocomplete:true, expect:"" }),
   question: () => ({ type:"question", heading:"", context:"", prompt:"", minWords:20, lines:4 }),
-  quiz:     () => ({ type:"quiz", title:"Check your understanding", pass:{ mode:"percent", value:70 },
+  quiz:     () => ({ type:"quiz", title:"", pass:{ mode:"percent", value:70 },
                      questions:[{ q:"", options:["",""], answers:[0], hint:"", why:"" }] }),
   page:     () => ({ type:"page", title:"New page", task:"", startLocked:true, blocks:[] }),
   /* A page within a page: it holds whatever a teacher wants, and the lesson
      keeps it out of sight until the rest of the page is finished with. */
   /* The lesson asks "Finished early?" itself, so the title is a teacher's own
      wording rather than something every one of these has to carry. */
-  extension:() => ({ type:"extension", title:"Extension tasks",
-                     task:"Have a go at these", blocks:[] }),
+  extension:() => ({ type:"extension", title:"", task:"", blocks:[] }),
   /* Several tasks kept together as one. Unlike a page it is not a screen of
      its own, and unlike extension tasks nothing about it is held back: what
      is in it is on the page from the start and holds it up exactly as it
@@ -583,17 +582,17 @@ const BLANK = {
   /* They pick one, and what they picked decides the work they then get. */
   choice:   () => ({ type:"choice", title:"", task:"", prompt:"Choose one",
                      options:[{ label:"", blocks:[] }, { label:"", blocks:[] }] }),
-  image:    () => ({ type:"image", title:"Add your screenshot", task:"Take a screenshot and paste it here." }),
-  embed:    () => ({ type:"embed", url:"", title:"Watch this", note:"Watch it all the way through.", confirm:false }),
-  frame:    () => ({ type:"frame", url:"", heading:"Have a go", task:"", width:"100%", height:520, confirm:false }),
-  link:     () => ({ type:"link", url:"", title:"Open this", heading:"Have a look at this site", task:"", confirm:false }),
+  image:    () => ({ type:"image", title:"", task:"" }),
+  embed:    () => ({ type:"embed", url:"", title:"", note:"", confirm:false }),
+  frame:    () => ({ type:"frame", url:"", heading:"", task:"", width:"100%", height:520, confirm:false }),
+  link:     () => ({ type:"link", url:"", title:"Open this", heading:"", task:"", confirm:false }),
   mc:       () => ({ type:"mc", prompt:"", options:["",""], answer:0, topic:"" }),
-  blanks:   () => ({ type:"blanks", prompt:"Fill in the gaps", text:"The [[cat]] sat on the mat.", distractors:"", topic:"" }),
-  order:    () => ({ type:"order", prompt:"Put these in order", items:["","",""], topic:"" }),
+  blanks:   () => ({ type:"blanks", prompt:"", text:"The [[cat]] sat on the mat.", distractors:"", topic:"" }),
+  order:    () => ({ type:"order", prompt:"", items:["","",""], topic:"" }),
   notes:    () => ({ type:"notes", title:"", task:"", starter:"" }),
   mindmap:  () => ({ type:"mindmap", title:"", task:"", centre:"", lockCentre:false, starter:[] }),
   board:    () => ({ type:"board", title:"", task:"", height:420 }),
-  keywords: () => ({ type:"keywords", title:"Keywords", task:"Write what each one means in your own words.",
+  keywords: () => ({ type:"keywords", title:"", task:"",
                      words:[{ word:"", hint:"" }, { word:"", hint:"" }] }),
   label:    () => ({ type:"label", title:"", task:"", image:"", spots:[] }),
   binary:   () => ({ type:"binary", title:"", task:"", mode:"toDenary", bits:8, count:4,
@@ -616,12 +615,12 @@ const BLANK = {
   exam:     () => ({ type:"exam", prompt:"", command:"State", marks:1, answer:"lines",
                      lines:"", answers:[""], scheme:[{ text:"", marks:1 }], model:"",
                      point:"", code:"", strand:"" }),
-  password: () => ({ type:"password", title:"Password strength challenge",
+  password: () => ({ type:"password", title:"",
                      task:"Invent a made-up password that turns all five checks green." }),
   /* The teacher writes the real message and picks a shift; the coded text and
      the answer's hash are worked out when the lesson is compiled, so the
      answer never sits in the lesson file in readable form. */
-  caesar:   () => ({ type:"caesar", title:"Caesar cipher puzzle",
+  caesar:   () => ({ type:"caesar", title:"",
                      task:"Slide the shift until the message becomes English, then type it in.",
                      message:"THE PASSWORD IS FIREWALL", shift:7,
                      prompt:"Type the hidden message here (letters only, spaces are fine):" })
@@ -791,6 +790,18 @@ function migrate(arr){
 function inline(s){
   return esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>");
 }
+/* A mark scheme as a list of points, whatever shape it arrived in. A task
+   copied in from elsewhere can carry it as the text of the scheme, one point
+   to a line, or as an object keyed by number, and either one stopped the
+   whole lesson compiling, which took the live preview down with it. */
+function schemeList(v){
+  if (Array.isArray(v)) return v;
+  if (!v) return [];
+  if (typeof v === "string")
+    return v.split(/\r?\n/).map(t => t.trim()).filter(Boolean).map(t => ({ text:t, marks:1 }));
+  if (typeof v === "object") return Object.keys(v).map(k => v[k]).filter(p => p && typeof p === "object");
+  return [];
+}
 function keepArrays(o){
   Object.keys(o).forEach(k => {
     const v = o[k];
@@ -945,7 +956,7 @@ function compileOne(b, id, target){
     (b.blocks || []).forEach((child, k) => compileOne(child, id + "_" + (k + 1), kids));
     if (!kids.length) return;                 // an empty one is not worth saving
     push({ type:"extension", id, title: b.title || "Extension tasks",
-           task: b.task || "Have a go at these", blocks: kids });
+           task: b.task || "", blocks: kids });
     return;
   }
   if (b.type === "group"){
@@ -1116,7 +1127,7 @@ function compileOne(b, id, target){
              beside: (b.beside === "left" || b.beside === "right") ? b.beside : "",
              frame: b.frame === false ? false : undefined }));
     else if (b.type === "pastelink")
-      push(keepArrays({ type:"pastelink", id, heading: b.heading || "Paste your link",
+      push(keepArrays({ type:"pastelink", id, heading: b.heading || "",
              task: b.task || "", note: b.note || "" }));
     else if (b.type === "quiz")
       push({ type:"quiz", id, title: b.title || "",
@@ -1198,7 +1209,7 @@ function compileOne(b, id, target){
         point: b.point || "", code: b.code || "", strand: b.strand || "" };
       if (short) out.answers = (b.answers || []).map(x => String(x).trim()).filter(Boolean);
       else {
-        out.scheme = (b.scheme || [])
+        out.scheme = schemeList(b.scheme)
           .filter(p => p && String(p.text || "").trim())
           .map(p => ({ text: String(p.text).trim(), marks: Math.max(1, parseInt(p.marks, 10) || 1) }));
         const lines = parseInt(b.lines, 10) || 0;
@@ -1472,11 +1483,11 @@ function renderNow(){
     const arr = respEditing === "__ext" ? (lesson.extensions || [])
                                         : (lesson.responses[respEditing] || []);
     if (!arr.length){
-      const empty = el("p","hint dropzone","No tasks here yet, drag one from the left, or click it.");
+      const empty = el("p","hint dropzone","No tasks here yet. Press + Add task.");
       list.appendChild(empty);
     }
     arr.forEach((b, i) => list.appendChild(card(b, i, arr)));
-    if (isCompact()) list.appendChild(addTaskRow(arr));
+    list.appendChild(addTaskRow(arr));
     /* dropping anywhere in the empty space adds to the end */
     list.addEventListener("dragover", (e) => {
       if (!canDropOn(arr)) return;
@@ -1494,13 +1505,13 @@ function renderNow(){
      drawn the way it always was. */
   if (lesson.assessment && !lesson.practical){
     if (!lesson.blocks.length)
-      list.appendChild(el("p","hint","No questions yet, add one from the left."));
+      list.appendChild(el("p","hint","No questions yet. Press + Add task."));
     lesson.blocks.forEach((b, i) => list.appendChild(card(b, i, lesson.blocks)));
     /* On a narrow screen the palette is gone, so the list needs its own way to
        add to it. A lesson adds pages from the strip and tasks from inside the
        page; an assessment has neither, so the containers go straight
        underneath its questions. */
-    if (isCompact()) list.appendChild(addTaskRow(lesson.blocks));
+    list.appendChild(addTaskRow(lesson.blocks));
     saveDraft();
     return;
   }
@@ -1516,8 +1527,12 @@ function renderNow(){
        built by dragging tasks over from the left. So the empty space takes
        the drop and makes the first page for it, which is what clicking a
        task has always done. */
-    const empty = el("p","hint dropzone",
-      "No pages yet. Drag a task here, or click one on the left, and a page is made for it.");
+    const empty = el("div","hint dropzone emptylesson");
+    empty.appendChild(el("p","", "No pages yet. Add a task and a page is made for it."));
+    const first = el("button","pageadd-btn","+ Add task");
+    first.type = "button";
+    first.addEventListener("click", () => openTaskPicker(null));
+    empty.appendChild(first);
     empty.addEventListener("dragover", (e) => {
       if (!newTask && !newBank) return;
       e.preventDefault(); empty.classList.add("over");
