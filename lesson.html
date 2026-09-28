@@ -5869,7 +5869,7 @@ function computeAssessment(){
                    mode: r.mode, groups: r.groups, accepted: r.accepted,
                    model: b.model || "" };
       } else {
-        const scheme = (b.scheme || []).filter(p => p && p.text);
+        const scheme = (Array.isArray(b.scheme) ? b.scheme : []).filter(p => p && p.text);
         if (!max) max = scheme.reduce((t, p) => t + Math.max(1, parseInt(p.marks, 10) || 1), 0);
         const ticked = (v && Array.isArray(v.ticks)) ? v.ticks : [];
         pts = (v && v.marks !== undefined && v.marks !== null) ? Math.max(0, Math.min(max, Number(v.marks))) : 0;

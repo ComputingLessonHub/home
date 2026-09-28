@@ -31,6 +31,7 @@
 const SETTINGS_OPEN = new WeakSet();
 const REVEALED = new WeakMap();
 function isRevealed(b, key){ const s = REVEALED.get(b); return !!(s && s.has(key)); }
+function unreveal(b, key){ const s = REVEALED.get(b); if (s) s.delete(key); }
 function reveal(b, key){
   let s = REVEALED.get(b);
   if (!s){ s = new Set(); REVEALED.set(b, s); }
@@ -68,6 +69,26 @@ function editorKit(b, body, ctx){
   /* An empty optional box, shown as a link to it. Runs of them share a line,
      so a task with no heading, subheading or instruction yet has one short
      row of links where there were three empty boxes. */
+  /* The other way: a shown optional box gets a cross by its label that
+     empties it and folds it back to its link. */
+  function optLabel(w, label, key, o){
+    const optional = !o.keep && /\(optional\)\s*$/.test(label);
+    if (!optional){ w.appendChild(el("label","", label)); return; }
+    const row = el("div","optlabel");
+    row.appendChild(el("label","", label.replace(/\s*\(optional\)\s*$/, "")));
+    const x = el("button","btn-ghost bmini optremove","\u2715");
+    x.type = "button";
+    x.title = "Remove this";
+    x.setAttribute("aria-label", "Remove " + label.replace(/\s*\(optional\)\s*$/, "").toLowerCase());
+    x.addEventListener("click", () => {
+      b[key] = "";
+      unreveal(b, key);
+      redraw(); schedulePreview();
+    });
+    row.appendChild(x);
+    w.appendChild(row);
+  }
+
   function tucked(label, key, o){
     if (o.keep || !/\(optional\)\s*$/.test(label)) return false;
     if (!isBlank(b[key]) || isRevealed(b, key)) return false;
@@ -89,7 +110,7 @@ function editorKit(b, body, ctx){
     if (tucked(label, key, o)) return;
     const w = el("div","bfield");
     w.dataset.key = key;
-    w.appendChild(el("label","", label));
+    optLabel(w, label, key, o);
     const input = o.area ? el("textarea") : el("input");
     if (o.area) input.rows = o.rows || 4;
     if (o.mono) input.className = "mono";
@@ -128,7 +149,7 @@ function editorKit(b, body, ctx){
     if (tucked(label, key, o)) return;
     const w = el("div","bfield");
     w.dataset.key = key;
-    w.appendChild(el("label","", label));
+    optLabel(w, label, key, o);
     const ed = window.richText(b[key] || "", (html) => { b[key] = html; saveDraft(); schedulePreview(); },
                                { rows: o.rows || 4, placeholder: o.placeholder,
                                  /* A picture pasted in here goes into the
@@ -233,7 +254,7 @@ function editorKit(b, body, ctx){
     const names = [];
     Array.from(setBox.children).forEach(f => {
       const toggles = f.querySelectorAll(".brow > .bmini2");
-      const lab = f.querySelector(":scope > label");
+      const lab = f.querySelector("label");
       if (f.dataset.toggles && toggles.length)
         toggles.forEach(t => names.push(String(t.textContent).replace(/:\s*(on|off)$/, "")));
       else if (lab) names.push(lab.textContent.replace(/\s*\(optional\)$/, ""));
@@ -324,72 +345,210 @@ function pickableGroups(inside){
   })).filter(g => g.kinds.length);
 }
 
-/* Every kind of task in one pop-up with a search box at the top. Picking one
-   puts it at `at` in arr, or at the end, open and ready to write in. */
+/* Fine-line icons for the kinds of task, on a 24 unit grid and drawn in the
+   current colour so they follow the theme. */
+const TASK_ICONS = {
+  text:      '<path d="M4 6h16M4 10h16M4 14h16M4 18h10"/>',
+  question:  '<path d="M4 20h7"/><path d="M15.5 4.5l4 4L9 19H5v-4z"/>',
+  short:     '<rect x="3" y="8" width="18" height="8" rx="2"/><path d="M7 10.5v3"/>',
+  keywords:  '<circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H21M18 12v3M15 12v2"/>',
+  quiz:      '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.6-.9 1.1v.4M12 16.6v.01"/>',
+  mc:        '<circle cx="6" cy="7" r="2"/><circle cx="6" cy="17" r="2"/><path d="M11 7h9M11 17h9"/>',
+  blanks:    '<path d="M3 8h5M16 8h5M3 16h18"/><rect x="9.5" y="5.5" width="5" height="5" rx="1.2"/>',
+  order:     '<path d="M7 4v16M4 7l3-3 3 3M4 17l3 3 3-3M13 7h8M13 12h8M13 17h8"/>',
+  table:     '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M10 4v16"/>',
+  label:     '<path d="M3 12V4h8l10 10-7 7z"/><circle cx="7.5" cy="8.5" r="1.3"/>',
+  picture:   '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 8"/>',
+  embed:     '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/>',
+  frame:     '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M6.5 6.5h.01M9 6.5h.01"/>',
+  link:      '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  notes:     '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/>',
+  mindmap:   '<circle cx="12" cy="12" r="3"/><circle cx="4.5" cy="5.5" r="1.8"/><circle cx="19.5" cy="5.5" r="1.8"/><circle cx="4.5" cy="18.5" r="1.8"/><circle cx="19.5" cy="18.5" r="1.8"/><path d="M9.8 9.8 5.8 6.8M14.2 9.8l4-3M9.8 14.2l-4 3M14.2 14.2l4 3"/>',
+  board:     '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M7 13c2-4 3 1 5-2s3 1 5-1M9 21l3-4 3 4"/>',
+  code:      '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>',
+  ide:       '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>',
+  web:       '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M10 13l-2 2 2 2M14 13l2 2-2 2"/>',
+  password:  '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3M12 15v2"/>',
+  caesar:    '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3v4.5M12 16.5V21M3 12h4.5M16.5 12H21"/>',
+  binary:    '<rect x="4" y="5" width="5" height="14" rx="2.5"/><path d="M15 7l2-2v14M14 19h6"/>',
+  binadd:    '<rect x="3" y="3" width="4" height="8" rx="2"/><path d="M11 5l1.5-2v8M18 4v6M15 7h6M3 15h18M3 20h18"/>',
+  choice:    '<path d="M12 21v-7M12 14 6 8M12 14l6-6M6 8V4M3.5 6.5 6 4l2.5 2.5M18 8V4M15.5 6.5 18 4l2.5 2.5"/>',
+  extension: '<path d="M12 3l2.6 5.5 6 .8-4.4 4.1 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.3l6-.8z"/>',
+  group:     '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/>',
+  image:     '<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/>',
+  pastelink: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9.5 4V3h5v1M10 13.5a2 2 0 0 0 2.8 0l1.5-1.5a2 2 0 0 0-2.8-2.8M14 13.5"/><path d="M12.5 12.3a2 2 0 0 0-2.8 0l-1 1a2 2 0 0 0 2.8 2.8"/>',
+  exam:      '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 15l1.5-4.5L12 15M9.5 13.5h2M15.5 11.5v3M14 13h3"/>',
+  bank:      '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/>',
+  _:         '<rect x="4" y="4" width="16" height="16" rx="3"/>'
+};
+function taskIcon(kind){
+  const span = el("span","tp-icon");
+  span.innerHTML = '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" '
+    + 'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + (TASK_ICONS[kind] || TASK_ICONS._) + '</svg>';
+  return span;
+}
+
+/* Every way of adding a task, in one pop-up. For a KS4 or KS5 lesson the
+   tasks already written in the task builder come first, those for the
+   lesson's own point at the top, with one button across to the ordinary
+   kinds of task for anything the bank has nothing for. Anywhere else it is
+   the kinds of task straight away. Either way it is a grid of three across
+   with a search box over it. Picking one puts it at `at` in arr, or at the
+   end; with no arr at all (a lesson with no pages yet) it goes where
+   addBlock would put it, which makes the first page. */
 function openTaskPicker(arr, inside, at){
   const groups = pickableGroups(inside);
-  /* The task bank puts what it copies at the end of the page being edited,
-     so it is only offered where that is the list being added to. */
-  const bankBtn = $(lesson.assessment ? "palFromBankAssess" : "palFromBank");
-  const onPage = !inside && targetPage() && targetPage().blocks === arr;
-  if (bankBtn && !bankBtn.hidden && !bankBtn.closest("[hidden]") && onPage && at === undefined)
-    groups.unshift({ name:"Already built", kinds:[{ label:"From the task bank",
-      note:"A task you have already built", run: () => bankBtn.click() }] });
+  const bankOK = !!specLevel() && !OFFLINE && !bankOpen && !respEditing;
+  let mode = bankOK ? "bank" : "types";
+  let everything = false;          // the rest of the bank has been asked for
+  const where = at === undefined ? -1 : at;
+
+  const placeBank = (t) => {
+    closeModal();
+    if (!arr){
+      if (t.kind === "group") bankGroupAdd(t, null, -1);
+      else addBlock(bankCopy(t));
+      return;
+    }
+    newBank = t; newTask = null; dragFrom = null;
+    dropInto(arr, where);
+    newBank = null;
+  };
+  const placeKind = (kind) => {
+    closeModal();
+    if (!arr){ addBlock(newBlock(kind)); return; }
+    newTask = kind; newBank = null; dragFrom = null;
+    dropInto(arr, where);
+    newTask = null;
+  };
 
   openModal(box => {
     box.classList.add("taskpicker");
-    box.appendChild(el("h2","", at === undefined ? "Add a task" : "Add a task here"));
+    const head = el("div","tp-top");
+    const h = el("h2","", "");
+    head.appendChild(h);
+    const swap = el("button","btn-ghost bmini2 tp-swap","");
+    swap.type = "button";
+    swap.hidden = !bankOK;
+    swap.addEventListener("click", () => {
+      mode = mode === "bank" ? "types" : "bank";
+      find.value = "";
+      paint();
+      find.focus();
+    });
+    head.appendChild(swap);
+    box.appendChild(head);
+
     const find = el("input","tp-find");
     find.type = "search";
-    find.placeholder = "Search: quiz, Python, picture…";
-    find.setAttribute("aria-label", "Search the kinds of task");
+    find.setAttribute("aria-label", "Search");
     box.appendChild(find);
-    const list = el("div","tp-list");
-    box.appendChild(list);
-    const none = el("p","hint","Nothing matches that.");
-    none.hidden = true;
+    const bodyEl = el("div","tp-body");
+    box.appendChild(bodyEl);
 
-    const items = [];
-    const choose = (item) => {
-      closeModal();
-      if (item.run){ item.run(); return; }
-      newTask = item.kind; newBank = null; dragFrom = null;
-      dropInto(arr, at === undefined ? -1 : at);
-      newTask = null;
+    let tiles = [];                 // [{ btn, words, pick }]
+    const tile = (kind, title, note, pick) => {
+      const btn = el("button","tp-item");
+      btn.type = "button";
+      btn.appendChild(taskIcon(kind));
+      const words = el("span","tp-words");
+      words.appendChild(el("b","", title));
+      if (note) words.appendChild(el("span","", note));
+      btn.appendChild(words);
+      btn.addEventListener("click", pick);
+      tiles.push({ btn, words: (title + " " + (note || "")).toLowerCase(), pick });
+      return btn;
     };
-    groups.forEach(g => {
-      const sec = el("div","tp-group");
-      sec.appendChild(el("h3","tp-head", g.name));
-      const grid = el("div","tp-grid");
-      g.kinds.forEach(item => {
-        const btn = el("button","tp-item");
-        btn.type = "button";
-        btn.appendChild(el("b","", item.label));
-        if (item.note) btn.appendChild(el("span","", item.note));
-        btn.addEventListener("click", () => choose(item));
-        grid.appendChild(btn);
-        items.push({ btn, sec, item, words: (g.name + " " + item.label + " " + (item.note || "")).toLowerCase() });
-      });
-      sec.appendChild(grid);
-      list.appendChild(sec);
-    });
-    list.appendChild(none);
+    const grid = () => el("div","tp-grid");
 
-    const shown = () => items.filter(x => !x.btn.hidden);
-    find.addEventListener("input", () => {
+    function bankTile(t){
+      const inside = t.kind === "group" ? bankGroupSize(t, bankKnown()) : 0;
+      const note = [t.kind === "group" ? "Group of " + inside + " task" + (inside === 1 ? "" : "s")
+                                       : (LABEL[t.kind] || t.kind),
+                    specLabel(t.point),
+                    t.marks ? t.marks + (t.marks === 1 ? " mark" : " marks") : ""]
+                   .filter(Boolean).join("  ·  ");
+      return tile(t.kind === "group" ? "group" : t.kind,
+                  t.title || (t.kind === "group" ? "Untitled group" : "Untitled task"),
+                  note, () => placeBank(t));
+    }
+
+    function paintBank(){
+      const point = lesson.point || "";
+      if (point){
+        const pt = specPointOf(point);
+        bodyEl.appendChild(el("h3","tp-head", pt ? "For " + pt.code + " " + pt.title : "For this lesson"));
+        if (pointTasksFor !== point){
+          bodyEl.appendChild(el("p","hint","Loading…"));
+          loadPointTasks(point).then(() => { if (!$("mBack").hidden) paint(); });
+          return;
+        }
+        const mine = bankTopLevel(pointTasks);
+        if (!mine.length) bodyEl.appendChild(el("p","hint","No tasks written for this point yet."));
+        else { const g = grid(); mine.forEach(t => g.appendChild(bankTile(t))); bodyEl.appendChild(g); }
+      }
+      /* Without a point there is nothing to narrow it to, so it is the bank. */
+      if (!everything && point){
+        const more = el("button","btn-ghost bmini2 tp-more","Show every task in the bank");
+        more.type = "button";
+        more.addEventListener("click", () => { everything = true; paint(); });
+        bodyEl.appendChild(more);
+        return;
+      }
+      bodyEl.appendChild(el("h3","tp-head", point ? "Everything else in the bank" : "The task bank"));
+      palFind = { component:0, strand:"", point:"" };
+      const key = "0||";
+      if (palAllFor !== key){
+        bodyEl.appendChild(el("p","hint","Loading…"));
+        loadAllTasks(key).then(() => { if (!$("mBack").hidden) paint(); });
+        return;
+      }
+      const rest = bankTopLevel(palAllTasks).filter(t => !pointTasks.some(p => p.id === t.id));
+      if (!rest.length){ bodyEl.appendChild(el("p","hint","Nothing else in the bank yet.")); return; }
+      const g = grid(); rest.forEach(t => g.appendChild(bankTile(t))); bodyEl.appendChild(g);
+      if (palAllCapped) bodyEl.appendChild(el("p","hint","The first 150 tasks. Search to find others, or use the Task builder."));
+    }
+
+    function paintTypes(){
+      const g = grid();
+      groups.forEach(gr => gr.kinds.forEach(item => {
+        if (item.kind) g.appendChild(tile(item.kind, item.label, item.note, () => placeKind(item.kind)));
+      }));
+      bodyEl.appendChild(g);
+    }
+
+    const none = el("p","hint tp-none","Nothing matches that.");
+    function filter(){
       const words = find.value.toLowerCase().split(/\s+/).filter(Boolean);
-      items.forEach(x => { x.btn.hidden = !words.every(w => x.words.includes(w)); });
-      list.querySelectorAll(".tp-group").forEach(sec => {
-        sec.hidden = !items.some(x => x.sec === sec && !x.btn.hidden);
+      tiles.forEach(x => { x.btn.hidden = !words.every(w => x.words.includes(w)); });
+      bodyEl.querySelectorAll(".tp-grid").forEach(g => {
+        const any = Array.from(g.children).some(c => !c.hidden);
+        g.hidden = !any;
+        const title = g.previousElementSibling;
+        if (title && title.classList.contains("tp-head")) title.hidden = !any && words.length > 0;
       });
-      none.hidden = shown().length > 0;
-    });
+      none.hidden = !words.length || tiles.some(x => !x.btn.hidden);
+    }
+    function paint(){
+      tiles = [];
+      bodyEl.innerHTML = "";
+      h.textContent = mode === "bank" ? "Add a pre-made task" : "Add a custom task";
+      swap.textContent = mode === "bank" ? "Custom task types →" : "← Pre-made tasks";
+      find.placeholder = mode === "bank" ? "Search the pre-made tasks…"
+                                         : "Search: quiz, Python, picture…";
+      if (mode === "bank") paintBank(); else paintTypes();
+      bodyEl.appendChild(none);
+      filter();
+    }
+    find.addEventListener("input", filter);
     /* Enter takes the first one left, so typing "quiz" and Enter is enough */
     find.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
-      const first = shown()[0];
-      if (first){ e.preventDefault(); choose(first.item); }
+      const first = tiles.find(x => !x.btn.hidden);
+      if (first){ e.preventDefault(); first.pick(); }
     });
+    paint();
     setTimeout(() => find.focus(), 0);
   });
 }
@@ -525,6 +684,15 @@ function pageView(p){
       { rows:2, placeholder:"Subtitle", upload: pasteUpload,
         imageSrc: (id) => pictureSrc({ imgId: id }) });
     ed.classList.add("pv-sub");
+    const lab = el("div","optlabel pv-sublabel");
+    lab.appendChild(el("label","","Subtitle"));
+    const x = el("button","btn-ghost bmini optremove","\u2715");
+    x.type = "button";
+    x.title = "Remove the subtitle";
+    x.setAttribute("aria-label", x.title);
+    x.addEventListener("click", () => { p.task = ""; unreveal(p, "task"); render(); schedulePreview(); });
+    lab.appendChild(x);
+    top.appendChild(lab);
     top.appendChild(ed);
   } else {
     const r = el("div","optrow");
@@ -695,6 +863,8 @@ EDITORS.web = function(b, k){
     F("Code must contain (optional)", "expect",
       { help:"Leave empty unless you want Continue to wait until their code has this in it." });
   });
+  /* what they are marked against, in the body where it can be seen */
+  checklistField(b, k);
 };
 
 EDITORS.ide = function(b, k){
@@ -750,6 +920,8 @@ EDITORS.ide = function(b, k){
               + "rest of the typing help stays either way: brackets and quotes in pairs, and "
               + "Backspace taking a whole indent.");
   });
+  /* what they are marked against, in the body where it can be seen */
+  checklistField(b, k);
 };
 
 EDITORS.question = function(b, k){
@@ -841,7 +1013,8 @@ EDITORS.question = function(b, k){
 };
 
 EDITORS.quiz = function(b, k){
-  const { add, redraw } = k;
+  const { F, add, redraw } = k;
+  F("Heading (optional)", "title");
   if (!b.questions) b.questions = [{ q:"", options:["",""], answer:0, hint:"" }];
   b.questions.forEach((q, qi) => {
     const box = el("div","qsub");
@@ -939,7 +1112,7 @@ EDITORS.page = function(b, k){
 
 EDITORS.extension = function(b, k){
   const { F, R, add } = k;
-  F("Heading", "title");
+  F("Heading (optional)", "title");
   R("Subtitle (optional)", "task", { rows:2, help:[
     "The lesson shows “Finished early?” with a box to tick. These open "
     + "when it is ticked, or on their own once everything else on the page is "
@@ -1502,7 +1675,8 @@ EDITORS.exam = function(b, k){
   } else {
     /* The mark scheme, a point at a time. A student sees these only after
        they have written something, and ticks off the ones they made. */
-    if (!Array.isArray(b.scheme) || !b.scheme.length) b.scheme = [{ text:"", marks:1 }];
+    b.scheme = schemeList(b.scheme);
+    if (!b.scheme.length) b.scheme = [{ text:"", marks:1 }];
     const sw = el("div","bfield");
     sw.appendChild(el("label","","Mark scheme"));
     b.scheme.forEach((point, k) => {
