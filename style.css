@@ -85,11 +85,11 @@ html,body{margin:0;padding:0}
 html{background:var(--bg)}
 body{
   background:var(--bg); color:var(--text);
-  font-family:var(--body); font-size:18px; line-height:1.6;
+  font-family:var(--body);
   -webkit-font-smoothing:antialiased;
 }
 a{color:var(--mint)}
-h1,h2,h3{font-family:var(--display); letter-spacing:-.02em; margin:0}
+h1,h2,h3{font-family:var(--display); margin:0}
 
 /* ---------- buttons ---------- */
 button{
@@ -99,10 +99,10 @@ button{
 }
 button:active{transform:translateY(1px)}
 button:focus-visible{outline:2px solid var(--amber); outline-offset:2px}
-.btn-primary{background:var(--amber); color:var(--amber-ink); border-color:var(--amber)}
-.btn-primary:hover{background:var(--amber-dark); border-color:var(--amber-dark)}
-.btn-ghost{background:transparent; color:var(--text); border-color:var(--line-2)}
-.btn-ghost:hover{border-color:var(--muted)}
+.btn-primary{border-color:var(--amber)}
+
+.btn-ghost{border-color:var(--line-2)}
+
 button:disabled{cursor:not-allowed}
 
 /* ---------- generic surfaces (used by home + admin too) ---------- */
@@ -167,27 +167,26 @@ body.lesson{
 }
 
 /* signature: segmented mission tracker */
-.tracker{display:flex; gap:3px; padding:6px 20px 0; background:var(--panel)}
+.tracker{display:flex; background:var(--panel)}
 .seg{
-  flex:1; height:3px; border-radius:2px; background:var(--line);
+  flex:1;
   transition:background .3s ease;
 }
-.seg.done{background:var(--mint)}
-.seg.now{background:var(--amber)}
+
+
 .trackmeta .now-label{color:var(--amber)}
 
 /* the brief: instructions, big, always at the top, never scrolls away */
 .brief{
-  width:min(760px, calc(100% - 40px)); margin:6px auto 2px;
-  padding:8px 26px 9px; background:var(--panel-2);
+  width:min(760px, calc(100% - 40px)); margin:6px auto 2px; background:var(--panel-2);
   border:1px solid var(--line); border-radius:12px; text-align:center;
 }
 .brief .eyebrow{
   font-family:var(--mono); font-size:9.5px; font-weight:500; letter-spacing:.14em; text-transform:uppercase;
   color:var(--amber); margin:0 0 2px;
 }
-.brief h2{font-family:var(--display); font-size:18px; font-weight:700; line-height:1.25; margin:0 0 3px}
-.brief p{margin:0; font-size:14.5px; line-height:1.45; color:var(--muted); max-width:88ch}
+.brief h2{font-family:var(--display); font-size:18px; font-weight:700; line-height:1.25;}
+.brief p{line-height:1.45;}
 
 /* the stage: the activity itself. Only this scrolls, and only if it must. */
 .stage{overflow-y:auto; padding:12px 18px; scrollbar-width:thin; scrollbar-color:var(--line-2) transparent}
@@ -202,7 +201,7 @@ body.lesson{
   padding:4px 20px; background:var(--panel); border-top:1px solid var(--line);
 }
 .dock .mid{flex:1; text-align:center; min-width:0}
-.btn-continue{font-size:17px; padding:9px 26px; border-radius:10px}
+.btn-continue{border-radius:10px}
 .btn-continue:disabled{background:var(--line); border-color:var(--line); color:var(--dim)}
 #backBtn:disabled{opacity:.35}
 
@@ -235,7 +234,7 @@ textarea.answer.answer-rows, .choice-panel textarea.answer.answer-rows{min-heigh
 input.answer{font-size:17px; line-height:1.5; flex:1 1 260px; max-width:520px}
 .short-row{display:flex; flex-wrap:wrap; align-items:center; gap:12px}
 .short-row .short-check{flex:0 0 auto}
-.counter{font-family:var(--mono); font-size:13px; color:var(--dim); margin:7px 0 0; letter-spacing:.03em}
+.counter{color:var(--dim); margin:7px 0 0;}
 .counter[data-ok=true]{color:var(--mint)}
 
 iframe.embed{
@@ -260,12 +259,12 @@ iframe.embed{
 .opts{display:grid; gap:8px}
 .opt{
   display:flex; align-items:flex-start; gap:13px; margin:0; padding:12px 15px;
-  border:1.5px solid var(--line-2); border-radius:12px; background:var(--panel);
+  border:1.5px solid var(--line-2);
   font-size:16.5px; font-weight:400; line-height:1.4; cursor:pointer; transition:border-color .12s, background .12s;
 }
-.opt:hover{border-color:var(--muted); background:var(--panel-2)}
+.opt:hover{background:var(--panel-2)}
 .opt input{width:20px; height:20px; margin-top:1px; flex:none; accent-color:var(--amber)}
-.opt.chosen{border-color:var(--amber)}
+
 .opt.right{border-color:var(--mint); background:rgba(65,199,164,.08)}
 .opt.wrong{border-color:var(--red); background:rgba(232,97,90,.08)}
 
@@ -285,8 +284,8 @@ iframe.embed{
   background:var(--panel); border:1.5px solid var(--line-2); color:var(--text);
   border-radius:12px; padding:13px 16px; font-size:15.5px; margin:0 0 18px;
 }
-.meter{height:8px; background:var(--line); border-radius:999px; overflow:hidden; margin:16px 0 10px}
-.meter-bar{height:100%; width:0; border-radius:999px; transition:width .2s ease, background .2s ease}
+.meter{border-radius:999px;}
+.meter-bar{width:0; border-radius:999px; transition:width .2s ease, background .2s ease}
 .meter-bar[data-level=weak]{background:var(--red)}
 .meter-bar[data-level=ok]{background:var(--amber)}
 .meter-bar[data-level=strong]{background:var(--mint)}
@@ -310,11 +309,9 @@ input[type=range]{flex:1; accent-color:var(--amber); height:6px}
 /* python */
 textarea.code{
   font-family:var(--mono); font-size:15px; line-height:1.55; min-height:150px;
-  background:var(--code-bg); color:var(--code-fg); border-color:var(--code-bg);
 }
 .output{
-  margin-top:10px; font-family:var(--mono); font-size:14.5px; white-space:pre-wrap; word-break:break-word;
-  background:var(--code-bg); border:1px solid #3A4150; border-radius:10px; padding:11px; min-height:44px; color:var(--code-fg);
+  margin-top:10px; font-family:var(--mono); font-size:14.5px; white-space:pre-wrap; word-break:break-word; border:1px solid #3A4150; border-radius:10px; padding:11px; min-height:44px;
 }
 .output:empty::before{content:"Output appears here after you press Run."; color:var(--dim)}
 /* input() in the older Python task. That task has no console of its own, so
@@ -334,7 +331,7 @@ textarea.code{
 }
 .masthead h1{font-size:40px; line-height:1.1; margin:0 0 10px}
 .masthead p{margin:0; font-size:18px; color:var(--muted); max-width:60ch}
-.homebar{display:flex; align-items:center; gap:14px; padding:14px 24px; border-bottom:1px solid var(--line); background:var(--panel)}
+.homebar{display:flex; align-items:center; gap:14px; padding:14px 24px; border-bottom:1px solid var(--line);}
 .homebar .title{font-family:var(--display); font-weight:700; margin-right:auto}
 .who{font-size:14px; color:var(--muted)}
 .who b{color:var(--text)}
@@ -357,7 +354,7 @@ textarea.code{
 .lessonCard .go{color:var(--amber); font-size:20px; flex:none}
 
 .grid3{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px}
-.banner{background:var(--panel); border:1.5px solid var(--line-2); color:var(--text); border-radius:12px; padding:14px 18px; font-size:16px; margin-bottom:22px}
+.banner{padding:14px 18px; font-size:16px; margin-bottom:22px}
 .banner a{color:var(--amber-dark); font-weight:700}
 
 table{width:100%; border-collapse:collapse; font-size:15px}
@@ -411,7 +408,7 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:13p
 .who-chip:focus-visible{outline:2px solid var(--amber); outline-offset:2px}
 .homebar .who-chip{margin-left:auto}
 
-.banner-ok{background:var(--panel); border-color:var(--mint); color:var(--text)}
+.banner-ok{background:var(--panel); color:var(--text)}
 
 /* progress marker on the lesson list */
 .lessonCard .status{
@@ -425,11 +422,10 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:13p
 /* ---- leave warning ---- */
 .modal-back{
   position:fixed; inset:0; z-index:100; background:rgba(8,11,18,.78);
-  display:grid; place-items:center; padding:24px; backdrop-filter:blur(3px);
+  display:grid; place-items:center; backdrop-filter:blur(3px);
 }
 .modal-back[hidden]{display:none}
-.modal{
-  background:var(--panel); border:1px solid var(--line-2); border-radius:18px;
+.modal{ border:1px solid var(--line-2); border-radius:18px;
   padding:34px 32px 28px; max-width:440px; width:100%; text-align:center;
   box-shadow:0 24px 60px rgba(0,0,0,.5);
 }
@@ -498,7 +494,7 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:13p
 .lock-row{display:flex; gap:10px; justify-content:center; max-width:340px; margin:0 auto}
 .lock-row input{text-align:center; font-family:var(--mono); letter-spacing:.14em; text-transform:uppercase}
 .lock-msg{color:var(--red); font-size:14px; font-weight:600; margin:12px 0 0; min-height:18px}
-.seg.locked-seg{background:var(--line-2)}
+
 
 /* ---- teacher-paced release ---- */
 .sel{
@@ -528,10 +524,10 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:13p
 }
 
 /* ---- v2: clearer task, quieter chrome ---- */
-.brief p{font-size:15px; max-width:62ch; margin:0 auto; color:var(--muted); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
-.signin-hint{font-size:12.5px; color:var(--dim); margin:0 0 14px}
+.brief p{font-size:15px; max-width:62ch; margin:0 auto; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+.signin-hint{font-size:12.5px; margin:0 0 14px}
 .signin-hint a{color:var(--muted)}
-.handin{font-size:14px; font-weight:600; margin:14px 0 0; min-height:18px}
+.handin{font-size:14px; margin:14px 0 0; min-height:18px}
 .handin[data-state=done]{color:var(--mint)}
 .handin[data-state=failed],.handin[data-state=offline],.handin[data-state=busy]{color:var(--amber)}
 /* Sits on the line after the words, centred with them, rather than tucked
@@ -552,7 +548,8 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:13p
   background-image:radial-gradient(circle, var(--line-2) 1.4px, transparent 1.6px);
   background-size:46px 46px}
 .rs-rocket{position:absolute; left:50%; bottom:34px; width:84px; height:200px; margin-left:-42px;
-  overflow:visible; will-change:transform}
+  overflow:visible; will-change:transform
+}
 .rs-body{fill:var(--panel); stroke:var(--text); stroke-width:3}
 .rs-nose{fill:var(--red); stroke:var(--text); stroke-width:3}
 .rs-fin{fill:var(--red); stroke:var(--text); stroke-width:3; stroke-linejoin:round}
@@ -609,7 +606,7 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:13p
 .order-item .mv button{padding:4px 10px; font-size:15px}
 
 /* ---- assessment: fill in the blanks ---- */
-.blanks{font-size:19px; line-height:2.3}
+.blanks{font-size:19px;}
 .blank-input:focus{outline:none; border-color:var(--amber)}
 
 /* ---- assessment results screen ---- */
@@ -627,10 +624,10 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:13p
 .tabs{display:flex; gap:8px; margin:26px 0 16px}
 .tabs button{background:transparent; border-color:var(--line-2); color:var(--muted); font-size:16px}
 .tabs button.on{background:var(--panel-2); color:var(--text); border-color:var(--amber)}
-.unit-head{font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--amber); margin:26px 0 10px}
+.unit-head{margin:26px 0 10px}
 .unit-head:first-child{margin-top:0}
-.badge{font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
-  color:var(--amber); border:1px solid var(--amber-dark); border-radius:999px; padding:3px 9px; white-space:nowrap}
+.badge{ border:1px solid var(--amber-dark); border-radius:999px; padding:3px 9px; white-space:nowrap
+}
 .result-card{display:flex; align-items:center; gap:18px; background:var(--panel); border:1px solid var(--line);
   border-radius:14px; padding:18px 20px; margin-bottom:12px}
 .result-card .sc{font-family:var(--display); font-size:26px; font-weight:700; flex:none; min-width:86px}
@@ -656,7 +653,7 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:13p
 .done-score{font-family:var(--display); font-size:58px; font-weight:700; line-height:1; margin-top:6px}
 .done-pct{font-family:var(--mono); font-size:16px; color:var(--muted); margin:8px 0 4px}
 .done-save{font-size:19px; padding:15px 34px; border-radius:12px; margin:14px auto 0; display:inline-block}
-.done-back{display:block; margin:18px 0 4px; color:var(--muted); font-size:15px; text-decoration:none}
+.done-back{display:block; margin:18px 0 4px; color:var(--muted); text-decoration:none}
 .done-back:hover{color:var(--text)}
 
 .sect-head{font-family:var(--display); font-size:21px; margin:0 0 14px}
@@ -669,7 +666,7 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:13p
 .chip-ans.no{color:var(--red); border-color:var(--red); background:var(--panel)}
 
 .st-card p{font-size:17.5px; margin:0 0 10px; line-height:1.55}
-.st-strength b{color:var(--mint); margin-right:8px}
+.st-strength b{margin-right:8px}
 .st-target b{color:var(--amber); margin-right:8px}
 /* the summary screen's tally of checklist ticks and quiz marks */
 .ach-headline{font-family:var(--display); font-size:19.5px; font-weight:700; color:var(--text)}
@@ -688,7 +685,7 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:13p
 .resp-task section{margin:0}
 
 /* homepage: completed lessons + clickable results */
-.badge-done{color:var(--mint); border-color:var(--mint-dim)}
+
 a.result-card{text-decoration:none; color:inherit; cursor:pointer}
 a.result-card:hover{border-color:var(--amber)}
 
@@ -698,13 +695,12 @@ body{font-weight:500}
 b,strong,h1,h2,h3,.done-title,.lessonCard b{font-weight:800}
 
 .btn-primary{
-  background:var(--amber); color:var(--amber-ink); border:none;
   border-radius:14px; box-shadow:0 2px 6px rgba(90,60,20,.14);
   text-shadow:none;
 }
 .btn-primary:hover:not(:disabled){background:var(--amber-dark); transform:none}
 .btn-primary:disabled{background:var(--line-2); color:var(--panel); box-shadow:none}
-.btn-ghost{background:var(--panel); border:1.5px solid var(--line-2); color:var(--text); border-radius:14px}
+.btn-ghost{border-radius:14px}
 .btn-ghost:hover:not(:disabled){border-color:var(--amber); color:var(--amber-dark); background:var(--panel)}
 
 .topbar,.dock{background:var(--bar); border-color:var(--line)}
@@ -716,10 +712,10 @@ b,strong,h1,h2,h3,.done-title,.lessonCard b{font-weight:800}
 .brief p{color:var(--muted)}
 
 /* tracker: bar only, softer states */
-.seg{background:var(--line); border-radius:99px}
+
 html[data-bg=dark] .seg{background:#3D434F}
-.seg.done{background:var(--mint)}
-.seg.now{background:var(--amber)}
+
+
 
 /* options, inputs */
 .opt{background:var(--panel); border-color:var(--line-2); border-radius:14px}
@@ -812,10 +808,10 @@ textarea.code{background:var(--code-bg) !important; color:var(--code-fg) !import
 .signin-hint{background:var(--panel); border:1.5px solid var(--line-2); color:var(--text);
   border-radius:10px; padding:8px 14px; display:inline-block}
 .handin{font-weight:700}
-.handin[data-state=done]{color:var(--mint)}
-.handin[data-state=done]{color:var(--mint)}
+
+
 .handin[data-state=offline],.handin[data-state=failed],.handin[data-state=busy]{color:var(--amber-dark)}
-.counter[data-stage=good]{color:var(--mint)}
+
 .st-strength b{color:var(--mint)}
 
 /* icon-only buttons (settings cog, task tools) */
@@ -842,8 +838,8 @@ textarea.code{background:var(--code-bg) !important; color:var(--code-fg) !import
 .ov-row .edit{color:var(--amber-dark); font-weight:800; white-space:nowrap}
 
 /* spectator strip (teacher preview / viewing a student) */
-.viewbar{position:sticky; top:0; z-index:60; text-align:center; font-weight:800; font-size:14.5px;
-  padding:8px 14px; background:var(--amber); color:var(--amber-ink)}
+.viewbar{ text-align:center; font-weight:800; font-size:14.5px; background:var(--amber); color:var(--amber-ink)
+}
 
 /* teacher console */
 .keywrap{max-width:460px; margin:9vh auto 0; text-align:center}
@@ -854,11 +850,11 @@ textarea.code{background:var(--code-bg) !important; color:var(--code-fg) !import
    grid as a whole, so it runs the full width instead of being squeezed into
    one 210px column and wrapping over four lines. */
 .classgrid > p, .bigcards > p{grid-column:1 / -1; margin:0}
-.classtile{background:var(--panel); border:1.5px solid var(--line); border-radius:18px; padding:26px 20px;
-  cursor:pointer; text-align:left; box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.classtile{background:var(--panel); border:1.5px solid var(--line); border-radius:18px; padding:26px 20px; text-align:left; box-shadow:0 1px 3px rgba(0,0,0,.07)
+}
 .classtile:hover{border-color:var(--amber); transform:translateY(-2px); transition:.12s}
-.classtile b{display:block; font-size:20px; margin-bottom:6px}
-.classtile span{color:var(--muted); font-size:15px}
+.classtile b{font-size:20px; margin-bottom:6px}
+.classtile span{font-size:15px}
 .bigcards{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:16px; margin-top:16px}
 .crumb{color:var(--muted); text-decoration:none; font-weight:700; font-size:15.5px; background:none; border:none; cursor:pointer; padding:0}
 .crumb:hover{color:var(--amber-dark)}
@@ -878,8 +874,8 @@ textarea.code{background:var(--code-bg) !important; color:var(--code-fg) !import
   border-radius:12px; padding:11px 14px; margin:0 0 9px; font-size:16px}
 .taskrow .tn{font-weight:800; color:var(--dim); min-width:22px}
 .taskrow.shut{opacity:.7}   /* NOT .locked — that class hides its children on the student page */
-.statechip{font-size:12.5px; font-weight:800; border-radius:999px; padding:3px 10px; border:1.5px solid}
-.statechip.open{color:var(--mint); border-color:var(--mint-dim)}
+.statechip{font-size:12.5px; font-weight:800; border-radius:999px; padding:3px 10px;}
+.statechip.open{border-color:var(--mint-dim)}
 .statechip.open{color:var(--mint)}
 .statechip.shut{color:var(--muted); border-color:var(--line-2)}
 /* A signed-in device somewhere the department has not been is the one thing
@@ -911,11 +907,12 @@ html[data-bg=dark] .who-row .st.yes{color:var(--mint)}
 
 /* the spectator strip floats, so the page grid keeps its shape (pill fix) */
 .viewbar{position:fixed; top:0; left:0; right:0; width:100%; z-index:120;
-  border:none; cursor:pointer; font-family:var(--body)}
+  border:none; cursor:pointer; font-family:var(--body)
+}
 body.spectating{padding-top:40px}
 
 /* locked tasks on the student progress bar */
-.seg.locked-seg{background:var(--line-2); opacity:.55}
+.seg.locked-seg{background:var(--line-2);}
 
 /* teacher: big centred lesson picker */
 .lesson-picker{max-width:560px; margin:26px auto 8px; text-align:center}
@@ -925,7 +922,8 @@ body.spectating{padding-top:40px}
 
 /* sub-tabs inside the Lessons tab */
 .subtabs{display:flex; gap:6px; margin:0 0 18px; padding:5px; background:var(--panel-2);
-  border:1px solid var(--line); border-radius:999px; width:fit-content}
+  border:1px solid var(--line); border-radius:999px; width:fit-content
+}
 .subtabs button{background:transparent; border:none; color:var(--muted); font-size:15px; font-weight:700;
   padding:8px 20px; border-radius:999px}
 .subtabs button.on{background:var(--panel); color:var(--text); box-shadow:0 1px 3px rgba(0,0,0,.10)}
@@ -961,7 +959,7 @@ body.spectating{padding-top:40px}
 .lp-head b{font-size:18px; flex:1; line-height:1.3}
 .lp-note{margin:0 0 10px; font-size:14.5px; color:var(--amber-dark); font-weight:700}
 .lp-acts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px}
-.lp-acts button{font-size:14.5px; padding:9px 14px}
+.lp-acts button{padding:9px 14px}
 .modal.wide{max-width:1500px; text-align:left}
 .modal.wide .toolrow{justify-content:flex-start}
 .stutable .statechip{margin-left:8px}
@@ -1041,10 +1039,10 @@ html.builder .loadscreen{z-index:90}
 
 /* ---- pop-ups: scrollable, and only closed by a click that STARTS outside ---- */
 .modal-back{align-items:start; overflow-y:auto; padding:4vh 24px}
-.modal{max-height:none; margin:auto}
+.modal{margin:auto}
 .modal.wide{max-height:none}
 @media (min-height:600px){ .modal{max-height:90vh; overflow-y:auto} }
-.modal-x{position:absolute; top:14px; right:16px; font-size:20px; line-height:1; padding:6px 11px}
+.modal-x{font-size:20px; line-height:1; padding:6px 11px}
 .modal.wide{position:relative}
 
 
@@ -1074,7 +1072,8 @@ html.builder .loadscreen{z-index:90}
 .ide{margin:0; --ed-bg:var(--code-bg); --ed-fg:#E6EAF2; --ed-bar:#2A2F3B; --ed-line:#3A4150;
      --ed-gut:#5C6779; --ed-size:16.5px;
      --t-kw:#C792EA; --t-str:#B8E08A; --t-num:#F2B36B; --t-fn:#7FC7F0; --t-call:#E8D48B;
-     --t-com:#7A8699; --t-op:#9FB0C8;}
+     --t-com:#7A8699; --t-op:#9FB0C8;
+}
 .ide[data-idetheme=light]{--ed-bg:#FFFFFF; --ed-fg:#2B2B2B; --ed-bar:#F1EDE4; --ed-line:#E0D8C8;
      --ed-gut:#A79C88;
      --t-kw:#8B2FA8; --t-str:var(--mint); --t-num:#B25C00; --t-fn:#1B6AA5; --t-call:#8A6A00;
@@ -1093,7 +1092,7 @@ html.builder .loadscreen{z-index:90}
 .ide-pane,.ide-side{border:1.5px solid var(--ed-line); border-radius:14px; overflow:hidden; background:var(--ed-bg)}
 .ide-bar{display:flex; align-items:center; gap:8px; padding:5px 10px; background:var(--ed-bar); border-bottom:1px solid var(--ed-line)}
 .ide-file{flex:1; font-family:var(--mono); font-size:13px; color:var(--ed-gut); font-weight:700}
-.ide-run{font-size:15px; padding:7px 18px; border-radius:10px}
+.ide-run{border-radius:10px}
 .ide-small{font-size:13.5px; padding:6px 12px; border-radius:8px; background:transparent;
   color:var(--ed-fg); border:1px solid var(--ed-line); opacity:.85}
 .ide-small:hover{border-color:var(--amber); color:var(--amber); opacity:1}
@@ -1185,7 +1184,7 @@ html.builder .loadscreen{z-index:90}
 .ide-askin:focus{outline:none; box-shadow:none !important}
 .ide-note{margin:9px 0 0; font-size:15px; font-weight:700}
 .ide-note.ok{color:var(--mint)}
-.ide-note.ok{color:var(--mint)}
+
 .ide-note.no{color:var(--amber-dark)}
 
 
@@ -1203,8 +1202,7 @@ html.builder .loadscreen{z-index:90}
   .build-preview{grid-column:1 / -1; height:70vh} }
 
 .build-palette{padding:18px 14px; border-right:1px solid var(--line); overflow-y:auto; background:var(--panel-2)}
-.pal-head{font-size:12.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
-  color:var(--muted); margin:0 0 9px}
+
 .pal{display:block; width:100%; text-align:left; background:var(--panel); border:1.5px solid var(--line);
   border-radius:12px; padding:10px 13px; margin:0 0 8px; cursor:pointer}
 .pal:hover{border-color:var(--amber)}
@@ -1220,7 +1218,7 @@ html.builder .loadscreen{z-index:90}
 .bgrip{cursor:grab; color:var(--dim); font-size:16px; user-select:none}
 .btype{flex:1; font-size:15.5px}
 .btools{display:flex; gap:4px}
-.bmini{font-size:14px; padding:5px 9px; border-radius:8px; line-height:1}
+.bmini{line-height:1}
 .bmini.right{border-color:var(--mint); color:var(--mint)}
 .bmini2{font-size:13.5px; padding:7px 12px; border-radius:8px}
 .bmini2.right{border-color:var(--mint); color:var(--mint)}
@@ -1272,7 +1270,7 @@ html.builder .loadscreen{z-index:90}
 .pagegroup{display:block}
 .pg-item{padding:0 0 14px; margin:0 0 14px; border-bottom:1px solid var(--line)}
 .pg-item:last-child{border-bottom:none; margin-bottom:0; padding-bottom:0}
-.pg-h{font-family:var(--display); font-size:17.5px; font-weight:800; margin:0 0 4px}
+.pg-h{font-family:var(--display); font-size:17.5px; font-weight:800;}
 .pg-t{color:var(--muted); font-size:14.5px; margin:0 0 8px}
 .pg-item section{margin:0}
 /* A quiz can be set to keep the rest of its page shut until the pass mark is
@@ -1315,8 +1313,7 @@ html.builder .loadscreen{z-index:90}
 /* written answer: background, then the question itself */
 .q-context{font-size:15.5px; line-height:1.55; color:var(--text); margin:0 0 9px}
 .q-ask{font-family:var(--display); font-size:17.5px; font-weight:800; line-height:1.35;
-  margin:0 0 10px; padding:9px 14px; background:var(--panel-2);
-  border-left:4px solid var(--amber); border-radius:0 12px 12px 0}
+}
 
 /* a link out, and a link a student pastes */
 .linkout{display:inline-block; text-decoration:none}
@@ -1377,8 +1374,8 @@ html.builder .loadscreen{z-index:90}
 
 /* rich text boxes in the builder */
 .rt{border:1.5px solid var(--line-2); border-radius:12px; overflow:hidden; background:var(--panel)}
-.rt-bar{display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:6px 8px;
-  background:var(--panel-2); border-bottom:1px solid var(--line)}
+.rt-bar{display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:6px 8px; border-bottom:1px solid var(--line)
+}
 .rt-btn{min-width:32px; padding:5px 9px; font-size:14px; border:1px solid transparent; border-radius:8px;
   background:transparent; color:var(--text); cursor:pointer; line-height:1.2}
 .rt-btn:hover{border-color:var(--line-2); background:var(--panel)}
@@ -1427,7 +1424,7 @@ html[data-bg=dark] .rt-cb, html[data-bg=night] .rt-cb{
 /* builder: the open page, drop targets, picture preview */
 .bcard.open{border-color:var(--amber); box-shadow:0 0 0 2px rgba(220,138,62,.16)}
 .pagekids.over{background:rgba(220,138,62,.08); border-left-color:var(--amber); border-radius:8px}
-.bpreview{max-width:100%; max-height:180px; border-radius:10px; border:1px solid var(--line); display:block}
+.bpreview{display:block}
 
 
 /* builder: lock icon, drop targets, palette dragging */
@@ -1456,12 +1453,11 @@ html[data-bg=dark] .rt-cb, html[data-bg=night] .rt-cb{
 
 
 /* web editor: preview, messages, colouring */
-.web-preview{background:#fff; min-height:260px; display:flex; flex-direction:column}
+.web-preview{flex-direction:column}
 
 /* help search */
-.ide-helpsearch{width:100%; margin:0 0 12px; font-family:var(--body) !important; font-size:14px !important;
-  padding:8px 12px !important; background:var(--ed-bar) !important; color:var(--ed-fg) !important;
-  border:1px solid var(--ed-line) !important; border-radius:8px !important}
+.ide-helpsearch{ font-family:var(--body) !important; border-radius:8px !important
+}
 .ide-helpsearch:focus{border-color:var(--amber) !important; outline:none}
 .ide-helpgroup:first-child{margin-top:0}
 .ide-helplist{display:block}
@@ -1518,8 +1514,8 @@ html[data-bg=dark] .rt-cb, html[data-bg=night] .rt-cb{
   background:var(--panel); border:1.5px solid var(--line-2); border-radius:12px; height:42px; max-width:300px}
 .searchbox:focus-within{border-color:var(--amber)}
 .searchicon{font-size:14px; opacity:.6; line-height:1}
-.searchbox input{border:none !important; background:transparent !important; padding:0 !important;
-  height:100%; font-size:15px; box-shadow:none !important; min-width:0}
+.searchbox input{ box-shadow:none !important; min-width:0
+}
 .searchbox input:focus{outline:none; border:none !important; box-shadow:none !important}
 .refresh{margin-left:8px; font-size:16px}
 
@@ -1547,10 +1543,11 @@ html[data-bg=dark] .mbtick .yes{color:var(--mint)}
 
 
 /* builder: three dot menu, title in the header */
-.menuwrap{position:relative; display:inline-block}
-.menu{position:absolute; right:0; top:110%; z-index:40; min-width:170px; padding:6px;
+.menuwrap{display:inline-block}
+.menu{ z-index:40; min-width:170px; padding:6px;
   background:var(--panel); border:1.5px solid var(--line-2); border-radius:12px;
-  box-shadow:0 8px 22px rgba(0,0,0,.16); display:flex; flex-direction:column}
+  box-shadow:0 8px 22px rgba(0,0,0,.16); display:flex; flex-direction:column
+}
 .menu button{background:transparent; border:none; text-align:left; padding:9px 12px;
   border-radius:8px; font-size:15px; color:var(--text); cursor:pointer}
 .menu button:hover{background:var(--panel-2)}
@@ -1723,16 +1720,17 @@ pre, code{overflow-wrap:anywhere}
   .modal-x{position:absolute; top:12px; right:12px; z-index:5}
   .modal h2:first-of-type{margin-top:0}
 }
-.modal{position:relative}
-.modal-x{position:absolute; top:14px; right:14px}
+
+
 
 
 /* scheduling, marks and feedback */
 /* three across: the period names are short, and two columns left them
    spread out enough to be hard to scan */
 .periodgrid{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px}
-.periodbtn{text-align:left; padding:10px 12px; border:1.5px solid var(--line-2); border-radius:10px;
-  background:var(--panel); cursor:pointer; font-family:var(--body)}
+.periodbtn{text-align:left; border:1.5px solid var(--line-2); border-radius:10px;
+  background:var(--panel); cursor:pointer; font-family:var(--body)
+}
 .periodbtn b{display:block; font-size:14.5px; color:var(--text)}
 .periodbtn span{display:block; font-size:12px; color:var(--muted); margin-top:2px}
 .periodbtn.on{border-color:var(--amber); background:var(--panel-2)}
@@ -1911,18 +1909,18 @@ body.workpage .grow{flex:1}
   padding:4px 9px 5px}
 .rt-swatch{display:block; width:16px; height:4px; border-radius:2px; background:transparent;
   border:1px solid var(--line-2)}
-.rt-palette{position:absolute; top:calc(100% + 4px); left:0; z-index:50; min-width:150px; padding:6px;
-  background:var(--panel); border:1.5px solid var(--line-2); border-radius:12px;
-  box-shadow:0 8px 22px rgba(0,0,0,.16); display:flex; flex-direction:column}
+.rt-palette{ top:calc(100% + 4px); left:0; display:flex; flex-direction:column
+}
 .rt-swatchbtn:hover{background:var(--panel-2)}
 .rt-dot.rt-auto{background:linear-gradient(135deg, var(--text) 50%, transparent 50%)}
 
 /* the bank of strengths and targets */
-.bank{margin-top:8px}
+
 .bankhead{margin:0 0 6px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
-.bankpick{display:block; width:100%; text-align:left; padding:8px 11px; margin:0 0 6px;
+.bankpick{ width:100%; text-align:left; padding:8px 11px;
   background:var(--panel-2); border:1px solid var(--line); border-radius:10px; cursor:pointer;
-  font-family:var(--body); color:var(--text)}
+  font-family:var(--body); color:var(--text)
+}
 .bankpick:hover{border-color:var(--amber)}
 .bankpick b{display:block; font-size:12.5px; color:var(--amber-dark)}
 .bankpick span{font-size:13.5px; color:var(--muted); line-height:1.4}
@@ -1933,7 +1931,8 @@ body.workpage .grow{flex:1}
 /* the colour palette, drawn on the page so nothing covers it */
 .rt-palette{position:absolute; z-index:9999; padding:10px; min-width:236px;
   background:var(--panel); border:1.5px solid var(--line-2); border-radius:12px;
-  box-shadow:0 10px 30px rgba(0,0,0,.22)}
+  box-shadow:0 10px 30px rgba(0,0,0,.22)
+}
 .rt-grid{display:grid; grid-template-columns:repeat(10, 1fr); gap:3px; margin:8px 0}
 .rt-cell{width:20px; height:20px; border:1px solid rgba(0,0,0,.12); border-radius:4px; cursor:pointer; padding:0}
 .rt-cell:hover{outline:2px solid var(--amber); outline-offset:1px}
@@ -2022,7 +2021,7 @@ textarea,select,.searchbox{ border-radius:10px }
 /* --- buttons: rounded, filling in when pointed at --- */
 .btn-primary,.btn-ghost{
   border-radius:999px; letter-spacing:.01em; text-transform:none;
-  font-weight:600; font-size:15.5px; line-height:2.6;
+  font-weight:600;
   transition:background .2s ease, color .2s ease, border-color .2s ease;
 }
 .btn-primary{ background:var(--amber); color:var(--amber-ink); border:1.5px solid var(--amber) }
@@ -2045,8 +2044,8 @@ textarea,select,.searchbox{ border-radius:10px }
 .homebar,.topbar,.crumbbar{ border-bottom:1px solid var(--line) }
 
 /* --- the progress bar, made clearly its own thing --- */
-.tracker{ padding:7px 20px 0; gap:4px }
-.seg{ height:6px; border-radius:999px; background:var(--line) }
+.tracker{padding:7px 20px 0; gap:4px}
+.seg{height:6px; border-radius:999px; background:var(--line)}
 .seg.done{ background:var(--mint) }
 .seg.now{ background:var(--amber); box-shadow:0 0 0 3px color-mix(in srgb, var(--amber) 18%, transparent) }
 
@@ -2158,7 +2157,7 @@ html[data-bg=night] #hubTint{mix-blend-mode:screen; opacity:.5}
 
 /* which made the top bar deeper than it needed to be */
 .homebar,.topbar{ padding-top:6px; padding-bottom:6px }
-.homebar .title{ line-height:1.3 }
+.homebar .title{line-height:1.3}
 
 /* the tab strip should sit flush */
 .subtabs{ padding-left:0; margin-left:0 }
@@ -2192,7 +2191,7 @@ html[data-bg=night] #hubTint{mix-blend-mode:screen; opacity:.5}
    pop-up rules further down), so the frame only has to claim the space a
    bottom bar, when there is one, has not: an explicit height:100% would
    claim the whole box regardless and push any bar below it clean off. */
-.fullprev{width:100%; max-width:1500px; height:92vh; padding:0; overflow:hidden}
+.fullprev{width:100%; max-width:1500px; padding:0; overflow:hidden}
 .fullprev .fullprev-frame{width:100%; flex:1 1 auto; min-height:0; border:none; display:block; border-radius:14px}
 .fullprev .modal-x{z-index:5; background:var(--panel)}
 /* "Add feedback", under a student's own preview */
@@ -2268,7 +2267,7 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 
 
 /* --- top bar: the title takes the space, everything else sits right --- */
-.homebar .title{ flex:1 1 auto; min-width:0 }
+
 .homebar .settings-btn,.homebar .auth{ flex:0 0 auto; margin-left:auto }
 .homebar .settings-btn ~ .auth{ margin-left:10px }
 
@@ -2366,7 +2365,7 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 
   /* side-by-side layouts become one column */
   .worksplit, .ide-wrap, .build{ grid-template-columns:minmax(0,1fr) !important }
-  .workside{ min-width:0; max-width:100% }
+  .workside{min-width:0; max-width:100%}
   .workside{ width:auto }
   .build-preview{ grid-column:1 / -1 }
 
@@ -2501,7 +2500,7 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 @media (min-width:901px){ .modal .toolrow{flex-wrap:nowrap} }
 
 /* the state pill: says when on hover, and can be pressed */
-.statechip{border:1px solid transparent; cursor:default; font-family:var(--body)}
+
 .chip-live{cursor:pointer; transition:background .15s ease, color .15s ease, max-width .2s ease}
 .chip-live:hover,.chip-live:focus-visible{background:var(--mint); color:#fff; border-color:var(--mint); outline:none}
 .statechip.wait.chip-live:hover{background:var(--amber); border-color:var(--amber); color:var(--amber-ink)}
@@ -2616,7 +2615,7 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 .chip-when{display:none}
 .chip-live:hover .chip-state,.chip-live:focus-visible .chip-state{display:none}
 .chip-live:hover .chip-when,.chip-live:focus-visible .chip-when{display:inline}
-.chip-live:hover,.chip-live:focus-visible{background:var(--mint); color:#fff; border-color:var(--mint); outline:none}
+
 .statechip.wait.chip-live:hover,.statechip.wait.chip-live:focus-visible{background:var(--amber); border-color:var(--amber); color:var(--amber-ink)}
 .statechip.shut.chip-live:hover,.statechip.shut.chip-live:focus-visible{background:var(--muted); border-color:var(--muted); color:var(--panel)}
 
@@ -2703,7 +2702,7 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 
 /* picking from the bank of strengths and targets */
 .bankfind{width:100%; margin-bottom:10px}
-.banklist{max-height:46vh; overflow-y:auto; margin-bottom:10px}
+.banklist{overflow-y:auto; margin-bottom:10px}
 .bankrow{display:flex; align-items:flex-start; gap:10px; padding:9px 10px; cursor:pointer}
 .bankrow input{margin-top:3px; flex:none}
 .bankwords{display:flex; flex-direction:column; gap:2px; min-width:0}
@@ -2730,29 +2729,34 @@ body.allmode .tracker,body.allmode .trackmeta,body.allmode .crumbbar{display:non
 
 
 /* whiteboard */
-.board-bar{display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:8px;
+.board-bar{display:flex; flex-wrap:wrap; gap:6px; padding:8px;
   background:var(--panel-2); border:1px solid var(--line); border-bottom:none;
-  border-radius:12px 12px 0 0}
+  border-radius:12px 12px 0 0
+}
 /* square, and never stretched by the row they sit in */
-.board-tool{flex:0 0 auto; width:34px; min-width:34px; max-width:34px;
+.board-tool{ width:34px; min-width:34px; max-width:34px;
   height:34px; min-height:34px; padding:0; align-self:center;
   display:inline-flex; align-items:center; justify-content:center;
   border:1.5px solid var(--line-2); border-radius:9px; background:var(--panel);
-  cursor:pointer; font-size:15px; line-height:1; color:var(--text); font-family:var(--body)}
+  cursor:pointer; line-height:1; color:var(--text); font-family:var(--body)
+}
 .board-tool.on{border-color:var(--amber); background:color-mix(in srgb, var(--amber) 12%, var(--panel))}
-.board-colour{flex:0 0 auto; width:26px; min-width:26px; height:26px; border-radius:50%; border:2px solid var(--panel);
-  box-shadow:0 0 0 1.5px var(--line-2); cursor:pointer; align-self:center}
+.board-colour{ border:2px solid var(--panel);
+  box-shadow:0 0 0 1.5px var(--line-2); cursor:pointer; align-self:center
+}
 .board-stage{height:350px; border:1px solid var(--line); border-radius:0 0 12px 12px;
-  overflow:hidden; background:#FFFFFF}
-.board-canvas{display:block; touch-action:none; cursor:crosshair}
+  overflow:hidden; background:#FFFFFF
+}
+.board-canvas{display:block; touch-action:none;}
 
 /* labelling a picture */
-.label-pic{position:relative; display:inline-block; max-width:100%}
-.label-pic img{max-width:100%; display:block; border-radius:12px}
-.label-spot{position:absolute; border:2px dashed var(--amber); border-radius:8px;
+
+
+.label-spot{ border:2px dashed var(--amber); border-radius:8px;
   background:color-mix(in srgb, var(--amber) 10%, transparent); display:flex;
-  align-items:center; justify-content:center; font-size:14px; font-weight:600;
-  color:var(--text); cursor:pointer; text-align:center; padding:2px}
+  align-items:center; justify-content:center; font-weight:600;
+  color:var(--text); cursor:pointer; text-align:center;
+}
 .label-spot[data-filled=yes]{background:var(--panel); border-style:solid}
 .label-spot[data-verdict=yes]{border-color:var(--mint); background:var(--mint-dim)}
 .label-spot[data-verdict=no]{border-color:var(--red); background:var(--red-dim)}
@@ -2767,7 +2771,7 @@ body.allmode .tracker,body.allmode .trackmeta,body.allmode .crumbbar{display:non
   background:color-mix(in srgb, var(--amber) 14%, transparent); pointer-events:none}
 
 /* notes */
-.notes-box{min-height:150px}
+
 .notes-count{margin:6px 0 0; font-size:13px; color:var(--muted)}
 
 
@@ -2801,7 +2805,7 @@ body.allmode .tracker,body.allmode .trackmeta,body.allmode .crumbbar{display:non
   }
 
 /* labelling: a picture that reads well rather than filling the screen */
-.label-edit{max-width:460px}
+
 .label-pic img{user-select:none; -webkit-user-drag:none}
 .labeltask .label-pic img{pointer-events:none}
 .label-list{margin-top:12px; display:flex; flex-direction:column; gap:8px}
@@ -2816,8 +2820,8 @@ body.allmode .tracker,body.allmode .trackmeta,body.allmode .crumbbar{display:non
   background:var(--panel); color:var(--text); font-family:var(--body); font-size:15px;
   display:block;
 }
-.searchbox input{border:none !important; background:transparent !important; padding:0 !important;
-  height:auto; font-size:15px}
+.searchbox input{border:none !important; background:transparent !important; padding:0 !important; font-size:15px
+}
 
 
 /* =====================================================================
@@ -2839,8 +2843,8 @@ body.allmode .tracker,body.allmode .trackmeta,body.allmode .crumbbar{display:non
   min-width:120px; max-width:200px}
 .map-node.is-centre .map-text{height:52px; font-size:18px; font-weight:700; min-width:170px;
   border-color:var(--amber); border-width:2.5px; text-align:center}
-.map-tools{display:flex; gap:2px; opacity:0; transition:opacity .15s ease}
-.map-node:hover .map-tools,.map-node:focus-within .map-tools{opacity:1}
+
+
 .map-btn{width:26px; min-width:26px; height:26px; flex:0 0 auto; border-radius:50%;
   border:1.5px solid var(--line-2); background:var(--panel); cursor:pointer; font-size:13px;
   color:var(--muted); padding:0; display:inline-flex; align-items:center; justify-content:center}
@@ -2964,7 +2968,7 @@ body.allmode .tracker,body.allmode .trackmeta,body.allmode .crumbbar{display:non
 .map-node{position:relative}
 .map-node:hover .map-tools,.map-node:focus-within .map-tools{opacity:1; pointer-events:auto}
 /* these tasks sit in the middle of the column */
-.labeltask{text-align:center}
+
 .labeltask .label-words,.labeltask .label-list{justify-content:center}
 .labeltask .btn-primary{margin:0 auto}
 .labeltask .label-spot{text-align:center}
@@ -2978,32 +2982,31 @@ body.allmode .tracker,body.allmode .trackmeta,body.allmode .crumbbar{display:non
 /* the welcome note floats in the bar, so nothing moves when it goes */
 #resumeNote{
   position:fixed; top:10px; left:50%; transform:translateX(-50%);
-  z-index:80; margin:0; max-width:min(520px, calc(100vw - 32px));
-  padding:8px 16px; border-radius:999px; box-shadow:0 4px 14px rgba(0,0,0,.12);
+  z-index:80; margin:0; max-width:min(520px, calc(100vw - 32px)); border-radius:999px; box-shadow:0 4px 14px rgba(0,0,0,.12);
   background:var(--panel); border:1.5px solid var(--amber); text-align:center;
 }
 
 /* mind map tools: no room taken, and reachable once shown */
-.map-node{position:relative}
+
 /* the whole branch keeps them alive, so the pointer can travel to them */
 .map-limb:hover .map-tools,.map-node:focus-within .map-tools{opacity:1; pointer-events:auto}
 
 /* notes and whiteboard, centred in the column */
 
 /* labelling: the picture on the left, the words beside it */
-.labeltask{max-width:none; width:100%; text-align:left}
-.label-layout{display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap}
-.label-layout .label-pic{flex:0 1 auto; max-height:50vh; width:auto; max-width:100%}
-.label-layout .label-pic img{max-height:50vh; width:auto; max-width:100%}
-.label-side{flex:1 1 220px; min-width:200px; display:flex; flex-direction:column; gap:10px}
-.label-side .label-words{justify-content:flex-start; margin:0}
+
+
+.label-layout .label-pic{max-height:50vh; width:auto; max-width:100%}
+
+.label-side{min-width:200px;}
+
 @media (max-width:700px){
   .label-layout{flex-direction:column}
   .label-side{min-width:0; flex:1 1 auto}
 }
 
 /* a label has to fit its box */
-.label-spot{font-size:13px; line-height:1.15; overflow:hidden; padding:2px 4px}
+.label-spot{font-size:13px; overflow:hidden; padding:2px 4px}
 .label-spot span,.label-spot{white-space:nowrap; text-overflow:ellipsis}
 
 /* the toolbar stays put while the writing scrolls under it */
@@ -3012,12 +3015,12 @@ body.allmode .tracker,body.allmode .trackmeta,body.allmode .crumbbar{display:non
 .rt-box{overflow-y:auto}
 
 /* search boxes centre their text like every other field */
-.searchbox,.bankfind{line-height:normal; display:flex; align-items:center}
+.searchbox,.bankfind{display:flex; align-items:center}
 .searchbox input{height:100%}
 
 /* a lesson in the picker shows its unit underneath */
 .pick-lesson{display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left}
-.pick-unit{font-size:12.5px; color:var(--muted)}
+
 
 /* the Past tab, folded up by unit */
 .pastunit{margin-bottom:10px}
@@ -3065,7 +3068,7 @@ body.allmode .tracker,body.allmode .trackmeta,body.allmode .crumbbar{display:non
 .label-layout{ display:flex; gap:22px; align-items:flex-start; justify-content:center;
   flex-wrap:nowrap }
 .label-layout .label-pic{ flex:0 1 auto; margin:0 }
-.label-layout .label-pic img{ max-height:50vh; width:auto; max-width:100%; display:block }
+.label-layout .label-pic img{width:auto; max-width:100%; display:block}
 .label-side{ flex:0 0 auto; width:250px; display:flex; flex-direction:column; gap:10px;
   align-items:stretch }
 /* the words themselves in two or three narrow columns */
@@ -3146,7 +3149,7 @@ body.allmode .tracker,body.allmode .trackmeta,body.allmode .crumbbar{display:non
 /* --- anything else measured against the screen --- */
 .fullprev{ height:88vh; height:88dvh }
 .banklist{ max-height:46vh; max-height:46dvh }
-.label-layout .label-pic img{ max-height:50vh; max-height:50dvh }
+
 /* .rubriccol used to be given flex-basis:78vw here. This block is not inside a
    breakpoint, so that phone width was being applied on every screen: on a
    laptop each grade came out 1123px wide and only one of the three could be
@@ -3232,7 +3235,7 @@ html[data-build=compact] .build-palette{display:none}
 html[data-build=compact] .build{display:block; height:auto}
 html[data-build=compact] .build-list{padding:14px; overflow:visible; min-height:0}
 html[data-build=compact] .homebar{gap:8px; flex-wrap:wrap; row-gap:8px}
-html[data-build=compact] .homebar .title{flex:1 1 auto; min-width:0}
+
 html[data-build=compact] .homebar #consoleLink{order:5}
 html[data-build=compact] .build-actions{display:flex; align-items:center; gap:6px}
 html[data-build=compact] #saveSite{padding:8px 14px; font-size:14px}
@@ -3266,7 +3269,8 @@ html[data-build=compact] .build-list{padding-bottom:340px}
   html[data-build=compact] .build-list{padding-bottom:24px}
 }
 html[data-build=compact][data-preview=full] .build-preview{
-  display:flex; top:0; bottom:0; box-shadow:none; height:auto}
+  display:flex; top:0; bottom:0; box-shadow:none; height:auto
+}
 html[data-build=compact][data-preview=full] .buildbar{
   position:fixed; top:0; left:0; right:0; z-index:42}
 html[data-build=compact][data-preview=full] .build-preview{padding-top:var(--buildbar-h)}
@@ -3643,13 +3647,14 @@ html[data-bg=dark] kbd{background:#2A303B; border-color:#4A515F}
   padding:4px 6px; cursor:pointer; font-family:var(--body); color:var(--text)}
 .rt-keycell:hover{border-color:var(--amber)}
 .rt-keyown{display:flex; gap:6px; align-items:center; border-top:1px solid var(--line); padding-top:9px}
-.rt-keyown input{flex:1; min-width:0; height:30px; padding:0 8px;
+.rt-keyown input{ min-width:0; height:30px; padding:0 8px;
   border:1px solid var(--line); border-radius:8px; background:var(--panel);
-  color:var(--text); font-family:var(--body); font-size:13px}
+  color:var(--text); font-family:var(--body); font-size:13px
+}
 .rt-keyown input:focus{border-color:var(--amber); outline:none}
 
 /* an extra condition on a checklist line */
-.morecond{border-left:2px solid var(--line-2); padding-left:10px; margin-left:2px}
+.morecond{margin-left:2px}
 .morecond select, .morecond input{min-width:0}
 
 /* ---------- a checklist card in the pop-up ----------
@@ -3798,7 +3803,8 @@ html[data-bg=dark] kbd{background:#2A303B; border-color:#4A515F}
    A question the student answers for themselves, always on the page so it can
    be reached whether or not everything above it is finished. */
 .ext-gate{display:flex; align-items:center; gap:9px; cursor:pointer;
-  font-family:var(--display); font-size:16px; color:var(--text)}
+  font-family:var(--display); font-size:16px; color:var(--text)
+}
 .ext-gate input{width:18px; height:18px; accent-color:var(--amber); cursor:pointer}
 .ext-body[hidden]{display:none}
 .ext-body{margin-top:10px}
@@ -5026,7 +5032,7 @@ html[data-build=compact] .homebar .title{flex:1 1 0; min-width:0}
 .pv-flags{display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 0}
 .pv-flag{font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px;
   background:var(--panel-2); border:1px solid var(--line-2); color:var(--muted)}
-.pv-sub{margin-top:8px}
+
 .pageview > .pagekids{margin:0; padding:0; border-left:none}
 .pageview > .pagekids > .bcard{background:var(--panel)}
 .pageview > .pagekids.over{background:rgba(220,138,62,.06); border-radius:12px}
@@ -5237,9 +5243,10 @@ html.inbuilder .pg-item:hover{outline:2px dashed rgba(220,138,62,.45); outline-o
 #pwBtn{position:relative}
 
 /* the side menu */
-.rail{position:fixed; left:0; top:var(--rail-top, 51px); bottom:0; width:212px; z-index:30;
+.rail{position:fixed; left:0; top:var(--rail-top, 51px); bottom:0; z-index:30;
   display:flex; flex-direction:column; gap:2px; padding:14px 10px; overflow-y:auto;
-  background:var(--panel); border-right:1px solid var(--line)}
+  background:var(--panel); border-right:1px solid var(--line)
+}
 .rail[hidden]{display:none}
 .rail-item{display:flex; align-items:center; gap:12px; width:100%; padding:10px 12px; border:none;
   border-radius:10px; background:transparent; color:var(--muted); cursor:pointer; text-align:left;
@@ -5253,7 +5260,7 @@ html.inbuilder .pg-item:hover{outline:2px dashed rgba(220,138,62,.45); outline-o
   color:#fff; font-size:12px; line-height:20px; text-align:center}
 .rail-badge[hidden]{display:none}
 .rail-sep{flex:1; min-height:12px}
-body.has-rail .page, body.has-rail .crumbbar{margin-left:212px}
+
 body.has-rail .page{max-width:1100px}
 /* the top bar's own copies of these are not needed while the menu is up */
 body.has-rail #pwBtn, body.has-rail #keepBtn, body.has-rail #logBtn{display:none}
@@ -5308,7 +5315,7 @@ html[data-ui-skeletons=on] .loading.mid > span:not(.skel){display:none}
 .dash-row{display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--line)}
 .dash-row:first-of-type{border-top:none}
 .dash-words{flex:1; min-width:0}
-.dash-words b{display:block; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.dash-words b{display:block; font-size:14px; text-overflow:ellipsis;}
 .dash-words span{display:block; font-size:12.5px; color:var(--muted)}
 .dash-sub{margin:12px 0 2px; font-size:11px; font-family:var(--mono); letter-spacing:.08em;
   text-transform:uppercase; color:var(--dim)}
@@ -5330,7 +5337,7 @@ html[data-ui-skeletons=on] .loading.mid > span:not(.skel){display:none}
 .chip-filter{padding:6px 12px; border:1.5px solid var(--line-2); border-radius:999px; background:var(--panel);
   font-family:var(--body); font-size:13px; font-weight:700; color:var(--muted); cursor:pointer}
 .chip-filter.on{border-color:var(--amber); color:var(--amber-dark); background:rgba(220,138,62,.08)}
-.stusort{width:auto; height:36px}
+.stusort{width:auto;}
 .stubulk{flex-basis:100%; display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 12px;
   border-radius:12px; background:var(--panel-2); border:1.5px solid var(--line-2)}
 .stubulk[hidden]{display:none}
