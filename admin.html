@@ -19,7 +19,7 @@
 <script src="settings.js"></script>
 <script src="changelog.js"></script>
 </head>
-<body>
+<body class="console">
 
 <!-- The console opens on the dots with the sign-in hidden behind them, so a
      teacher whose browser fills the key never sees a sign-in screen at all.
@@ -152,9 +152,9 @@ setTimeout(function(){
   <div id="homeView" hidden>
     <h2 style="margin:22px 0 4px">Teacher console</h2>
     <div class="bigcards">
-      <button class="classtile" id="openHub"><b>&#128218; Lesson hub</b><span id="hubCount">All units and lessons</span></button>
-      <button class="classtile" id="openClasses"><b>&#128101; Classes</b><span id="clsCount">Publish, pace and mark</span></button>
-      <button class="classtile" id="openPractice" hidden><b>&#9654; Practice</b><span>Your own sandbox, and students' programs</span></button>
+      <button class="classtile" id="openHub"><b><span data-icon="lessons" data-size="22"></span> Lesson hub</b><span id="hubCount">All units and lessons</span></button>
+      <button class="classtile" id="openClasses"><b><span data-icon="classes" data-size="22"></span> Classes</b><span id="clsCount">Publish, pace and mark</span></button>
+      <button class="classtile" id="openPractice" hidden><b><span data-icon="practice" data-size="22"></span> Practice</b><span>Your own sandbox, and students' programs</span></button>
     </div>
   </div>
 
@@ -180,7 +180,7 @@ setTimeout(function(){
     <h3 style="margin:22px 0 4px">Students' programs</h3>
     <p class="hint">Find a student by their username or their name, then open their sandbox programs.</p>
     <div class="toolrow">
-      <span class="searchbox"><span class="searchicon">&#128269;</span><input id="pracSearch" placeholder="Search by username or name"></span>
+      <span class="searchbox"><span class="searchicon" data-icon="search" data-size="16"></span><input id="pracSearch" placeholder="Search by username or name"></span>
       <button class="btn-primary" id="pracGo">Search</button>
     </div>
     <div class="loading mid" id="pracWait" hidden><div class="load-dots"><span></span><span></span><span></span></div><span>Looking</span></div>
@@ -193,7 +193,7 @@ setTimeout(function(){
     <button class="btn-ghost iconbtn refresh" id="refHub" title="Refresh">&#8635;</button>
     <h2 style="margin:14px 0 4px">Lesson hub</h2>
     <div class="toolrow">
-      <span class="searchbox"><span class="searchicon">&#128269;</span><input id="hubSearch" placeholder="Search lessons"></span>
+      <span class="searchbox"><span class="searchicon" data-icon="search" data-size="16"></span><input id="hubSearch" placeholder="Search lessons"></span>
       <button class="btn-ghost" id="hubNewYear">+ New year group</button>
       <button class="btn-primary" id="hubNewLesson">+ Build a new lesson</button>
     </div>
@@ -210,7 +210,7 @@ setTimeout(function(){
       <button class="btn-ghost iconbtn" id="deleteYearBtn" title="Delete year group">&#128465;</button>
     </div>
     <div class="toolrow">
-      <span class="searchbox"><span class="searchicon">&#128269;</span><input id="unitSearch" placeholder="Search lessons"></span>
+      <span class="searchbox"><span class="searchicon" data-icon="search" data-size="16"></span><input id="unitSearch" placeholder="Search lessons"></span>
       <button class="btn-ghost iconbtn refresh" id="refYear" title="Refresh">&#8635;</button>
       <button class="btn-ghost" id="hubNewUnit">+ New unit</button>
       <button class="btn-ghost" id="specBtn" hidden>Specification</button>
@@ -295,10 +295,10 @@ setTimeout(function(){
       <button class="btn-ghost iconbtn" id="renameBtn" title="Rename class">&#9998;</button>
     </div>
     <div class="bigcards">
-      <button class="classtile" id="openLessons"><b>&#128218; Units &amp; lessons</b><span>Publish, lock, watch progress, view work</span></button>
-      <button class="classtile" id="openStudents"><b>&#128101; Students</b><span>Add, edit and reset logins</span></button>
-      <button class="classtile" id="openProgress"><b>&#128200; Progress</b><span>How a unit is going, lesson by lesson</span></button>
-      <button class="classtile" id="openCover" hidden><b>&#128202; Specification coverage</b><span>How the class is doing, point by point</span></button>
+      <button class="classtile" id="openLessons"><b><span data-icon="lessons" data-size="22"></span> Units &amp; lessons</b><span>Publish, lock, watch progress, view work</span></button>
+      <button class="classtile" id="openStudents"><b><span data-icon="classes" data-size="22"></span> Students</b><span>Add, edit and reset logins</span></button>
+      <button class="classtile" id="openProgress"><b><span data-icon="progress" data-size="22"></span> Progress</b><span>How a unit is going, lesson by lesson</span></button>
+      <button class="classtile" id="openCover" hidden><b><span data-icon="coverage" data-size="22"></span> Specification coverage</b><span>How the class is doing, point by point</span></button>
     </div>
   </div>
 
@@ -4360,7 +4360,7 @@ function paintLessonGrid(){
       vrow.appendChild(vchip);
       card.appendChild(vrow);
     }
-    if (lessonLocks[l.lesson_id]) card.appendChild(el("p","lp-note","\u{1F512} Locked for " + cls));
+    if (lessonLocks[l.lesson_id]) card.appendChild(el("p","lp-note","Locked for " + cls));
     const acts = el("div","lp-acts");
     const pub = el("button", live ? "btn-ghost" : "btn-primary", live ? "Unpublish" : "Publish");
     pub.addEventListener("click", () => {
@@ -5408,5 +5408,7 @@ if (OFFLINE){
    the page that this script ran to the end and the dots are in hand. */
 window.consoleReady = true;
 </script>
+<!-- the newer layout, built on top of everything above -->
+<script src="console-ui.js"></script>
 </body>
 </html>

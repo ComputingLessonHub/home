@@ -6428,8 +6428,10 @@ async function saveToSite(){
     const r = await fetch(API + "/api/teacher/save-lesson", {
       method:"POST",
       headers: window.teacherAuth.json(),
+      /* When it was saved travels with it, for the lesson hub's cards. */
       body: JSON.stringify({ id: lessonId(), title: lesson.title, unit: lesson.unit,
-                             year: lesson.year || "", data: compile() })
+                             year: lesson.year || "",
+                             data: Object.assign(compile(), { savedAt: new Date().toISOString() }) })
     });
     const d = await r.json().catch(() => ({}));
     if (authFailed(r.status, saveToSite)){ btn.disabled = false; btn.textContent = "Save to the site"; return; }

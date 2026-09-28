@@ -187,6 +187,59 @@
     return box;
   }
 
+  /* ---------- emoji on icon buttons ----------
+     The console grew a mix of emoji for its small square buttons, which look
+     different on every device and sit badly on the dark theme. Rather than
+     hunting down every place one is made, any icon button whose words are
+     just one of these is given the matching line icon as it appears. */
+  const EMOJI = {
+    "\u{1F512}": "lock", "\u{1F513}": "unlock", "\u{1F4BE}": "backup", "\u{1F4DC}": "log",
+    "\u2699\uFE0E": "settings", "\u2699\uFE0F": "settings", "\u2699": "settings",
+    "\u270E": "edit", "\u{1F5D1}": "trash", "\u{1F5D1}\uFE0F": "trash", "\u{1F441}": "eye",
+    "\u{1F441}\uFE0F": "eye", "\u{1F465}": "classes", "\u{1F4C4}": "log", "\u21BB": "refresh",
+    "\u{1F4C5}": "calendar", "\u{1F517}": "link"
+  };
+  function swapOne(btn){
+    if (!btn || btn.dataset.iconDone) return;
+    const first = btn.firstChild;
+    if (!first || first.nodeType !== 3) return;
+    const text = first.nodeValue.trim();
+    const name = EMOJI[text];
+    if (!name) return;
+    btn.dataset.iconDone = "1";
+    const holder = document.createElement("span");
+    holder.className = "hi-wrap";
+    holder.innerHTML = icon(name, 17);
+    btn.replaceChild(holder, first);
+    if (!btn.getAttribute("aria-label") && btn.title) btn.setAttribute("aria-label", btn.title);
+  }
+  function swapEmoji(root){
+    const r = root || document;
+    if (r.nodeType === 1 && r.matches && r.matches(".iconbtn, .bmini, .lockbtn")) swapOne(r);
+    if (r.querySelectorAll) r.querySelectorAll(".iconbtn, .bmini, .lockbtn").forEach(swapOne);
+    if (r.querySelectorAll) r.querySelectorAll("[data-icon]").forEach(e => {
+      if (e.dataset.iconDone) return;
+      e.dataset.iconDone = "1";
+      e.innerHTML = icon(e.dataset.icon, Number(e.dataset.size) || 18);
+      e.classList.add("hi-wrap");
+    });
+  }
+  function watchEmoji(){
+    swapEmoji(document);
+    try{
+      new MutationObserver(list => list.forEach(m => {
+        m.addedNodes.forEach(n => { if (n.nodeType === 1) swapEmoji(n); });
+        /* a button whose words were changed after it was made */
+        if (m.type === "characterData" || m.type === "childList"){
+          const t = m.target.nodeType === 1 ? m.target : m.target.parentNode;
+          if (t && t.matches && t.matches(".iconbtn, .bmini, .lockbtn")){ delete t.dataset.iconDone; swapOne(t); }
+        }
+      })).observe(document.body, { childList:true, subtree:true, characterData:true });
+    }catch(e){}
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watchEmoji, { once:true });
+  else watchEmoji();
+
   window.hubUI = { toast, icon, iconEl, pref, setPref, prefLabels: LABELS, prefNames: Object.keys(DEFAULTS),
-                   skeleton, ICONS };
+                   skeleton, ICONS, swapEmoji };
 })();

@@ -5212,3 +5212,158 @@ html[data-build=compact] .homebar .title{flex:1 1 0; min-width:0}
 html.inbuilder .pg-item{border-radius:12px}
 html.inbuilder .pg-item:hover{outline:2px dashed rgba(220,138,62,.45); outline-offset:6px}
 .build-actions{align-items:center}
+
+/* =====================================================================
+   Teacher console: header, side menu, loading shapes
+   ===================================================================== */
+.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+
+/* one header on every screen: title left, buttons right, Refresh last */
+.viewhead{display:flex; align-items:center; gap:12px 16px; flex-wrap:wrap; margin:12px 0 10px}
+.vh-title{flex:1 1 auto; min-width:0; display:flex; align-items:center}
+.vh-title > h2, .vh-title .classhead h2{margin:0 !important}
+.vh-title .classhead{margin:0}
+.vh-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+.vh-actions .refresh{margin-left:0}
+.vh-actions .vh-refresh{order:99}
+.viewhead + .toolrow{margin-top:0}
+@media (max-width:640px){ .vh-actions{justify-content:flex-start; width:100%} }
+
+/* tiles and small buttons with line icons */
+.classtile b{display:flex; align-items:center; gap:10px}
+.classtile b .hi-wrap{color:var(--amber)}
+.searchicon.hi-wrap{color:var(--dim)}
+.iconbtn .hi-wrap{pointer-events:none}
+#pwBtn{position:relative}
+
+/* the side menu */
+.rail{position:fixed; left:0; top:var(--rail-top, 51px); bottom:0; width:212px; z-index:30;
+  display:flex; flex-direction:column; gap:2px; padding:14px 10px; overflow-y:auto;
+  background:var(--panel); border-right:1px solid var(--line)}
+.rail[hidden]{display:none}
+.rail-item{display:flex; align-items:center; gap:12px; width:100%; padding:10px 12px; border:none;
+  border-radius:10px; background:transparent; color:var(--muted); cursor:pointer; text-align:left;
+  font-family:var(--body); font-size:14.5px; font-weight:700}
+.rail-item[hidden]{display:none}
+.rail-item:hover{background:var(--panel-2); color:var(--text)}
+.rail-item.on{background:var(--panel-2); color:var(--amber-dark)}
+.rail-item.on .hi{color:var(--amber)}
+.rail-words{flex:1; min-width:0}
+.rail-badge{min-width:20px; height:20px; padding:0 6px; border-radius:999px; background:var(--red);
+  color:#fff; font-size:12px; line-height:20px; text-align:center}
+.rail-badge[hidden]{display:none}
+.rail-sep{flex:1; min-height:12px}
+body.has-rail .page, body.has-rail .crumbbar{margin-left:212px}
+body.has-rail .page{max-width:1100px}
+/* the top bar's own copies of these are not needed while the menu is up */
+body.has-rail #pwBtn, body.has-rail #keepBtn, body.has-rail #logBtn{display:none}
+@media (max-width:900px){
+  .rail{display:none !important}
+  body.has-rail .page, body.has-rail .crumbbar{margin-left:0}
+  body.has-rail #pwBtn, body.has-rail #keepBtn, body.has-rail #logBtn{display:inline-flex}
+}
+
+/* loading: the shapes or the dots, whichever Settings asks for */
+.loading.mid > .skel{display:none; width:100%}
+html[data-ui-skeletons=on] .loading.mid{display:block}
+html[data-ui-skeletons=on] .loading.mid[hidden]{display:none}
+html[data-ui-skeletons=on] .loading.mid > .skel{display:grid}
+html[data-ui-skeletons=on] .loading.mid > .load-dots,
+html[data-ui-skeletons=on] .loading.mid > span:not(.skel){display:none}
+.skelwrap{padding:6px 0}
+
+/* ---------- lesson hub: fuller cards ---------- */
+.richgrid .richcard{cursor:pointer; display:flex; flex-direction:column; transition:border-color .15s, box-shadow .15s}
+.richgrid .richcard:hover, .richgrid .richcard:focus-visible{border-color:var(--amber); outline:none;
+  box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.richcard.dragging{opacity:.45}
+.rc-meta{margin:2px 0 8px; font-size:13.5px; color:var(--muted); font-weight:600}
+.rc-dim{color:var(--dim); font-weight:600; font-size:13px}
+.rc-classes{display:flex; flex-wrap:wrap; gap:6px; margin:0 0 4px}
+.rc-class{font-size:12.5px; font-weight:700; padding:3px 9px; border-radius:999px;
+  background:var(--panel-2); border:1px solid var(--line-2); color:var(--text)}
+.richcard .lp-acts{margin-top:auto; padding-top:12px; align-items:center}
+.richcard .rc-more{margin-left:auto}
+.rc-hint{margin-top:10px}
+
+/* search results under their year and unit */
+.search-group{display:flex; align-items:center; gap:8px; margin:22px 0 10px; font-size:15px}
+.search-group .hi{color:var(--dim)}
+.sg-year{color:var(--muted)}
+.sg-count{margin-left:6px; font-size:12px; font-weight:700; padding:2px 8px; border-radius:999px;
+  background:var(--panel-2); color:var(--muted)}
+
+/* ---------- a class: the dashboard ---------- */
+#classView.dashed .bigcards{grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:8px; margin-top:6px}
+#classView.dashed .classtile{padding:12px 14px; border-radius:12px; text-align:left}
+#classView.dashed .classtile b{font-size:15px; margin:0}
+#classView.dashed .classtile span:not(.hi-wrap){display:none}
+.classdash{display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-top:18px}
+.classdash > .skel{grid-column:1 / -1}
+.dash-panel{background:var(--panel); border:1.5px solid var(--line); border-radius:16px; padding:14px 16px}
+.dash-head{display:flex; align-items:center; gap:8px; margin:0 0 10px; font-size:15.5px}
+.dash-head .hi{color:var(--amber)}
+.dash-count{margin-left:auto; min-width:24px; padding:1px 8px; border-radius:999px; background:var(--panel-2);
+  font-size:12.5px; text-align:center; color:var(--muted)}
+.dash-row{display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--line)}
+.dash-row:first-of-type{border-top:none}
+.dash-words{flex:1; min-width:0}
+.dash-words b{display:block; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.dash-words span{display:block; font-size:12.5px; color:var(--muted)}
+.dash-sub{margin:12px 0 2px; font-size:11px; font-family:var(--mono); letter-spacing:.08em;
+  text-transform:uppercase; color:var(--dim)}
+
+/* ---------- Manage in three parts ---------- */
+.managebox .mg-section{border:1.5px solid var(--line); border-radius:14px; padding:12px 14px; margin:0 0 12px}
+.mg-head{display:flex; align-items:center; gap:8px; margin:0 0 8px; font-size:15px}
+.mg-head .hi{color:var(--amber)}
+.mg-state{margin:0 0 10px; font-weight:700; font-size:14px}
+.mg-state.live{color:var(--mint)}
+.mg-state.draft{color:var(--muted)}
+.mg-row{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 8px}
+.mg-foot{margin-top:8px}
+
+/* ---------- students ---------- */
+.stutools{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:6px 0 12px}
+.stutools .searchbox{flex:1 1 220px; max-width:320px}
+.stuchips{display:flex; gap:6px; flex-wrap:wrap}
+.chip-filter{padding:6px 12px; border:1.5px solid var(--line-2); border-radius:999px; background:var(--panel);
+  font-family:var(--body); font-size:13px; font-weight:700; color:var(--muted); cursor:pointer}
+.chip-filter.on{border-color:var(--amber); color:var(--amber-dark); background:rgba(220,138,62,.08)}
+.stusort{width:auto; height:36px}
+.stubulk{flex-basis:100%; display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 12px;
+  border-radius:12px; background:var(--panel-2); border:1.5px solid var(--line-2)}
+.stubulk[hidden]{display:none}
+.stuhead th{text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); padding:6px 8px}
+.stutick{width:34px}
+.stutable tr.picked td{background:rgba(220,138,62,.07)}
+
+/* ---------- progress: the heat map ---------- */
+.heatwrap{margin:6px 0 18px}
+.heatscroll{overflow-x:auto; border:1.5px solid var(--line); border-radius:14px; background:var(--panel)}
+.heat{border-collapse:separate; border-spacing:3px; min-width:100%; font-size:13px}
+.heat th, .heat td{padding:0}
+.heat-name{position:sticky; left:0; background:var(--panel); text-align:left; font-weight:700; padding:4px 10px !important;
+  white-space:nowrap; max-width:200px; overflow:hidden; text-overflow:ellipsis}
+.heat-col{min-width:40px; text-align:center; font-size:12px; color:var(--muted); padding:4px 0 !important}
+.heat-cell{min-width:40px; height:30px; text-align:center; border-radius:6px; font-weight:700; font-size:12px; color:#1d1d1f}
+.heat-avg .heat-name{color:var(--amber-dark)}
+.heat-avg .heat-cell{outline:2px solid var(--line-2)}
+.heat-cell.none{background:var(--panel-2); color:var(--dim)}
+.heat-cell.b0{background:#E8A0A0}
+.heat-cell.b1{background:#F2C29A}
+.heat-cell.b2{background:#F2DD9A}
+.heat-cell.b3{background:#C9E3A6}
+.heat-cell.b4{background:#9FD3A8}
+.heat-cell.total{outline:1.5px solid var(--line-2)}
+.heat-key{display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:8px; font-size:12.5px; color:var(--muted)}
+.rail{width:228px}
+body.has-rail .page, body.has-rail .crumbbar{margin-left:228px}
+.rail-words{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+@media (max-width:900px){ body.has-rail .page, body.has-rail .crumbbar{margin-left:0} }
+.dash-row button{font-size:13px; padding:6px 11px; flex:none}
+.dash-words b{white-space:normal; overflow:visible}
+.heat th.heat-name, .heat th.heat-col{text-transform:none; letter-spacing:0; font-family:var(--body); font-size:13px; color:var(--text)}
+.heat th.heat-col{color:var(--muted); font-weight:700}
+.heat-avg th.heat-name{color:var(--amber-dark)}
+.stusort{height:auto; padding:8px 10px; font-size:14px; line-height:1.3}
