@@ -5068,7 +5068,7 @@ html[data-build=compact] .homebar .title{flex:1 1 0; min-width:0}
 
 /* The pop-up + Add task opens: a search box across the top and every choice
    in a grid of three. */
-.modal.taskpicker{max-width:980px; width:min(980px, calc(100vw - 32px))}
+.modal.taskpicker{max-width:1120px; width:min(1120px, calc(100vw - 32px))}
 .tp-top{display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding-right:44px}
 .tp-top h2{flex:1; margin:0}
 .tp-swap{flex:none}
@@ -5078,11 +5078,12 @@ html[data-build=compact] .homebar .title{flex:1 1 0; min-width:0}
 .tp-head{font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.08em;
   text-transform:uppercase; color:var(--dim); margin:4px 0 8px}
 .tp-head[hidden]{display:none}
-.tp-grid{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; margin:0 0 16px}
+.tp-grid{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin:0 0 18px}
 .tp-grid[hidden]{display:none}
+@media (max-width:1000px){ .tp-grid{grid-template-columns:repeat(3, minmax(0,1fr))} }
 @media (max-width:760px){ .tp-grid{grid-template-columns:repeat(2, minmax(0,1fr))} }
 @media (max-width:480px){ .tp-grid{grid-template-columns:minmax(0,1fr)} }
-.tp-item{display:flex; align-items:center; gap:12px; text-align:left; padding:12px 14px; min-width:0;
+.tp-item{display:flex; align-items:center; gap:10px; text-align:left; padding:11px 12px; min-width:0;
   border:1.5px solid var(--line); border-radius:14px; background:var(--panel); cursor:pointer;
   font-family:var(--body); color:var(--text)}
 .tp-item[hidden]{display:none}

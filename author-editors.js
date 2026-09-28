@@ -510,12 +510,17 @@ function openTaskPicker(arr, inside, at){
       if (palAllCapped) bodyEl.appendChild(el("p","hint","The first 150 tasks. Search to find others, or use the Task builder."));
     }
 
+    /* One grid per category, each under its own name, so the kinds of task
+       are still grouped the way the palette grouped them. */
     function paintTypes(){
-      const g = grid();
-      groups.forEach(gr => gr.kinds.forEach(item => {
-        if (item.kind) g.appendChild(tile(item.kind, item.label, item.note, () => placeKind(item.kind)));
-      }));
-      bodyEl.appendChild(g);
+      groups.forEach(gr => {
+        const kinds = gr.kinds.filter(item => item.kind);
+        if (!kinds.length) return;
+        bodyEl.appendChild(el("h3","tp-head", gr.name));
+        const g = grid();
+        kinds.forEach(item => g.appendChild(tile(item.kind, item.label, item.note, () => placeKind(item.kind))));
+        bodyEl.appendChild(g);
+      });
     }
 
     const none = el("p","hint tp-none","Nothing matches that.");
