@@ -3686,6 +3686,11 @@ html[data-bg=dark] kbd{background:#2A303B; border-color:#4A515F}
 .checkrow select, .morecond select{text-overflow:ellipsis}
 .bfield.wide input{width:100%}
 .addcond{flex:none; white-space:nowrap}
+/* the output checks: a box of several lines, set in the same type as the
+   console so the lines up as they will be printed */
+.checkfield.outfield{flex:1 1 100%}
+.checkfield textarea.outtext{width:100%; min-width:0; font-family:var(--mono); font-size:13px;
+  line-height:1.45; resize:vertical; white-space:pre; overflow-x:auto}
 
 /* Aa, the way a search bar shows it: struck through while capitals are being
    ignored, solid and marked when they have to match. */

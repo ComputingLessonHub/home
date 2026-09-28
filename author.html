@@ -554,7 +554,7 @@ const BLANK = {
   pastelink:() => ({ type:"pastelink", heading:"Paste your link", task:"", note:"" }),
   code:     () => ({ type:"code", lang:"" }),        // they pick Python or web next
   ide:      () => ({ type:"ide", title:"Python", task:"Write your code, then press Run.",
-                     starter:'print("Hello World!")', turtle:false, expect:"", run:true, edit:true,
+                     starter:'print("Hello World!")', turtle:false, run:true, edit:true,
                      autocomplete:true }),
   web:      () => ({ type:"web", title:"Build a web page", task:"Edit the files, then press Run.",
                      html:'<h1>My page</h1>\n<p>Hello!</p>',
@@ -994,7 +994,6 @@ function compileOne(b, id, target){
       if (b.title) blk.title = b.title;              // headings stay optional
       if (b.task) blk.task = b.task;
       if (b.turtle) blk.turtle = true;
-      if (b.expect) blk.expect = b.expect;
       /* Nothing waits on the Run button any more, so this is always off. Written
          out rather than left absent, because absent means "required" to the
          code that reads it. */
@@ -2451,7 +2450,6 @@ function card(b, i, arr){
               + "made themselves. Arrow keys or a tap to choose, Enter or Tab to take it. The "
               + "rest of the typing help stays either way: brackets and quotes in pairs, and "
               + "Backspace taking a whole indent.");
-    F("Output must contain (optional)", "expect", { help:"Leave empty unless you want Continue to wait for the right output." });
   }
   if (b.type === "question"){
     F("Heading (optional)", "heading");
@@ -3599,6 +3597,25 @@ function checkFields(c, row, kinds, repaint){
     row.appendChild(f);
   };
 
+  /* The two output checks take a box that can hold more than one line, since
+     what a program prints usually runs over several: a name on one line and a
+     greeting on the next. It grows with what is typed so a four-line answer
+     is seen whole rather than scrolled through. */
+  const outputLines = (name, key, help) => {
+    const f = el("div","bfield checkfield grow outfield");
+    f.appendChild(el("label","", name));
+    const ta = document.createElement("textarea");
+    ta.className = "outtext";
+    ta.spellcheck = false;
+    ta.value = c[key] || "";
+    if (help) ta.placeholder = help;
+    const fit = () => { ta.rows = Math.max(2, Math.min(10, ta.value.split("\n").length)); };
+    fit();
+    ta.addEventListener("input", () => { c[key] = ta.value; fit(); saveDraft(); });
+    f.appendChild(ta);
+    row.appendChild(f);
+  };
+
   const kind = c.kind || kinds[0][0];
   if (kind === "uses") whichOne();
   else if (kind === "usesCount"){ whichOne(); howMany(); }
@@ -3608,6 +3625,10 @@ function checkFields(c, row, kinds, repaint){
   }
   else if (kind === "lineCount") needs("How many lines", "count", "5");
   else if (kind === "runCount") needs("How many times", "count", "1");
+  else if (kind === "outputHas")
+    outputLines("Output to look for (Enter for a new line)", "value", "Hello Ada\nYou are 12");
+  else if (kind === "outputIs")
+    outputLines("The whole output (Enter for a new line)", "value", "Hello Ada\nYou are 12");
   else if (kind === "tag") needs("Tag name", "selector", "h1");
   else if (kind === "classOrId") needs("Class or id", "selector", ".title or #header");
   else if (kind === "attr"){

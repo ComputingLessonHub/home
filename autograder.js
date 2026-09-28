@@ -19,8 +19,8 @@
      uses         value          a for loop, while loop, if, input, list…
      usesCount    value,count,compare  how many of those there are: 3 elifs
      codeCount    value,count,compare  how many times this text appears
-     outputHas    value          the printed output contains this
-     outputIs     value          the printed output is exactly this
+     outputHas    value          the printed output contains this (can be several lines)
+     outputIs     value          the printed output is exactly this (can be several lines)
      lineCount    count          at least this many lines of real code
 
    Web:
@@ -522,14 +522,21 @@
         return countsUp(label, got, check, "You have " + amount(got, which) + ".");
       }
 
-      case "outputHas":
+      /* Both can be asked for over several lines. The line breaks count, so
+         "Hello\nAda" wants Ada on the line after Hello, but nothing a person
+         cannot see does: Windows line endings, spaces left at the end of a
+         line, and blank lines before or after what the teacher typed. */
+      case "outputHas": {
+        const want = outText(value).replace(/^\n+|\n+$/g, "");
+        if (!want.trim()) return broken(label, "This check has no output to look for.");
         if (!out.trim()) return fail(label, "Run your code first.");
-        return has(out, value, cased, soft) ? pass(label)
-          : fail(label, "Your output does not include \u201c" + value + "\u201d.");
+        return has(outText(out), want, cased, soft) ? pass(label)
+          : fail(label, "Your output does not include \u201c" + want + "\u201d.");
+      }
 
       case "outputIs": {
         if (!out.trim()) return fail(label, "Run your code first.");
-        const tidy = (t) => t.replace(/\r/g, "").trim().replace(/[ \t]+$/gm, "");
+        const tidy = (t) => outText(t).replace(/^\n+|\n+$/g, "");
         return same(tidy(out), tidy(value), cased, soft) ? pass(label)
           : fail(label, "Your output is not quite right yet.");
       }
@@ -733,6 +740,11 @@
     let s = String(text == null ? "" : text);
     if (soft) s = s.replace(/[ \t]+/g, "");
     return cased ? s : s.toLowerCase();
+  }
+  /* Printed output as a reader sees it: one kind of line ending, and nothing
+     left dangling at the end of a line. */
+  function outText(text){
+    return String(text == null ? "" : text).replace(/\r\n?/g, "\n").replace(/[ \t]+$/gm, "");
   }
   function has(hay, needle, cased, soft){
     return tidyText(hay, cased, soft).includes(tidyText(needle, cased, soft));
