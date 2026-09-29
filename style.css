@@ -5683,3 +5683,70 @@ body.has-rail #setBtn{display:none}
   #lessonGrid .lessongrid{grid-template-columns:minmax(0,1fr)}
   #lessonGrid .lp-acts{flex-wrap:wrap}
 }
+
+/* ---------- Lesson hub: cards as wide as a class's ---------- */
+.lessongrid.richgrid{grid-template-columns:repeat(auto-fill, minmax(380px, 1fr))}
+@media (max-width:640px){ .lessongrid.richgrid{grid-template-columns:minmax(0,1fr)} }
+
+/* ---------- Practice: the search box with a small button beside it ---------- */
+.pracbar{display:flex; align-items:center; gap:8px; margin:10px 0 14px; flex-wrap:wrap}
+.pracbar .searchbox{flex:0 1 380px; min-width:280px}
+.pracbar .searchbox input{text-overflow:ellipsis}
+.pracbar #pracGo{flex:none}
+@media (max-width:480px){ .pracbar .searchbox{flex:1 1 100%; min-width:0} }
+
+/* ---------- a student's profile ---------- */
+.prof-hero{display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:18px 20px; margin:4px 0 14px;
+  background:var(--panel); border:1.5px solid var(--line); border-radius:var(--rad-lg)}
+.prof-avatar{flex:none; width:60px; height:60px; border-radius:50%; display:grid; place-items:center;
+  background:color-mix(in srgb, var(--amber) 14%, var(--panel)); color:var(--amber-dark);
+  font-family:var(--display); font-weight:700; font-size:var(--text-2xl)}
+.prof-who{flex:1 1 220px; min-width:0}
+.prof-name{display:block; font-family:var(--display); font-size:var(--text-2xl); line-height:1.25}
+.prof-line{margin:2px 0 0; color:var(--muted); font-size:var(--text-md)}
+.prof-user{font-family:var(--mono); font-size:var(--text-sm); color:var(--text)}
+.prof-chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px}
+.prof-acts{display:flex; gap:8px; flex-wrap:wrap}
+.prof-facts{display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:14px}
+.prof-fact{display:flex; flex-direction:column; align-items:flex-start; gap:2px; padding:14px 16px;
+  background:var(--panel); border:1.5px solid var(--line); border-radius:var(--rad-lg)}
+.prof-fact-label{display:flex; align-items:center; gap:6px; margin:0 0 4px; font-size:var(--text-xs); font-weight:700;
+  text-transform:uppercase; letter-spacing:.06em; color:var(--dim)}
+.prof-fact-label .hi{color:var(--amber)}
+.prof-fact-value{font-size:var(--text-lg); line-height:1.3}
+.prof-fact-sub{font-size:var(--text-sm); color:var(--muted); min-height:1em}
+.prof-fact .bmini2{margin-top:8px}
+.prof-prog-head{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:6px}
+.prof-prog-head .dash-head{margin:0; flex:1 1 auto}
+.prof-unit{width:auto; max-width:260px}
+.prof-stats{display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px; margin:8px 0 14px}
+.prof-stat{display:flex; flex-direction:column; padding:12px 14px; border-radius:var(--rad-md); background:var(--panel-2);
+  border:1.5px solid var(--line)}
+.prof-stat b{font-family:var(--display); font-size:var(--text-3xl); line-height:1.1}
+.prof-stat span{font-size:var(--text-sm); color:var(--muted); font-weight:600}
+.prof-stat em{font-style:normal; font-size:var(--text-xs); color:var(--dim); margin-top:2px}
+.prof-stat.good b{color:var(--mint)}
+.prof-stat.mid b{color:var(--amber-dark)}
+.prof-stat.low b{color:var(--red)}
+.prof-lessons{display:flex; flex-direction:column}
+.prof-lesson{display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(0, 1fr) auto; align-items:center; gap:14px;
+  padding:10px 0; border-top:1px solid var(--line)}
+.prof-lesson:first-child{border-top:none}
+.prof-lesson-name{display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0}
+.prof-lesson-name b{font-size:var(--text-base)}
+.prof-meter{display:flex; align-items:center; gap:10px; min-width:0}
+.prof-meter .coverbar{position:relative; flex:1; min-width:80px}
+.prof-meter .covernum{white-space:nowrap}
+.prof-avg{position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; background:var(--text); opacity:.55; border-radius:1px}
+.prof-avg-key{display:inline-block; width:2px; height:12px; background:var(--text); opacity:.55; vertical-align:middle; margin-right:4px}
+.prof-dim{font-size:var(--text-sm); color:var(--dim)}
+.prof-key{margin-top:10px}
+@media (max-width:700px){
+  .prof-lesson{grid-template-columns:minmax(0,1fr) auto}
+  .prof-meter{grid-column:1 / -1; grid-row:2}
+}
+.prof-meter .coverbar{overflow:visible}
+.prof-meter .coverfill{max-width:100%}
+/* the name is in the card with the initials, so not twice */
+#studentView > .viewhead, #studentView > h2{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+.prof-hero .bmini2, .prof-fact .bmini2, .prof-lesson .bmini2, .pracbar .bmini2{font-size:var(--text-sm); padding:6px 14px; line-height:1.4}

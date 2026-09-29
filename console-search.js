@@ -41,9 +41,9 @@
       go: () => { if (window.timetable) window.timetable.open(); } },
     { name:"Practice",          icon:"practice", words:"sandbox programs",     go: () => toPractice(),    online:true,
       when: () => { const t = $("openPractice"); return t && !t.hidden; } },
-    { name:"Password updates",  icon:"key",      words:"reset passwords requests logins", go: click("pwBtn"), online:true },
-    { name:"Backups & devices", icon:"backup",   words:"backup restore devices", go: click("keepBtn"),  online:true },
-    { name:"What's changed",    icon:"log",      words:"changelog version news", go: click("logBtn") },
+    { name:"Passwords",         icon:"key",      words:"reset passwords requests logins", go: click("pwBtn"), online:true },
+    { name:"Backups",           icon:"backup",   words:"backup restore devices", go: click("keepBtn"),  online:true },
+    { name:"Changelog",         icon:"log",      words:"what's changed version news", go: click("logBtn") },
     { name:"Settings",          icon:"settings", words:"preferences layout theme font", go: click("setBtn") }
   ];
   /* The pages of a class, offered under each class that matches. */
@@ -159,6 +159,8 @@
   async function goStudent(st){
     const group = st.group_name || "";
     if (!group) return;
+    /* their profile, where there is one */
+    if (window.studentProfile){ window.studentProfile.open(st); return; }
     openClass(group);
     show("studentsView");
     await loadStudents();
