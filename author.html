@@ -72,7 +72,6 @@
   <button class="modechip" id="modeChip" hidden>
     <span id="modeChipName">Lesson</span><span class="modechip-pen">&#9998;</span>
   </button>
-  <a class="crumb" href="admin.html" id="consoleLink" style="margin-right:10px">&larr; Teacher console</a>
   <button class="btn-ghost iconbtn" id="setBtn" title="Settings">&#9881;&#65038;</button>
 </div>
 
@@ -2134,12 +2133,16 @@ function card(b, i, arr){
   const acts = (b === bankRoot) ? [] :
                [["\u2191","Move up", () => move(arr, i, -1)],
                 ["\u2193","Move down", () => move(arr, i, 1)],
-                ["\u29C9","Duplicate", () => { arr.splice(i + 1, 0, JSON.parse(JSON.stringify(b))); render(); schedulePreview(); saveDraft(); }],
+                ["duplicate","Duplicate: add a copy just below", () => { arr.splice(i + 1, 0, JSON.parse(JSON.stringify(b))); render(); schedulePreview(); saveDraft(); }],
                 ["copy","Copy to paste into another lesson", () => clipCopy(b)],
                 ["\u2715","Delete", () => askDelete(LABEL[b.type], () => { arr.splice(i, 1); render(); schedulePreview(); })]];
   acts.forEach(a => {
-    const btn = el("button","btn-ghost bmini", a[0] === "copy" ? "" : a[0]); btn.title = a[1];
-    if (a[0] === "copy" && window.hubUI) btn.innerHTML = window.hubUI.icon("copy", 15);
+    /* Duplicate and Copy used to be two sets of overlapping squares. Duplicate
+       is a square with a plus now (another one, here), and Copy the clipboard
+       (to paste somewhere else). */
+    const drawn = (a[0] === "copy" || a[0] === "duplicate") && window.hubUI;
+    const btn = el("button","btn-ghost bmini", drawn ? "" : a[0]); btn.title = a[1];
+    if (drawn) btn.innerHTML = window.hubUI.icon(a[0] === "copy" ? "clipboard" : "duplicate", 15);
     btn.setAttribute("aria-label", a[1]);
     btn.addEventListener("click", a[2]);
     tools.appendChild(btn);
@@ -2427,14 +2430,16 @@ function rubricPopup(){
         };
         [["\u2191","Move up", move(-1)],
          ["\u2193","Move down", move(1)],
-         ["\u29C9","Duplicate", () => {
+         ["duplicate","Duplicate: add a copy just below", () => {
             lesson.rubric.splice(i + 1, 0, JSON.parse(JSON.stringify(g)));
             saveDraft(); paint();
           }],
          ["\u2715","Remove", () => { lesson.rubric.splice(i, 1); saveDraft(); paint(); }]
         ].forEach(t => {
-          const b = el("button","btn-ghost bmini", t[0]);
+          const b = el("button","btn-ghost bmini", t[0] === "duplicate" && window.hubUI ? "" : t[0]);
+          if (t[0] === "duplicate" && window.hubUI) b.innerHTML = window.hubUI.icon("duplicate", 15);
           b.title = t[1];
+          b.setAttribute("aria-label", t[1]);
           b.addEventListener("click", t[2]);
           tools.appendChild(b);
         });

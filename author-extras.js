@@ -456,7 +456,54 @@ function problemDot(b){
   d.innerHTML = window.hubUI ? window.hubUI.icon("warn", 15) : "!";
   d.title = list.join("\n");
   d.setAttribute("aria-label", "Needs attention: " + list.join(". "));
+  /* Clicked, it says what is wrong right where the pointer is, rather than
+     leaving it to a title that only shows after hovering and waiting. */
+  d.setAttribute("role", "button");
+  d.tabIndex = 0;
+  const tell = (x, y) => probTip(list, x, y);
+  d.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); tell(e.clientX, e.clientY); });
+  d.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault(); e.stopPropagation();
+    const r = d.getBoundingClientRect();
+    tell(r.left + r.width / 2, r.bottom);
+  });
   return d;
+}
+/* One tooltip at a time, placed at the pointer and kept on screen. Any click
+   elsewhere, Escape or scrolling takes it away. */
+let probTipEl = null;
+function probTipClose(){
+  if (!probTipEl) return;
+  probTipEl.remove(); probTipEl = null;
+  document.removeEventListener("mousedown", probTipOut, true);
+  document.removeEventListener("keydown", probTipKey, true);
+  window.removeEventListener("scroll", probTipClose, true);
+  window.removeEventListener("resize", probTipClose);
+}
+function probTipOut(e){ if (probTipEl && !probTipEl.contains(e.target)) probTipClose(); }
+function probTipKey(e){ if (e.key === "Escape") probTipClose(); }
+function probTip(list, x, y){
+  probTipClose();
+  const t = el("div","probtip");
+  t.setAttribute("role", "tooltip");
+  const h = el("b","", list.length === 1 ? "Needs attention" : list.length + " things need attention");
+  t.appendChild(h);
+  if (list.length === 1) t.appendChild(el("p","", list[0]));
+  else { const ul = el("ul"); list.forEach(w => ul.appendChild(el("li","", w))); t.appendChild(ul); }
+  document.body.appendChild(t);
+  probTipEl = t;
+  const w = t.offsetWidth, hh = t.offsetHeight;
+  let left = x + 10, top = y + 14;
+  if (left + w > innerWidth - 8) left = Math.max(8, innerWidth - w - 8);
+  if (top + hh > innerHeight - 8) top = Math.max(8, y - hh - 10);
+  t.style.left = left + "px"; t.style.top = top + "px";
+  setTimeout(() => {
+    document.addEventListener("mousedown", probTipOut, true);
+    document.addEventListener("keydown", probTipKey, true);
+    window.addEventListener("scroll", probTipClose, true);
+    window.addEventListener("resize", probTipClose);
+  }, 0);
 }
 /* Before saving, a list of what a student would trip over. Saving anyway is
    always allowed: a lesson half-built is still worth keeping. */

@@ -23,15 +23,13 @@
     skeletons: true,        // grey shapes while a screen loads
     richCards: true,        // lesson cards in the hub with more on them
     classDash: true,        // a class opens onto its dashboard
-    manageSections: true,   // the Manage pop-up split into three parts
     homeDash: true          // Home as a dashboard: today's lessons and what needs doing
   };
   const LABELS = {
     sidebar: ["Side menu", "Lessons, classes and the rest down the left of the console."],
     skeletons: ["Placeholder shapes while loading", "Grey shapes where the screen is about to be, rather than dots."],
     richCards: ["Detailed lesson cards", "Pages, tasks, when it was changed and which classes have it."],
-    classDash: ["Class dashboard", "A class opens on what is live, what needs marking and reset requests."],
-    manageSections: ["Manage in sections", "The Manage pop-up split into When, What's open and Work."],
+    classDash: ["Class dashboard", "A class opens on what is live and what needs marking."],
     homeDash: ["Home dashboard", "Home shows today's lessons from your timetable, what is live and what needs doing."]
   };
   function prefs(){ try{ return JSON.parse(localStorage.getItem("hub_prefs") || "{}"); }catch(e){ return {}; } }
@@ -85,6 +83,8 @@
     eye:      '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
     calendar: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
     copy:     '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    clipboard:'<rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 4.5V3.5h6v1"/><rect x="9" y="3" width="6" height="3" rx="1"/><path d="M9 11h6M9 14.5h6M9 18h3"/>',
+    duplicate:'<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M12 8.5v7M8.5 12h7"/>',
     paste:    '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9.5 4V3h5v1M9 11h6M9 15h4"/>',
     undo:     '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
     warn:     '<path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.01"/>',

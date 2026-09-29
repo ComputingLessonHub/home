@@ -579,14 +579,13 @@ const toHubYear = () => openYear(hubYear);
 function paintCrumbs(){
   const v = VIEWS.find(x => !$(x).hidden);
   if (v === "keyView"){ crumbs(null); return; }
-  /* Offline the hub is the top of the console rather than something sitting
-     under Home, because Home holds classes and there are none. */
-  const top = OFFLINE ? { name:"Lesson hub", go: v === "hubView" ? null : toHub }
-                      : { name:"Home", go: v === "homeView" ? null : toHome };
-  const hub = OFFLINE ? [top] : [top, { name:"Lesson hub", go: toHub }];
+  /* Every part of the console is a place of its own, the same as in the side
+     menu, so a trail starts at the part it is in: Lesson hub, Classes,
+     Practice. Home is one of those places, not the top of all of them. */
+  const hub = [{ name:"Lesson hub", go: toHub }];
   const home = { name:"Classes", go: toClasses };
-  if (v === "homeView") return crumbs([top]);
-  if (v === "hubView") return crumbs(OFFLINE ? [top] : [top, { name:"Lesson hub" }]);
+  if (v === "homeView" || v === "whoView") return crumbs([{ name:"Home" }]);
+  if (v === "hubView") return crumbs([{ name:"Lesson hub" }]);
   if (v === "hubUnitsView") return crumbs(hub.concat([{ name: hubYear || "Not in a year group" }]));
   if (v === "hubCompView") return crumbs(hub.concat([{ name: hubYear }]));
   if (v === "hubPointView") return crumbs(hub.concat([
@@ -599,27 +598,27 @@ function paintCrumbs(){
   if (v === "hubLessonsView") return crumbs(hub.concat([
                                              { name: hubYear || "Not in a year group", go: toHubYear },
                                              { name: hubUnit || "Not in a unit" }]));
-  if (v === "classesView") return crumbs([top, { name:"Classes" }]);
-  if (v === "timetableView") return crumbs([top, home, { name:"Timetable" }]);
-  if (v === "practiceView") return crumbs([top, { name:"Practice" }]);
-  if (v === "pwView") return crumbs([top, { name:"Password updates" }]);
-  if (v === "classView") return crumbs([top, home, { name: cls }]);
-  if (v === "studentsView") return crumbs([top, home, { name: cls, go: toClass }, { name:"Students" }]);
-  if (v === "coverView") return crumbs([top, home, { name: cls, go: toClass }, { name:"Specification coverage" }]);
-  if (v === "progressView") return crumbs([top, home, { name: cls, go: toClass }, { name:"Progress" }]);
-  if (v === "unitsView") return crumbs([top, home, { name: cls, go: toClass }, { name:"Units" }]);
-  if (v === "keepView") return crumbs([top, home, { name:"Backups and devices" }]);
-  if (v === "partsView") return crumbs([top, home, { name: cls, go: toClass }, { name:"Units", go: toUnits },
+  if (v === "classesView") return crumbs([{ name:"Classes" }]);
+  if (v === "timetableView") return crumbs([home, { name:"Timetable" }]);
+  if (v === "practiceView") return crumbs([{ name:"Practice" }]);
+  if (v === "pwView") return crumbs([{ name:"Password updates" }]);
+  if (v === "keepView") return crumbs([{ name:"Backups and devices" }]);
+  if (v === "classView") return crumbs([home, { name: cls }]);
+  if (v === "studentsView") return crumbs([home, { name: cls, go: toClass }, { name:"Students" }]);
+  if (v === "coverView") return crumbs([home, { name: cls, go: toClass }, { name:"Specification coverage" }]);
+  if (v === "progressView") return crumbs([home, { name: cls, go: toClass }, { name:"Progress" }]);
+  if (v === "unitsView") return crumbs([home, { name: cls, go: toClass }, { name:"Units" }]);
+  if (v === "partsView") return crumbs([home, { name: cls, go: toClass }, { name:"Units", go: toUnits },
                                         { name: unit || "Not in a unit" }]);
   /* One crumb longer when the unit was divided, so the trail says which part
      of 2.2 this is and leads back to the rest of them. A KS3 unit has no
      parts screen to go back to, so it keeps the trail it always had. */
-  if (v === "lessonsView") return crumbs([top, home, { name: cls, go: toClass }, { name:"Units", go: toUnits }]
+  if (v === "lessonsView") return crumbs([home, { name: cls, go: toClass }, { name:"Units", go: toUnits }]
       .concat(partsOfUnit().length
         ? [{ name: unit || "Not in a unit", go: () => openUnit(unit) },
            { name: subunit || "All of " + unitCode() }]
         : [{ name: unit || "Not in a unit" }]));
-  crumbs([top]);
+  crumbs([{ name:"Home" }]);
 }
 
 /* A point's number and name for the crumbs. Defined here because the crumbs

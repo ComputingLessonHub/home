@@ -1008,7 +1008,15 @@ EDITORS.question = function(b, k){
     head.appendChild(el("label","","Question " + (k + 2)));
     const del = el("button","btn-ghost bmini","×");
     del.title = "Remove this question";
-    del.addEventListener("click", () => { b.extra.splice(k, 1); redraw(); schedulePreview(); });
+    /* Gone straight away, with Undo in the corner to put it back where it was. */
+    del.addEventListener("click", () => {
+      const gone = b.extra.splice(k, 1)[0];
+      redraw(); schedulePreview(); saveDraft();
+      if (window.hubUI) window.hubUI.toast("Question " + (k + 2) + " removed", { action:"Undo", onAction: () => {
+        b.extra.splice(Math.min(k, b.extra.length), 0, gone);
+        redraw(); schedulePreview(); saveDraft();
+      } });
+    });
     head.appendChild(del);
     wrapx.appendChild(head);
 
