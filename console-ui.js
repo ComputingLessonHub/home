@@ -361,6 +361,7 @@
     list.forEach(l => {
       const id = l.lesson_id;
       const card = el("div","lessonpill richcard");
+      card.dataset.lesson = id;
       card.tabIndex = 0;
       card.setAttribute("role", "button");
       card.setAttribute("aria-label", "Open " + titleOf(id) + " in the lesson builder");

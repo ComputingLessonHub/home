@@ -106,11 +106,23 @@ setTimeout(function(){
 
 <div class="homebar" id="topbar" hidden>
   <div class="title">Computing Teacher Console</div>
-  <button class="btn-ghost iconbtn" id="pwBtn" title="Password updates">&#128274;<span class="pwcount" id="pwCount" hidden></span></button>
-  <button class="btn-ghost iconbtn" id="keepBtn" title="Backups and devices">&#128190;</button>
-  <button class="btn-ghost iconbtn" id="logBtn" title="What has changed">&#128220;</button>
-  <button class="btn-ghost iconbtn" id="setBtn" title="Settings">&#9881;&#65038;</button>
-  <div class="auth" id="whoBar" hidden></div>
+  <!-- Jump to: a class, a student, a lesson or a screen, from anywhere.
+       console-search.js fills it and takes the hidden off. -->
+  <div class="jump" id="jumpBox" role="search" hidden>
+    <span class="jump-icon" aria-hidden="true">&#128269;</span>
+    <input id="jumpIn" type="text" autocomplete="off" spellcheck="false"
+           placeholder="Jump to a class, student, lesson…" aria-label="Jump to a class, student, lesson or screen"
+           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="jumpList">
+    <kbd class="jump-key" aria-hidden="true">/</kbd>
+    <ul class="jump-list" id="jumpList" role="listbox" aria-label="Places to go" hidden></ul>
+  </div>
+  <div class="homebar-end">
+    <button class="btn-ghost iconbtn" id="pwBtn" title="Password updates">&#128274;<span class="pwcount" id="pwCount" hidden></span></button>
+    <button class="btn-ghost iconbtn" id="keepBtn" title="Backups and devices">&#128190;</button>
+    <button class="btn-ghost iconbtn" id="logBtn" title="What has changed">&#128220;</button>
+    <button class="btn-ghost iconbtn" id="setBtn" title="Settings">&#9881;&#65038;</button>
+    <div class="auth" id="whoBar" hidden></div>
+  </div>
 </div>
 
 <nav class="crumbbar" id="crumbBar" hidden></nav>
@@ -2425,6 +2437,7 @@ function lessonCards(list, box){
   inOrder(list, (l) => titleOf(l.lesson_id));
   list.forEach(l => {
     const card = el("div","lessonpill");
+    card.dataset.lesson = l.lesson_id;
     const head = el("div","lp-head");
     head.appendChild(el("b","", titleOf(l.lesson_id)));
     const alts = versionsOf(l.lesson_id);
@@ -5410,5 +5423,6 @@ window.consoleReady = true;
 </script>
 <!-- the newer layout, built on top of everything above -->
 <script src="console-ui.js"></script>
+<script src="console-search.js"></script>
 </body>
 </html>
