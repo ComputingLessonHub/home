@@ -37,6 +37,8 @@
     { name:"Lesson hub",        icon:"lessons",  words:"lessons units year groups catalogue",
       go: () => { const t = $("openHub"); if (t && !OFFLINE) t.click(); else toHub(); } },
     { name:"Classes",           icon:"classes",  words:"groups sets",          go: () => toClasses(),     online:true },
+    { name:"Timetable",         icon:"calendar", words:"periods week a b holidays term", online:true,
+      go: () => { if (window.timetable) window.timetable.open(); } },
     { name:"Practice",          icon:"practice", words:"sandbox programs",     go: () => toPractice(),    online:true,
       when: () => { const t = $("openPractice"); return t && !t.hidden; } },
     { name:"Password updates",  icon:"key",      words:"reset passwords requests logins", go: click("pwBtn"), online:true },
