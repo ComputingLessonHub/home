@@ -23,14 +23,16 @@
     skeletons: true,        // grey shapes while a screen loads
     richCards: true,        // lesson cards in the hub with more on them
     classDash: true,        // a class opens onto its dashboard
-    manageSections: true    // the Manage pop-up split into three parts
+    manageSections: true,   // the Manage pop-up split into three parts
+    homeDash: true          // Home as a dashboard: today's lessons and what needs doing
   };
   const LABELS = {
     sidebar: ["Side menu", "Lessons, classes and the rest down the left of the console."],
     skeletons: ["Placeholder shapes while loading", "Grey shapes where the screen is about to be, rather than dots."],
     richCards: ["Detailed lesson cards", "Pages, tasks, when it was changed and which classes have it."],
     classDash: ["Class dashboard", "A class opens on what is live, what needs marking and reset requests."],
-    manageSections: ["Manage in sections", "The Manage pop-up split into When, What's open and Work."]
+    manageSections: ["Manage in sections", "The Manage pop-up split into When, What's open and Work."],
+    homeDash: ["Home dashboard", "Home shows today's lessons from your timetable, what is live and what needs doing."]
   };
   function prefs(){ try{ return JSON.parse(localStorage.getItem("hub_prefs") || "{}"); }catch(e){ return {}; } }
   function pref(name){

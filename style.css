@@ -5477,3 +5477,128 @@ body.console .homebar .title{flex:1 1 0}
   body.console .homebar-end{flex:0 0 auto}
   .jump{order:3; flex:1 1 100%; height:38px}
 }
+
+/* =====================================================================
+   Teacher console: signing in and choosing who is teaching, as pop-ups
+   over Home. The console sits behind them, dimmed and blurred, so every
+   screen has the same side menu and top bar from the very first one.
+   ===================================================================== */
+body.console .entry-pop{position:fixed; inset:0; z-index:90; max-width:none; margin:0;
+  display:grid; place-items:center; padding:24px 16px; overflow-y:auto;
+  background:rgba(8,11,18,.58); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px)}
+body.console .entry-pop[hidden]{display:none}
+body.console .entry-pop .station{position:relative; width:100%; max-width:440px;
+  box-shadow:0 24px 60px rgba(0,0,0,.45)}
+body.console .entry-pop .modal-x{position:absolute; top:12px; right:12px}
+body.entry-open{overflow:hidden}
+body.entry-open .page{min-height:70vh}
+
+/* =====================================================================
+   Home as a dashboard
+   ===================================================================== */
+.home-greet{margin:-4px 0 6px}
+.home-hello{margin:0; font-family:var(--display); font-weight:700; font-size:var(--text-2xl)}
+.home-date{margin:2px 0 0; display:flex; align-items:center; flex-wrap:wrap; gap:8px; color:var(--muted);
+  font-size:var(--text-md); font-weight:600}
+.home-chip{display:inline-block; font-size:var(--text-xs); font-weight:800; padding:2px 9px; border-radius:var(--rad-pill);
+  border:1.5px solid var(--line-2); color:var(--muted); background:var(--panel); vertical-align:middle; margin-left:6px}
+.home-date .home-chip{margin-left:0}
+.home-chip.a{border-color:var(--amber); color:var(--amber-dark)}
+.home-chip.b{border-color:var(--mint); color:var(--mint)}
+.home-chip.hol{border-color:var(--line-2); color:var(--muted); background:var(--panel-2)}
+.home-chip.now{border-color:var(--mint); background:var(--mint); color:#fff}
+.home-chip.next{border-color:var(--amber); color:var(--amber-dark)}
+#homeView.homedash .bigcards{grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:8px; margin-top:10px}
+#homeView.homedash .classtile{padding:12px 14px; border-radius:var(--rad-md)}
+#homeView.homedash .classtile b{font-size:var(--text-md); margin:0}
+#homeView.homedash .classtile span:not(.hi-wrap){display:none}
+.homedash-grid{margin-top:16px}
+.homedash-grid #dashToday{grid-row:span 2}
+.dash-why{margin:0 0 4px}
+.dash-foot{margin-top:10px; display:flex; gap:8px}
+.tt-lesson .tt-when{flex:none; width:56px; display:flex; flex-direction:column; line-height:1.2}
+.tt-lesson .tt-when b{font-size:var(--text-sm)}
+.tt-lesson .tt-when span{font-size:var(--text-xs); color:var(--dim); font-family:var(--mono)}
+.tt-lesson.done{opacity:.55}
+.tt-lesson.now{background:color-mix(in srgb, var(--mint) 9%, transparent); border-radius:var(--rad-sm);
+  box-shadow:inset 3px 0 0 var(--mint); padding-left:10px; padding-right:6px}
+.tt-lesson.next .tt-when b{color:var(--amber-dark)}
+
+/* =====================================================================
+   The timetable
+   ===================================================================== */
+.tt-section{background:var(--panel); border:1.5px solid var(--line); border-radius:var(--rad-lg); padding:14px 16px; margin:0 0 14px}
+.tt-note{margin:-4px 0 10px}
+.tt-row{display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:12px 0 4px}
+.tt-label{font-weight:700; font-size:var(--text-base)}
+.tt-copy{margin-left:auto}
+.tt-ahead{display:flex; flex-wrap:wrap; gap:6px; margin-top:12px}
+.tt-wk{display:flex; flex-direction:column; min-width:84px; padding:6px 10px; border-radius:var(--rad-md);
+  border:1.5px solid var(--line); background:var(--panel-2); font-size:var(--text-sm)}
+.tt-wk-date{font-size:var(--text-xs); color:var(--dim)}
+.tt-wk.a b{color:var(--amber-dark)}
+.tt-wk.b b{color:var(--mint)}
+.tt-wk.hol b{color:var(--muted)}
+.tt-wk.hol{background:repeating-linear-gradient(135deg, var(--panel-2) 0 6px, var(--panel) 6px 12px)}
+.tt-wk.now{border-color:var(--amber)}
+.tt-scroll{overflow-x:auto; margin-top:8px}
+.tt-grid{border-collapse:separate; border-spacing:4px; width:100%; min-width:640px; table-layout:fixed}
+.tt-grid th{font-size:var(--text-sm); color:var(--muted); font-weight:700; text-align:left; padding:4px 6px}
+.tt-grid th.tt-corner{width:92px}
+.tt-grid th.tt-today{color:var(--amber-dark)}
+.tt-grid th.tt-today::after{content:" · today"; font-weight:600; color:var(--dim)}
+.tt-dshort{display:none}
+.tt-period b{display:block; color:var(--text); font-size:var(--text-base)}
+.tt-period span{display:block; font-family:var(--mono); font-size:var(--text-xs); color:var(--dim); font-weight:500}
+.tt-cell{vertical-align:top; padding:6px; border:1.5px dashed var(--line); border-radius:var(--rad-md); background:var(--panel-2)}
+.tt-cell.filled{border-style:solid; border-color:var(--line-2); background:var(--panel)}
+.tt-cell select.tt-sel{width:100%; padding:6px 8px; font-size:var(--text-sm); border-radius:var(--rad-sm);
+  font-family:var(--body); color:var(--text)}
+.tt-cell.filled select.tt-sel{font-weight:700}
+.tt-in{border:1.5px solid var(--line-2); background:var(--panel); color:var(--text); border-radius:var(--rad-sm);
+  font-family:var(--body); font-size:var(--text-sm); padding:6px 8px}
+.tt-in:focus{border-color:var(--amber); outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--amber) 15%, transparent)}
+.tt-in[hidden]{display:none}
+.tt-cell .tt-in{display:block; width:100%; margin-top:5px; box-sizing:border-box}
+.tt-cell .tt-room{font-size:var(--text-xs); padding:4px 8px}
+.tt-list{display:flex; flex-direction:column; gap:8px; margin:4px 0 12px}
+.tt-line{display:flex; align-items:center; flex-wrap:wrap; gap:8px}
+.tt-pname{width:110px}
+.tt-hname{flex:1 1 180px; min-width:140px}
+.tt-time{width:110px}
+.tt-date{width:150px}
+.tt-dash{color:var(--dim); font-size:var(--text-sm)}
+.tt-count{font-size:var(--text-sm); color:var(--muted); min-width:52px}
+.tt-hol.past{opacity:.55}
+@media (max-width:700px){
+  .tt-dlong{display:none}
+  .tt-dshort{display:inline}
+  .tt-grid th.tt-today::after{content:""}
+  .homedash-grid #dashToday{grid-row:auto}
+}
+/* beats the site-wide full-width text box */
+.tt-section input.tt-in{width:auto; min-height:0; padding:6px 8px; font-size:var(--text-sm)}
+.tt-section .tt-line input.tt-pname{width:110px; flex:none}
+.tt-section .tt-line input.tt-time{width:120px; flex:none}
+.tt-section .tt-line input.tt-date{width:160px; flex:none}
+.tt-section .tt-line input.tt-hname{flex:1 1 180px; min-width:140px}
+.tt-section .tt-cell input.tt-in{width:100%}
+.tt-section .tt-cell input.tt-room{font-size:var(--text-xs); padding:4px 8px}
+.dash-panel > .bmini2, .dash-foot .bmini2{font-size:var(--text-sm); padding:6px 12px}
+.dash-words .home-chip{display:inline-block; font-size:var(--text-2xs); color:inherit}
+.dash-words .home-chip.now{color:#fff}
+.dash-words .home-chip.next{color:var(--amber-dark)}
+.dash-row.tt-lesson{flex-wrap:nowrap}
+/* the school's holidays, and suggestions from them */
+.tt-school{display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:10px 12px; margin:0 0 10px;
+  border-radius:var(--rad-md); background:var(--panel-2); border:1.5px solid var(--line-2)}
+.tt-school-words{margin:0; flex:1 1 200px; font-weight:700; font-size:var(--text-base)}
+.tt-ro{padding:6px 0; border-top:1px solid var(--line)}
+.tt-ro:first-child{border-top:none}
+.tt-hname-ro{flex:1 1 160px; font-size:var(--text-base)}
+.tt-when-ro{font-size:var(--text-sm); color:var(--muted); min-width:170px}
+.tt-suggest{padding:10px 12px; margin:0 0 12px; border-radius:var(--rad-md);
+  border:1.5px solid var(--amber); background:color-mix(in srgb, var(--amber) 6%, var(--panel))}
+.tt-suggest-head{display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:6px}
+.tt-suggest-head b{flex:1 1 200px}
+.tt-suggest .tt-line{padding:5px 0; border-top:1px solid var(--line)}

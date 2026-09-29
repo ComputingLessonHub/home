@@ -76,7 +76,8 @@
     homeView:"home", hubView:"hub", hubUnitsView:"hub", hubCompView:"hub", hubPointView:"hub",
     hubPointLessonsView:"hub", hubLessonsView:"hub", classesView:"classes", classView:"classes",
     studentsView:"classes", coverView:"classes", unitsView:"classes", partsView:"classes",
-    lessonsView:"classes", progressView:"classes", practiceView:"practice", pwView:"pw", keepView:"keep"
+    lessonsView:"classes", progressView:"classes", timetableView:"classes", practiceView:"practice",
+    pwView:"pw", keepView:"keep", keyView:"home", whoView:"home"
   };
   let rail = null;
   function buildRail(){
@@ -114,8 +115,11 @@
   function paintRail(view){
     if (!rail) return;
     const bar = $("topbar");
-    const want = on("sidebar") && bar && !bar.hidden && view !== "keyView" && view !== "whoView";
+    /* Behind the sign-in and the teacher picker as well, since those are
+       pop-ups over Home now: the console looks the same all the way in. */
+    const want = on("sidebar") && bar && !bar.hidden;
     rail.hidden = !want;
+    if (view === "keyView" || view === "whoView") rail.setAttribute("inert", ""); else rail.removeAttribute("inert");
     document.body.classList.toggle("has-rail", !!want);
     const here = SECTION[view] || "";
     rail.querySelectorAll(".rail-item").forEach(b => {
@@ -958,6 +962,7 @@
       else if (v === "studentsView") paintStudents();
       else if (v === "classView") openClass(cls);
       else if (v === "progressView") openProgressView();
+      else if (v === "homeView" && window.timetable) window.timetable.paintHome();
     }catch(e){}
   }
 

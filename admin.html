@@ -127,38 +127,45 @@ setTimeout(function(){
 
 <nav class="crumbbar" id="crumbBar" hidden></nav>
 
+<!-- ============ signing in, and choosing who is teaching ============
+     Pop-ups over Home rather than pages of their own, so the console is
+     already there behind them, dimmed and blurred, with the same side menu
+     and top bar as everywhere else. Outside .page on purpose: .page fades up
+     with a transform as it arrives, and a fixed box inside a transformed one
+     is placed against that box instead of the window. -->
+<div class="keywrap entry-pop" id="keyView" role="dialog" aria-modal="true" aria-labelledby="keyTitle" hidden>
+  <section class="station">
+    <h2 id="keyTitle" style="margin:0 0 6px">Teacher console</h2>
+    <p class="hint" style="margin:0 0 16px">Sign in to load your classes.</p>
+    <!-- A real form with a named password box, because that is what Edge and
+         Chrome look for before they offer to remember a sign-in and before
+         they will fill one back in. autocomplete="off" here is what stopped
+         them: the box was left empty and the key typed out every lesson. -->
+    <form id="keyForm">
+      <div class="field"><input type="password" id="keyIn" name="teacher-key"
+           placeholder="Teacher key" autocomplete="current-password"></div>
+      <div class="field" id="codeField" hidden>
+        <input type="text" id="codeIn" name="code" placeholder="6-digit code" autocomplete="one-time-code"
+               inputmode="numeric" maxlength="6"></div>
+      <button class="btn-primary" id="keyGo" type="submit" style="margin-top:10px; width:100%">Sign in</button>
+    </form>
+    <p class="hint" id="keyMsg" style="margin:12px 0 0"></p>
+  </section>
+</div>
+
+<div class="keywrap entry-pop" id="whoView" role="dialog" aria-modal="true" aria-labelledby="whoTitle" hidden>
+  <section class="station">
+    <!-- Only when there is a console to go back to: changing teacher can be
+         thought better of, choosing one for the first time cannot. -->
+    <button class="btn-ghost iconbtn modal-x" id="whoX" type="button" title="Keep the current teacher" hidden>&#10005;</button>
+    <h2 id="whoTitle" style="margin:0 0 6px">Who is teaching?</h2>
+    <select id="whoAmI" class="bigselect"></select>
+    <button class="btn-primary" id="whoGo" style="margin-top:14px; width:100%">Open the console</button>
+    <p class="hint" id="whoMsg" style="margin:12px 0 0"></p>
+  </section>
+</div>
+
 <div class="page">
-
-  <!-- ============ key ============ -->
-  <div class="keywrap" id="keyView" hidden>
-    <section class="station">
-      <h2 style="margin:0 0 6px">Teacher console</h2>
-      <p class="hint" style="margin:0 0 16px">Sign in to load your classes.</p>
-      <!-- A real form with a named password box, because that is what Edge and
-           Chrome look for before they offer to remember a sign-in and before
-           they will fill one back in. autocomplete="off" here is what stopped
-           them: the box was left empty and the key typed out every lesson. -->
-      <form id="keyForm">
-        <div class="field"><input type="password" id="keyIn" name="teacher-key"
-             placeholder="Teacher key" autocomplete="current-password"></div>
-        <div class="field" id="codeField" hidden>
-          <input type="text" id="codeIn" name="code" placeholder="6-digit code" autocomplete="one-time-code"
-                 inputmode="numeric" maxlength="6"></div>
-        <button class="btn-primary" id="keyGo" type="submit" style="margin-top:10px; width:100%">Sign in</button>
-      </form>
-      <p class="hint" id="keyMsg" style="margin:12px 0 0"></p>
-    </section>
-  </div>
-
-  <!-- ============ who is teaching ============ -->
-  <div class="keywrap" id="whoView" hidden>
-    <section class="station">
-      <h2 style="margin:0 0 6px">Who is teaching?</h2>
-      <select id="whoAmI" class="bigselect"></select>
-      <button class="btn-primary" id="whoGo" style="margin-top:14px; width:100%">Open the console</button>
-      <p class="hint" id="whoMsg" style="margin:12px 0 0"></p>
-    </section>
-  </div>
 
   <!-- ============ classes grid ============ -->
   <div id="homeView" hidden>
@@ -295,8 +302,21 @@ setTimeout(function(){
   <div id="classesView" hidden>
     <button class="crumb" id="backHome">&larr; Home</button>
     <h2 style="margin:14px 0 4px">Your classes</h2>
-    <div class="toolrow"><button class="btn-ghost" id="newClassBtn">+ New class</button></div>
+    <div class="toolrow">
+      <button class="btn-ghost" id="timetableBtn"><span data-icon="calendar" data-size="16"></span> Timetable</button>
+      <button class="btn-ghost" id="newClassBtn">+ New class</button>
+    </div>
     <div class="classgrid" id="classGrid"></div>
+  </div>
+
+  <!-- ============ timetable ============
+       Filled by timetable.js: the periods of the day, the lessons in each,
+       Week A and Week B, and the holidays that the weeks skip over. -->
+  <div id="timetableView" hidden>
+    <button class="crumb" id="backClassesTt">&larr; All classes</button>
+    <h2 style="margin:14px 0 4px">Timetable</h2>
+    <div class="toolrow"><span class="hint" id="ttSaved"></span></div>
+    <div id="ttBody"></div>
   </div>
 
   <!-- ============ one class ============ -->
@@ -580,6 +600,7 @@ function paintCrumbs(){
                                              { name: hubYear || "Not in a year group", go: toHubYear },
                                              { name: hubUnit || "Not in a unit" }]));
   if (v === "classesView") return crumbs([top, { name:"Classes" }]);
+  if (v === "timetableView") return crumbs([top, home, { name:"Timetable" }]);
   if (v === "practiceView") return crumbs([top, { name:"Practice" }]);
   if (v === "pwView") return crumbs([top, { name:"Password updates" }]);
   if (v === "classView") return crumbs([top, home, { name: cls }]);
@@ -609,17 +630,27 @@ function crumbName(id){
 }
 
 /* ---------- view switching ---------- */
-const VIEWS = ["keyView","whoView","homeView","hubView","hubUnitsView","hubCompView","hubPointView","hubPointLessonsView","hubLessonsView","classesView","classView","studentsView","coverView","unitsView","partsView","lessonsView","keepView","pwView","practiceView","progressView"];
+const VIEWS = ["keyView","whoView","homeView","hubView","hubUnitsView","hubCompView","hubPointView","hubPointLessonsView","hubLessonsView","classesView","classView","studentsView","coverView","unitsView","partsView","lessonsView","keepView","pwView","practiceView","progressView","timetableView"];
 let goingBack = false;          // set while the browser's Back is driving
 function show(view, quiet){
-  VIEWS.forEach(v => { const e = $(v); if (e) e.hidden = v !== view; });
+  /* Signing in and choosing who is teaching are pop-ups over Home, so Home
+     stays up behind them, dimmed, blurred and out of reach until they go. */
+  const entry = view === "keyView" || view === "whoView";
+  VIEWS.forEach(v => { const e = $(v); if (e) e.hidden = v !== view && !(entry && v === "homeView"); });
+  document.body.classList.toggle("entry-open", entry);
+  ["topbar","crumbBar","homeView","rail"].forEach(id => {
+    const e = $(id);
+    if (!e) return;
+    if (entry) e.setAttribute("inert", ""); else e.removeAttribute("inert");
+  });
   clearInterval(relTimer);
   hideLoader();
   /* The bar comes out with whatever it sits above, in the same frame. Showing
      it the moment the first answer came back, while the page underneath was
      still waiting on the second and third, is what made the console arrive in
-     pieces: bar first, then a pause, then the rest of it. */
-  if (TOKEN && !OFFLINE){ const bar = $("topbar"); if (bar) bar.hidden = false; }
+     pieces: bar first, then a pause, then the rest of it. Behind the sign-in
+     it is there as part of the picture, and inert. */
+  if ((TOKEN || entry) && !OFFLINE){ const bar = $("topbar"); if (bar) bar.hidden = false; }
   paintCrumbs();
   paintWho();
   /* Remember where we are, so Back and the swipe gesture step through the
@@ -692,6 +723,7 @@ try{
       else if (st.view === "studentsView") loadStudents();
       else if (st.view === "progressView") openProgressView();
       else if (st.view === "classView"){ $("clsName").textContent = cls; }
+      else if (st.view === "timetableView" && window.timetable) window.timetable.paintEditor();
     }catch(err){}
     goingBack = false;
   });
@@ -985,6 +1017,7 @@ async function enterConsole(){
   nudgeBackup();           // the once-a-week reminder to take a backup
 }
 on("whoGo", "click", async () => {
+  whoCancel = false;
   meCode = $("whoAmI").value || "";
   try{
     localStorage.setItem("hub_me", meCode);
@@ -1037,6 +1070,7 @@ async function restoreSpot(spot){
   const here = cls && allClasses().some(g => String(g.name).toLowerCase() === cls.toLowerCase());
   try{
     if (spot.view === "classesView"){ toClasses(); return; }
+    if (spot.view === "timetableView" && window.timetable){ window.timetable.open(); return; }
     /* Nothing is fetched until something is searched for, so this comes back
        whole with only the box waiting in it. */
     if (spot.view === "practiceView"){ toPractice(); return; }
@@ -1088,13 +1122,29 @@ async function restoreSpot(spot){
   }
 }
 /* changing who you are, without signing in again */
+let whoCancel = false;         // true while the picker was opened over a console already in use
 function changeTeacher(){
   /* Wherever they were belongs to the teacher they were being. Coming back as
      somebody else starts at Home rather than in the other one's class, which
      they may not even take. */
   try{ sessionStorage.removeItem("hub_spot"); }catch(e){}
+  whoCancel = keyStage === "in";
+  const x = $("whoX");
+  if (x) x.hidden = !whoCancel;
+  const sel = $("whoAmI");
+  if (sel) sel.value = meCode || "";
   show("whoView", true);
+  if (sel) sel.focus();
 }
+/* Thought better of it: the same teacher, back on Home underneath. */
+function keepTeacher(){
+  if (!whoCancel || $("whoView").hidden) return;
+  whoCancel = false;
+  show("homeView");
+}
+on("whoX", "click", keepTeacher);
+on("whoView", "mousedown", (e) => { if (e.target === $("whoView")) keepTeacher(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") keepTeacher(); });
 
 /* ---------- letting the browser sign you in ----------
    Edge and Chrome fill the key box themselves once a teacher has told the
@@ -3467,6 +3517,8 @@ function paintUnitProgress(result){
 
 on("backClasses", "click", () => { refreshGroups(); show("classesView"); });
 on("openClasses", "click", toClasses);
+on("backClassesTt", "click", toClasses);
+on("timetableBtn", "click", () => { if (window.timetable) window.timetable.open(); });
 on("backHome", "click", toHome);
 
 /* ---------- practice: find a student, open their programs ----------
@@ -5423,6 +5475,7 @@ window.consoleReady = true;
 </script>
 <!-- the newer layout, built on top of everything above -->
 <script src="console-ui.js"></script>
+<script src="timetable.js"></script>
 <script src="console-search.js"></script>
 </body>
 </html>
