@@ -66,17 +66,17 @@
     ["classes",  "classes",  "Classes",           () => toClasses()],
     ["practice", "practice", "Practice",          () => toPractice()],
     ["gap"],
-    ["pw",       "key",      "Password updates",  () => $("pwBtn") && $("pwBtn").click()],
-    ["keep",     "backup",   "Backups & devices", () => $("keepBtn") && $("keepBtn").click()],
+    ["pw",       "key",      "Passwords",         () => $("pwBtn") && $("pwBtn").click()],
+    ["keep",     "backup",   "Backups",           () => $("keepBtn") && $("keepBtn").click()],
     ["line"],
-    ["log",      "log",      "What's changed",    () => $("logBtn") && $("logBtn").click()],
+    ["log",      "log",      "Changelog",         () => $("logBtn") && $("logBtn").click()],
     ["settings", "settings", "Settings",          () => $("setBtn") && $("setBtn").click()]
   ];
   const SECTION = {
     homeView:"home", hubView:"hub", hubUnitsView:"hub", hubCompView:"hub", hubPointView:"hub",
     hubPointLessonsView:"hub", hubLessonsView:"hub", classesView:"classes", classView:"classes",
     studentsView:"classes", coverView:"classes", unitsView:"classes", partsView:"classes",
-    lessonsView:"classes", progressView:"classes", timetableView:"classes", practiceView:"practice",
+    lessonsView:"classes", progressView:"classes", timetableView:"classes", studentView:"classes", practiceView:"practice",
     pwView:"pw", keepView:"keep", keyView:"home", whoView:"home"
   };
   let rail = null;

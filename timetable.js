@@ -762,13 +762,13 @@
        before anything has been asked of the server. */
     dash.innerHTML = "";
     dash.dataset.painted = "1";
-    /* Two panels side by side: what the classes can see now on the left,
-       and the day's lessons on the right. */
-    const live = panel(dash, "eye", "Live now");
-    live.appendChild(UI ? UI.skeleton("lines", 3) : waiting("Loading"));
+    /* Two panels side by side: the day's lessons on the left, and what the
+       classes can see now on the right. */
     const today = panel(dash, "calendar", "Today");
     today.id = "dashToday";
     paintToday(today);
+    const live = panel(dash, "eye", "Live now");
+    live.appendChild(UI ? UI.skeleton("lines", 3) : waiting("Loading"));
     clearInterval(clock);
     clock = setInterval(() => {
       const t = $("dashToday");
@@ -888,7 +888,7 @@
                   .filter(Boolean).join("  ·  ");
       if (sub) t.appendChild(el("span","", sub));
       r.appendChild(t);
-      if (x.slot.cls) r.appendChild(btn("Open", "btn-ghost bmini2", () => openClass(x.slot.cls)));
+      if (x.slot.cls) r.appendChild(btn("View Class", "btn-ghost bmini2", () => openClass(x.slot.cls)));
       p.appendChild(r);
     });
   }
@@ -920,10 +920,57 @@
     Array.from(byClass.keys()).sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric:true })).slice(0, 8).forEach(g => {
       const list = byClass.get(g);
       const names = list.map(a => titleOf(a.lesson_id));
-      row(p, g, names.slice(0, 2).join(", ") + (names.length > 2 ? " and " + (names.length - 2) + " more" : ""),
-          [btn("Open", "btn-ghost bmini2", () => openClass(g))]);
+      /* Straight to the unit when everything open is in the one unit (and
+         the one part of it); the class's own page when it is spread about. */
+      const shelves = new Set(list.map(a => {
+        const l = (cat.lessons || []).find(x => x.lesson_id === a.lesson_id) || {};
+        return (l.unit || "") + "\u0000" + (l.subunit || "");
+      }));
+      const go = shelves.size === 1
+        ? btn("View Lessons", "btn-ghost bmini2", () => { const [u, part] = Array.from(shelves)[0].split("\u0000"); goToUnit(g, u, part); })
+        : btn("View Class", "btn-ghost bmini2", () => openClass(g));
+      row(p, g, names.slice(0, 2).join(", ") + (names.length > 2 ? " and " + (names.length - 2) + " more" : ""), [go]);
     });
     if (byClass.size > 8) p.appendChild(el("p","hint","And " + (byClass.size - 8) + " more classes."));
+  }
+
+  /* A class's lessons in one unit, the way coming back to them after a
+     refresh does: the class named, the catalogue there, then the unit and
+     the part of it. */
+  async function goToUnit(group, unitName, part){
+    try{
+      nameClass(group);
+      await loadCatalogue();
+      openUnit(unitName);
+      if (part || partsOfUnit().length) openPart(part || "");
+    }catch(e){ openClass(group); }
+  }
+
+  /* ================= the next lesson with a class ================= */
+  /* When this teacher next has the class, from their own timetable: today's
+     lesson if it has not finished yet, else the next school day that has one.
+     null when the timetable has nothing for the class. */
+  async function nextLessonFor(name){
+    await load();
+    const k = String(name || "").toLowerCase();
+    if (!tt || !k) return null;
+    const now = new Date();
+    const mins = now.getHours() * 60 + now.getMinutes();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    for (let i = 0; i < 70; i++){
+      const d = addDays(today, i);
+      const plan = dayPlan(tt, d);
+      if (plan.kind !== "school") continue;
+      for (const x of plan.list){
+        if (String(x.slot.cls || "").toLowerCase() !== k) continue;
+        const a = toMins(x.period.start), b = toMins(x.period.end);
+        if (i === 0 && b !== null && b <= mins) continue;
+        return { date: d, period: x.period, room: x.slot.room || "", week: plan.week,
+                 today: i === 0, now: i === 0 && a !== null && a <= mins,
+                 tomorrow: i === 1 };
+      }
+    }
+    return null;
   }
 
   /* ================= hooking in ================= */
@@ -939,7 +986,8 @@
   /* Whatever is on screen already, since the sign-in may have gone up first. */
   if ($("homeView") && !$("homeView").hidden) paintHome();
 
-  window.timetable = { open, paintEditor, paintHome, load,
+  window.timetable = { open, paintEditor, paintHome, load, nextLessonFor,
+                       hasLessons: () => !!tt && hasLessons(tt),
                        weekOf: (d) => tt ? weekOf(tt, d || new Date()) : undefined,
                        _test: { normal, weekOf, holsOf, dayPlan, holidayWeek, nextSchoolDay } };
 })();

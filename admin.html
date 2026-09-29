@@ -197,10 +197,12 @@ setTimeout(function(){
       </div>
     </div>
     <h3 style="margin:22px 0 4px">Students' programs</h3>
-    <p class="hint">Find a student by their username or their name, then open their sandbox programs.</p>
-    <div class="toolrow">
+    <p class="hint">Find a student by their username or their name to see their profile and their sandbox programs.</p>
+    <!-- Not a .toolrow: the console lifts a toolrow's buttons up into the
+         screen's header, and Search belongs beside its box. -->
+    <div class="pracbar">
       <span class="searchbox"><span class="searchicon" data-icon="search" data-size="16"></span><input id="pracSearch" placeholder="Search by username or name"></span>
-      <button class="btn-primary" id="pracGo">Search</button>
+      <button class="btn-ghost bmini2" id="pracGo">Search</button>
     </div>
     <div class="loading mid" id="pracWait" hidden><div class="load-dots"><span></span><span></span><span></span></div><span>Looking</span></div>
     <div id="pracList"></div>
@@ -212,7 +214,6 @@ setTimeout(function(){
     <button class="btn-ghost iconbtn refresh" id="refHub" title="Refresh">&#8635;</button>
     <h2 style="margin:14px 0 4px">Lesson hub</h2>
     <div class="toolrow">
-      <span class="searchbox"><span class="searchicon" data-icon="search" data-size="16"></span><input id="hubSearch" placeholder="Search lessons"></span>
       <button class="btn-ghost" id="hubNewYear">+ New year group</button>
       <button class="btn-primary" id="hubNewLesson">+ Build a new lesson</button>
     </div>
@@ -229,7 +230,6 @@ setTimeout(function(){
       <button class="btn-ghost iconbtn" id="deleteYearBtn" title="Delete year group">&#128465;</button>
     </div>
     <div class="toolrow">
-      <span class="searchbox"><span class="searchicon" data-icon="search" data-size="16"></span><input id="unitSearch" placeholder="Search lessons"></span>
       <button class="btn-ghost iconbtn refresh" id="refYear" title="Refresh">&#8635;</button>
       <button class="btn-ghost" id="hubNewUnit">+ New unit</button>
       <button class="btn-ghost" id="specBtn" hidden>Specification</button>
@@ -353,11 +353,19 @@ setTimeout(function(){
       <button class="btn-primary" id="addOneBtn">+ Add student</button>
       <button class="btn-ghost" id="importBtn">Import from Arbor</button>
     </div>
-    <p class="hint" id="stuHint" hidden>Click a name to see their practice programs.</p>
+    <p class="hint" id="stuHint" hidden>Click a name to see their profile.</p>
     <div id="resetBox"></div>
     <div class="loading mid" id="stuWait" hidden><div class="load-dots"><span></span><span></span><span></span></div><span>Loading the students</span></div>
     <table class="stutable" id="stuTable"></table>
     <p class="hint" id="stuMsg" style="margin-top:12px"></p>
+  </div>
+
+  <!-- ============ one student ============
+       Filled by student-profile.js. -->
+  <div id="studentView" hidden>
+    <button class="crumb" id="backStudents">&larr; <span class="bk"></span></button>
+    <h2 id="profName" style="margin:14px 0 6px">Student</h2>
+    <div id="profBody"></div>
   </div>
 
   <!-- ============ unit-wide progress ============ -->
@@ -601,10 +609,13 @@ function paintCrumbs(){
   if (v === "classesView") return crumbs([{ name:"Classes" }]);
   if (v === "timetableView") return crumbs([home, { name:"Timetable" }]);
   if (v === "practiceView") return crumbs([{ name:"Practice" }]);
-  if (v === "pwView") return crumbs([{ name:"Password updates" }]);
-  if (v === "keepView") return crumbs([{ name:"Backups and devices" }]);
+  if (v === "pwView") return crumbs([{ name:"Passwords" }]);
+  if (v === "keepView") return crumbs([{ name:"Backups" }]);
   if (v === "classView") return crumbs([home, { name: cls }]);
   if (v === "studentsView") return crumbs([home, { name: cls, go: toClass }, { name:"Students" }]);
+  if (v === "studentView") return crumbs([home, { name: cls, go: toClass },
+                                          { name:"Students", go: () => { show("studentsView"); loadStudents(); } },
+                                          { name: (window.studentProfile && window.studentProfile.name()) || "Student" }]);
   if (v === "coverView") return crumbs([home, { name: cls, go: toClass }, { name:"Specification coverage" }]);
   if (v === "progressView") return crumbs([home, { name: cls, go: toClass }, { name:"Progress" }]);
   if (v === "unitsView") return crumbs([home, { name: cls, go: toClass }, { name:"Units" }]);
@@ -629,7 +640,7 @@ function crumbName(id){
 }
 
 /* ---------- view switching ---------- */
-const VIEWS = ["keyView","whoView","homeView","hubView","hubUnitsView","hubCompView","hubPointView","hubPointLessonsView","hubLessonsView","classesView","classView","studentsView","coverView","unitsView","partsView","lessonsView","keepView","pwView","practiceView","progressView","timetableView"];
+const VIEWS = ["keyView","whoView","homeView","hubView","hubUnitsView","hubCompView","hubPointView","hubPointLessonsView","hubLessonsView","classesView","classView","studentsView","coverView","unitsView","partsView","lessonsView","keepView","pwView","practiceView","progressView","timetableView","studentView"];
 let goingBack = false;          // set while the browser's Back is driving
 function show(view, quiet){
   /* Signing in and choosing who is teaching are pop-ups over Home, so Home
@@ -661,18 +672,21 @@ function show(view, quiet){
     try{
       sessionStorage.setItem("hub_spot", JSON.stringify(
         { view: view, cls: cls, unit: unit, subunit: subunit, hubYear: hubYear, hubUnit: hubUnit,
-          hubComp: hubComp, hubStrand: hubStrand, hubPoint: hubPoint }));
+          hubComp: hubComp, hubStrand: hubStrand, hubPoint: hubPoint,
+          stu: (window.studentProfile && window.studentProfile.username()) || "" }));
     }catch(e){}
   }
   if (!quiet && !goingBack && view !== "keyView"){
     try{
       const state = { view: view, cls: cls, unit: unit, subunit: subunit, hubYear: hubYear, hubUnit: hubUnit,
-                      hubComp: hubComp, hubStrand: hubStrand, hubPoint: hubPoint };
+                      hubComp: hubComp, hubStrand: hubStrand, hubPoint: hubPoint,
+                      stu: (window.studentProfile && window.studentProfile.username()) || "" };
       if (!history.state || history.state.view !== view ||
           history.state.cls !== cls || history.state.unit !== unit ||
           history.state.subunit !== subunit ||
           history.state.hubYear !== hubYear || history.state.hubUnit !== hubUnit ||
-          history.state.hubStrand !== hubStrand || history.state.hubPoint !== hubPoint){
+          history.state.hubStrand !== hubStrand || history.state.hubPoint !== hubPoint ||
+          (view === "studentView" && history.state.stu !== state.stu)){
         history.pushState(state, "", location.pathname + location.search);
       }
     }catch(e){}
@@ -723,6 +737,7 @@ try{
       else if (st.view === "progressView") openProgressView();
       else if (st.view === "classView"){ $("clsName").textContent = cls; }
       else if (st.view === "timetableView" && window.timetable) window.timetable.paintEditor();
+      else if (st.view === "studentView" && window.studentProfile) window.studentProfile.reopen(st.stu);
     }catch(err){}
     goingBack = false;
   });
@@ -1070,6 +1085,9 @@ async function restoreSpot(spot){
   try{
     if (spot.view === "classesView"){ toClasses(); return; }
     if (spot.view === "timetableView" && window.timetable){ window.timetable.open(); return; }
+    if (here && spot.view === "studentView" && spot.stu && window.studentProfile){
+      nameClass(cls); await window.studentProfile.reopen(spot.stu); return;
+    }
     /* Nothing is fetched until something is searched for, so this comes back
        whole with only the box waiting in it. */
     if (spot.view === "practiceView"){ toPractice(); return; }
@@ -2592,14 +2610,8 @@ function runSearch(termBox, into){
   into.appendChild(holder);
   return true;
 }
-on("hubSearch", "input", () => {
-  const searching = runSearch($("hubSearch"), $("hubSearchResults"));
-  $("hubYears").hidden = searching;
-});
-on("unitSearch", "input", () => {
-  const searching = runSearch($("unitSearch"), $("unitSearchResults"));
-  $("hubUnits").hidden = searching;
-});
+/* Lessons are searched from the Jump to box in the top bar, which finds
+   them in every year group at once, so the hub's own boxes have gone. */
 
 /* ---------- making year groups and units ---------- */
 function newYearPrompt(then){
@@ -3343,46 +3355,64 @@ function paintProgressUnitSelect(){
     $("progressBody").appendChild(el("p","hint", cls + " has no lessons filed against a unit yet."));
   }
 }
-async function fetchClassRoster(){
-  const r = await fetch(API + "/api/teacher/students?group=" + encodeURIComponent(cls), { headers: H(), cache: "no-store" });
+async function fetchClassRoster(group){
+  const r = await fetch(API + "/api/teacher/students?group=" + encodeURIComponent(group || cls), { headers: H(), cache: "no-store" });
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || "Could not load the class.");
   return (d.students || []).slice().sort((a, b) => (a.username || "").localeCompare(b.username || ""));
 }
+/* A unit's marks for one class, lesson by lesson. Kept apart from the
+   screen that draws them, because a student's profile reads the same
+   figures for the one child it is about. Each lesson also says who has
+   started it and who has finished it. */
+async function unitProgressFor(unitName, group, force){
+  const key = unitName + "\u0000" + group;
+  const cached = !force && progUnitCache.get(key);
+  if (cached && Date.now() - cached.at < 30000) return cached.result;
+  const lessonsInUnit = classLessonsFor(group).filter(l => (l.unit || "") === unitName)
+                          .slice().sort((a, b) => (a.position || 0) - (b.position || 0));
+  const roster = await fetchClassRoster(group);
+  const per = await Promise.all(lessonsInUnit.map(async (l) => {
+    const [lessonR, workR] = await Promise.all([
+      fetch(API + "/api/catalog?lesson=" + encodeURIComponent(l.lesson_id), { headers: H(), cache: "no-store" }),
+      fetch(API + "/api/teacher/work?lesson=" + encodeURIComponent(l.lesson_id) +
+            "&group=" + encodeURIComponent(group), { headers: H(), cache: "no-store" })
+    ]);
+    if (!lessonR.ok || !workR.ok) return null;
+    const lessonD = await lessonR.json(), workD = await workR.json();
+    if (!lessonD.lesson) return null;
+    const rows = workD.rows || [];
+    /* An assessment is marked into the results table, not saved into work
+       the way an ordinary lesson's tasks are, so work.data is empty for
+       it here. Scoring it anyway would read as the whole class getting
+       nothing, which is worse than not scoring it: its marks already have
+       a home, on Specification coverage. */
+    let mr;
+    if (lessonD.lesson.assessment){
+      mr = { tasks: [], gotSum: 0, maxSum: 0, pct: null, byUsername: {}, byLabel: {}, isAssessment: true };
+    } else {
+      const locks = await window.progressMath.fetchLockedPages(API, l.lesson_id, group, lessonD.lesson);
+      mr = window.progressMath.markRoster(lessonD.lesson, roster, rows, locks);
+    }
+    return { id: l.lesson_id, title: titleOf(l.lesson_id), mr: mr,
+             started: rows.map(r => r.username),
+             finished: rows.filter(r => r.data && r.data.__done).map(r => r.username) };
+  }));
+  const result = { roster: roster, lessons: per.filter(Boolean) };
+  progUnitCache.set(key, { at: Date.now(), result: result });
+  return result;
+}
+/* The lessons a class has been given, for any class rather than the one on
+   screen. */
+function classLessonsFor(group){
+  const g = String(group || "").toLowerCase();
+  return (cat.lessons || []).filter(l => assigns.some(a => a.lesson_id === l.lesson_id && a.group_name.toLowerCase() === g));
+}
 async function loadUnitProgress(force){
-  const key = unit + "\u0000" + cls;
   $("progressWait").hidden = false;
   $("progressBody").innerHTML = "";
-  const cached = !force && progUnitCache.get(key);
-  if (cached && Date.now() - cached.at < 30000){ paintUnitProgress(cached.result); return; }
-  const lessonsInUnit = classLessonsIn(unit).slice().sort((a, b) => (a.position || 0) - (b.position || 0));
   try{
-    const roster = await fetchClassRoster();
-    const per = await Promise.all(lessonsInUnit.map(async (l) => {
-      const [lessonR, workR] = await Promise.all([
-        fetch(API + "/api/catalog?lesson=" + encodeURIComponent(l.lesson_id), { headers: H(), cache: "no-store" }),
-        fetch(API + "/api/teacher/work?lesson=" + encodeURIComponent(l.lesson_id) +
-              "&group=" + encodeURIComponent(cls), { headers: H(), cache: "no-store" })
-      ]);
-      if (!lessonR.ok || !workR.ok) return null;
-      const lessonD = await lessonR.json(), workD = await workR.json();
-      if (!lessonD.lesson) return null;
-      /* An assessment is marked into the results table, not saved into work
-         the way an ordinary lesson's tasks are, so work.data is empty for
-         it here. Scoring it anyway would read as the whole class getting
-         nothing, which is worse than not scoring it: its marks already have
-         a home, on Specification coverage. */
-      let mr;
-      if (lessonD.lesson.assessment){
-        mr = { tasks: [], gotSum: 0, maxSum: 0, pct: null, byUsername: {}, byLabel: {}, isAssessment: true };
-      } else {
-        const locks = await window.progressMath.fetchLockedPages(API, l.lesson_id, cls, lessonD.lesson);
-        mr = window.progressMath.markRoster(lessonD.lesson, roster, workD.rows || [], locks);
-      }
-      return { id: l.lesson_id, title: titleOf(l.lesson_id), mr: mr };
-    }));
-    const result = { roster: roster, lessons: per.filter(Boolean) };
-    progUnitCache.set(key, { at: Date.now(), result: result });
+    const result = await unitProgressFor(unit, cls, force);
     $("progressWait").hidden = true;
     paintUnitProgress(result);
   }catch(e){
@@ -3540,6 +3570,11 @@ on("backHome2", "click", toHome);
 on("pracGo", "click", () => searchStudents());
 on("pracSearch", "keydown", (e) => { if (e.key === "Enter") searchStudents(); });
 
+/* A student's profile, from student-profile.js; their programs straight
+   away if that script is missing. */
+function openStudent(st){
+  if (window.studentProfile) window.studentProfile.open(st); else openPrograms(st);
+}
 /* Their programs, in the same viewer a lesson's work opens in. */
 function openPrograms(st){
   window.open("work.html?practice=1&group=" + encodeURIComponent(st.group_name || cls) +
@@ -3550,7 +3585,7 @@ async function searchStudents(){
   const term = ($("pracSearch").value || "").trim();
   const list = $("pracList"), msg = $("pracMsg");
   list.innerHTML = ""; msg.textContent = "";
-  if (term.length < 2){ msg.textContent = "Type at least two letters."; return; }
+  if (term.length < 2) return;
   $("pracWait").hidden = false;
   try{
     const r = await fetch(API + "/api/teacher/students?find=" + encodeURIComponent(term),
@@ -3576,13 +3611,13 @@ async function searchStudents(){
       const row = el("div","lessonCard pracCard");
       const open = el("button","pracOpen");
       open.type = "button";
-      open.title = "Open " + st.display_name + "'s programs";
+      open.title = "Open " + st.display_name + "'s profile";
       const body = el("span","body");
       body.appendChild(el("b","", st.username));
       body.appendChild(el("span","", st.display_name + " · " + (st.group_name || "no class")));
       open.appendChild(body);
       open.appendChild(el("span","go","→"));
-      open.addEventListener("click", () => openPrograms(st));
+      open.addEventListener("click", () => openStudent(st));
       row.appendChild(open);
       wrap.appendChild(row);
     });
@@ -3720,8 +3755,8 @@ function paintStudents(){
     } else {
       const open = el("button","linkbtn", st.display_name);
       open.type = "button";
-      open.title = "See " + st.display_name + "'s practice programs";
-      open.addEventListener("click", () => openPrograms(st));
+      open.title = "See " + st.display_name + "'s profile";
+      open.addEventListener("click", () => openStudent(st));
       td1.appendChild(open);
     }
     const td2 = el("td"); td2.style.color = "var(--muted)";
@@ -5475,6 +5510,7 @@ window.consoleReady = true;
 <!-- the newer layout, built on top of everything above -->
 <script src="console-ui.js"></script>
 <script src="timetable.js"></script>
+<script src="student-profile.js"></script>
 <script src="console-search.js"></script>
 </body>
 </html>
