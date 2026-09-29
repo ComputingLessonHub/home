@@ -12,13 +12,14 @@
                   every teacher uses them until they choose to customise
                   their own. A teacher with their own list is offered any
                   school holiday they do not have yet.
-     Dashboard    Home shows today's lessons in period order, what is live
-                  now, what is coming up and what is waiting on the teacher.
+     Dashboard    Home greets the teacher and shows what their classes can
+                  see now beside today's lessons in period order.
                   Settings > Console layout > Home dashboard turns it off.
 
-   Each teacher has their own timetable. It is offered to the server
-   (/api/teacher/timetable) and kept in this browser as well, so it still
-   works, on this machine, before the server knows how to keep one.
+   Each teacher has their own timetable, kept by the server at
+   /api/teacher/timetable. A copy stays in this browser as well, so a save
+   that could not reach the server is not lost: it goes up the next time
+   the timetable is opened.
 
    Classic script loaded after the console's own: meCode, show, el, $ and
    the rest are read by name at the time they are used.
@@ -244,7 +245,7 @@
       savedNote("Saved");
     }catch(e){
       serverKeeps = false;
-      savedNote("Saved in this browser only. The server does not keep timetables yet, so other computers will not see it.");
+      savedNote("Could not save to the server just now. It is kept in this browser and will be sent the next time the timetable opens.");
     }
   }
   function savedNote(words){ const s = $("ttSaved"); if (s) s.textContent = words; }
@@ -264,7 +265,7 @@
     }
     await load();
     if ($("timetableView").hidden) return;
-    if (serverKeeps === false) savedNote("Kept in this browser only until the server can keep timetables.");
+    if (serverKeeps === false) savedNote("Could not reach the server, so this is the copy kept in this browser.");
     else if (tt.savedAt) savedNote("Saved");
     else savedNote("");
     box.innerHTML = "";
@@ -746,13 +747,14 @@
        the shape of the dashboard and nothing more. */
     if (!signedIn || (entry && !dash.dataset.painted)){
       greet.innerHTML = "";
+      greet.appendChild(el("h2","home-hello", greeting()));
       greet.appendChild(el("p","home-date", longDate(new Date())));
       dash.innerHTML = "";
-      if (UI) dash.appendChild(UI.skeleton("tiles", 4));
+      if (UI) dash.appendChild(UI.skeleton("tiles", 2));
       return;
     }
     if (entry) return;                     // keep what is there under the picker
-    if (!dash.dataset.painted){ dash.innerHTML = ""; if (UI) dash.appendChild(UI.skeleton("tiles", 4)); }
+    if (!dash.dataset.painted){ dash.innerHTML = ""; if (UI) dash.appendChild(UI.skeleton("tiles", 2)); }
     await load();
     if (no !== paintNo) return;
     paintGreet(greet);
@@ -760,13 +762,13 @@
        before anything has been asked of the server. */
     dash.innerHTML = "";
     dash.dataset.painted = "1";
+    /* Two panels side by side: what the classes can see now on the left,
+       and the day's lessons on the right. */
+    const live = panel(dash, "eye", "Live now");
+    live.appendChild(UI ? UI.skeleton("lines", 3) : waiting("Loading"));
     const today = panel(dash, "calendar", "Today");
     today.id = "dashToday";
     paintToday(today);
-    const live = panel(dash, "eye", "Live now");
-    const soon = panel(dash, "bell", "Coming up");
-    const needs = panel(dash, "key", "Needs you");
-    [live, soon, needs].forEach(p => p.appendChild(UI ? UI.skeleton("lines", 3) : waiting("Loading")));
     clearInterval(clock);
     clock = setInterval(() => {
       const t = $("dashToday");
@@ -775,18 +777,11 @@
       paintGreet($("homeGreet"));
     }, 60000);
 
-    let resets = [];
-    await Promise.all([
-      loadCatalogue().catch(() => {}),
-      fetch(API + "/api/teacher/resets", { headers: H(), cache:"no-store" }).then(r => r.json())
-        .then(d => { resets = d.requests || []; }).catch(() => {})
-    ]);
+    try{ await loadCatalogue(); }catch(e){}
     if (no !== paintNo) return;
     const mine = new Set(classList().map(n => String(n).toLowerCase()));
     const ours = (name) => !who() || mine.has(String(name || "").toLowerCase());
     paintLive(live, ours);
-    paintSoon(soon, ours);
-    paintNeeds(needs, resets.filter(x => ours(x.group_name)));
   }
   function panel(dash, icon, title){
     const p = el("section","dash-panel");
@@ -822,15 +817,17 @@
     if (!greet || !tt) return;
     greet.innerHTML = "";
     const name = who() ? ((typeof teacherNames === "object" && teacherNames[who()]) || who()) : "";
-    greet.appendChild(el("p","home-hello", greeting() + (name ? ", " + name : "")));
-    const line = el("p","home-date", longDate(new Date()));
+    /* The greeting is the page's title; the date and the week sit under it
+       as one line of the same quiet text. */
+    greet.appendChild(el("h2","home-hello", greeting() + (name ? ", " + name : "")));
     const now = new Date();
     const plan = dayPlan(tt, now);
     const w = weekOf(tt, now);
-    if (plan.kind === "holiday") line.appendChild(el("span","home-chip hol", plan.holiday.name));
-    else if (w === null) line.appendChild(el("span","home-chip hol","Holiday week"));
-    else if (w) line.appendChild(el("span","home-chip " + (w === "B" ? "b" : "a"), "Week " + w));
-    greet.appendChild(line);
+    const bits = [longDate(now)];
+    if (plan.kind === "holiday") bits.push(plan.holiday.name);
+    else if (w === null) bits.push("Holiday week");
+    else if (w) bits.push("Week " + w);
+    greet.appendChild(el("p","home-date", bits.join("  \u00B7  ")));
   }
 
   /* ---------- today's lessons ---------- */
@@ -894,9 +891,6 @@
       if (x.slot.cls) r.appendChild(btn("Open", "btn-ghost bmini2", () => openClass(x.slot.cls)));
       p.appendChild(r);
     });
-    const foot = el("div","dash-foot");
-    foot.appendChild(btn("Edit timetable", "btn-ghost bmini2", open));
-    p.appendChild(foot);
   }
   function until(n){
     if (n < 60) return n + " min";
@@ -930,53 +924,6 @@
           [btn("Open", "btn-ghost bmini2", () => openClass(g))]);
     });
     if (byClass.size > 8) p.appendChild(el("p","hint","And " + (byClass.size - 8) + " more classes."));
-  }
-
-  /* ---------- what is on its way ---------- */
-  function paintSoon(p, ours){
-    body(p);
-    const now = new Date();
-    const nowIso = now.toISOString();
-    const week = addDays(now, 7).toISOString();
-    const items = [];
-    (assigns || []).filter(a => ours(a.group_name) && a.published).forEach(a => {
-      if (a.release_at && a.release_at > nowIso && a.release_at < week)
-        items.push({ at: a.release_at, words: titleOf(a.lesson_id), sub: a.group_name + "  ·  opens " + niceDate(a.release_at) + " at " + hhmm(a.release_at), g: a.group_name });
-      else if (liveNow(a) && a.close_on){
-        const close = parseDay(a.close_on);
-        if (close && close <= addDays(now, 3))
-          items.push({ at: a.close_on + "T23:59", words: titleOf(a.lesson_id), sub: a.group_name + "  ·  closes " + niceDate(a.close_on), g: a.group_name });
-      }
-    });
-    items.sort((a, b) => a.at.localeCompare(b.at));
-    /* the next holiday, however far off */
-    const todayIso = isoDay(now);
-    const hol = holsOf(tt).filter(h => h.start > todayIso).sort((a, b) => a.start.localeCompare(b.start))[0];
-    count(p, items.length);
-    if (!items.length && !hol) p.appendChild(el("p","hint","Nothing scheduled for the next seven days."));
-    items.slice(0, 6).forEach(x => row(p, x.words, x.sub, [btn("Open", "btn-ghost bmini2", () => openClass(x.g))]));
-    if (hol){
-      const days = Math.round((parseDay(hol.start) - parseDay(todayIso)) / 86400000);
-      if (items.length) p.appendChild(el("p","dash-sub","Next holiday"));
-      row(p, hol.name, niceDate(hol.start) + (hol.end !== hol.start ? " to " + niceDate(hol.end) : "") +
-          "  ·  in " + days + " day" + (days === 1 ? "" : "s"));
-    }
-  }
-
-  /* ---------- waiting on the teacher ---------- */
-  function paintNeeds(p, resets){
-    body(p);
-    count(p, resets.length);
-    if (!resets.length) p.appendChild(el("p","hint","No password requests from your classes."));
-    resets.slice(0, 5).forEach(x => row(p, x.display_name || x.username,
-      (x.group_name ? x.group_name + "  ·  " : "") + "wants a new password"));
-    if (resets.length) p.appendChild(btn("Password updates", "btn-primary bmini2", () => { const b = $("pwBtn"); if (b) b.click(); }));
-    /* a nudge towards the timetable while it is empty */
-    if (!hasLessons(tt)){
-      p.appendChild(el("p","dash-sub","Timetable"));
-      row(p, "Not set up yet", "Home can list the classes you teach today once it is.",
-          [btn("Set up", "btn-ghost bmini2", open)]);
-    }
   }
 
   /* ================= hooking in ================= */

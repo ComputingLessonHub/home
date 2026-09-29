@@ -15,9 +15,8 @@
      Messages       short notes in the corner, with Undo after a removal
      Lesson hub     fuller lesson cards, search results grouped by year and
                     unit, and lessons dragged into order within a unit
-     A class        a dashboard of what is live, what needs marking and who
-                    has asked for a password reset
-     Manage         the pop-up in three parts: When, What's open and Work
+     A class        a dashboard of what is live and what needs marking
+     Manage         pacing a lesson: opening and locking its tasks
      Students       search, sort, filters, and ticking several at once
      Progress       a grid of every student against every lesson
 
@@ -66,9 +65,10 @@
     ["hub",      "lessons",  "Lesson hub",        () => { const t = $("openHub"); if (t && !OFFLINE) t.click(); else toHub(); }],
     ["classes",  "classes",  "Classes",           () => toClasses()],
     ["practice", "practice", "Practice",          () => toPractice()],
+    ["gap"],
     ["pw",       "key",      "Password updates",  () => $("pwBtn") && $("pwBtn").click()],
     ["keep",     "backup",   "Backups & devices", () => $("keepBtn") && $("keepBtn").click()],
-    ["sep"],
+    ["line"],
     ["log",      "log",      "What's changed",    () => $("logBtn") && $("logBtn").click()],
     ["settings", "settings", "Settings",          () => $("setBtn") && $("setBtn").click()]
   ];
@@ -86,7 +86,10 @@
     rail.setAttribute("aria-label", "Console");
     rail.hidden = true;
     RAIL.forEach(r => {
-      if (r[0] === "sep"){ rail.appendChild(el("div","rail-sep")); return; }
+      /* the space that pushes the rest to the bottom, and the thin rule
+         between the admin screens and What's changed and Settings */
+      if (r[0] === "gap"){ rail.appendChild(el("div","rail-sep")); return; }
+      if (r[0] === "line"){ const l = el("div","rail-line"); l.setAttribute("role", "separator"); rail.appendChild(l); return; }
       if (OFFLINE && ["home","classes","practice","pw","keep"].indexOf(r[0]) >= 0) return;
       const b = el("button","rail-item");
       b.type = "button";
@@ -487,7 +490,7 @@
 
   /* ================= a class: its dashboard ================= */
   /* A class opens on what a teacher wants to know first: what the class can
-     see now, what is waiting to be marked, and who is locked out. The four
+     see now and what is waiting to be marked. The four
      ways into the class's screens sit above it as a row of tabs. */
   const baseOpenClass = openClass;
   window.openClass = async function(name){
@@ -513,15 +516,10 @@
   };
   async function paintDash(dash, name){
     const group = name;
-    let resets = [], results = [];
+    let results = [];
     try{ await loadCatalogue(); }catch(e){}
-    await Promise.all([
-      fetch(API + "/api/teacher/resets", { headers: H(), cache:"no-store" }).then(r => r.json())
-        .then(d => { resets = (d.requests || []).filter(x => (x.group_name || "").toLowerCase() === group.toLowerCase()); })
-        .catch(() => {}),
-      fetch(API + "/api/teacher/results?all=1&group=" + encodeURIComponent(group), { headers: H(), cache:"no-store" })
-        .then(r => r.json()).then(d => { results = d.rows || []; }).catch(() => {})
-    ]);
+    await fetch(API + "/api/teacher/results?all=1&group=" + encodeURIComponent(group), { headers: H(), cache:"no-store" })
+      .then(r => r.json()).then(d => { results = d.rows || []; }).catch(() => {});
     if (cls !== group) return;                      // they have moved on
     dash.innerHTML = "";
     const mine = assigns.filter(a => a.group_name.toLowerCase() === group.toLowerCase());
@@ -558,7 +556,6 @@
       const sub = [a.release_at ? "Opened " + niceDate(a.release_at) : "", a.close_on ? "closes " + niceDate(a.close_on) : ""]
         .filter(Boolean).join(", ");
       row(p1, titleOf(a.lesson_id), sub, [
-        btn("View work", "btn-ghost bmini2", () => openWorkPage(a.lesson_id)),
         btn("Manage", "btn-ghost bmini2", () => manageLesson(a.lesson_id))
       ]);
     });
@@ -594,15 +591,6 @@
       ]);
     });
 
-    /* who cannot sign in */
-    const p3 = panel("key", "Password requests", resets.length);
-    if (!resets.length) p3.appendChild(el("p","hint","Nobody in " + group + " is waiting for a password reset."));
-    resets.forEach(x => {
-      row(p3, x.display_name, x.username + (x.hasNewPassword ? "  ·  new password ready" : ""), [
-        btn("Approve", "btn-primary bmini2", async () => { await resetAction("approve-reset", x.username); UI.toast("Approved for " + x.display_name); paintDash(dash, group); }),
-        btn("Deny", "btn-ghost bmini2", async () => { await resetAction("deny-reset", x.username); paintDash(dash, group); })
-      ]);
-    });
   }
 
   /* ================= Manage: in three parts ================= */
@@ -623,85 +611,126 @@
     if (b && b.type === "page") return "Page " + (i + 1);
     return KIND[b && b.type] || (b && b.type) || "Task";
   };
-  const baseOpenManage = openManage;
+  /* Manage is for pacing a lesson: opening tasks as the class reaches them.
+     Publishing, scheduling and work each have their own place on the lesson's
+     card, so nothing else is here. */
+  const basePaintTasks = paintTasks;
   window.openManage = function(){
-    if (!on("manageSections")) return baseOpenManage.apply(this, arguments);
     openModal(box => {
-      box.classList.add("wide", "managebox");
-      modalTitle(box, titleOf(lessonId));
+      box.classList.add("wide", "pacebox");
       const x = el("button","btn-ghost iconbtn modal-x","✕"); x.title = "Close";
       x.addEventListener("click", closeModal);
       box.appendChild(x);
-      const mine = assigns.find(a => a.lesson_id === lessonId && a.group_name.toLowerCase() === cls.toLowerCase());
-      const isLiveNow = mine ? !!mine.published : !!catOf(lessonId).published;
-      const section = (icon, title) => {
-        const sct = el("section","mg-section");
-        const h = el("h3","mg-head"); h.innerHTML = ic(icon, 18); h.appendChild(el("span","", title));
-        sct.appendChild(h);
-        box.appendChild(sct);
-        return sct;
-      };
-
-      /* When */
-      const when = section("calendar", "When");
-      const state = !isLiveNow ? "Draft: " + cls + " cannot see it"
-        : (mine && mine.release_at && mine.release_at > new Date().toISOString())
-          ? "Scheduled: opens " + niceDate(mine.release_at) + " at " + hhmm(mine.release_at)
-          : "Open" + (mine && mine.close_on ? ", closes " + niceDate(mine.close_on) : "");
-      when.appendChild(el("p","mg-state " + (isLiveNow ? "live" : "draft"), state));
-      const wrow = el("div","mg-row");
-      const pubBtn = el("button", isLiveNow ? "btn-ghost" : "btn-primary", isLiveNow ? "Unpublish" : "Publish");
-      pubBtn.addEventListener("click", async () => {
-        if (!isLiveNow){ closeModal(); schedulePopup(lessonId); return; }
-        pubBtn.textContent = "…";
-        try{
-          const id = lessonId;
-          await catPost({ op:"class-publish", id, group: cls, published: false });
-          await loadCatalogue();
-          closeModal(); paintLessonGrid(); openManage();
-          UI.toast("Unpublished for " + cls, { action:"Undo", onAction: async () => {
-            await catPost({ op:"class-publish", id, group: cls, published: true,
-                            releaseAt: (mine && mine.release_at) || "", closeOn: (mine && mine.close_on) || "" });
-            await loadCatalogue(); paintLessonGrid();
-          } });
-        }catch(e){ UI.toast("Could not change that: " + e.message, { kind:"error" }); }
-      });
-      const sch = el("button","btn-ghost","Schedule");
-      sch.addEventListener("click", () => { closeModal(); schedulePopup(lessonId); });
-      wrow.appendChild(pubBtn); wrow.appendChild(sch);
-      when.appendChild(wrow);
-
-      /* What's open */
-      const what = section("unlock", "What's open");
-      if (!lessonJson.assessment){
-        const orow = el("div","mg-row");
-        const oa = el("button","btn-ghost bmini2","Open all tasks"); oa.addEventListener("click", () => postLocks(new Set()));
-        const la = el("button","btn-ghost bmini2","Lock all tasks");
-        la.addEventListener("click", () => postLocks(new Set(lessonJson.blocks.map((_, i) => i).concat([lessonJson.blocks.length]))));
-        orow.appendChild(oa); orow.appendChild(la);
-        what.appendChild(orow);
-      }
-      const msg = el("p","hint",""); msg.id = "relMsg"; what.appendChild(msg);
-      const list = el("div"); list.id = "taskList"; what.appendChild(list);
-      const foot = el("div","mg-foot"); foot.id = "summaryFoot"; what.appendChild(foot);
-
-      /* Work */
-      const work = section("work", "Work");
-      const krow = el("div","mg-row");
-      const vw = el("button","btn-primary","View work");
-      vw.addEventListener("click", () => openWorkPage(lessonId));
-      krow.appendChild(vw);
-      if (lessonJson && lessonJson.assessment){
-        const mb = el("button","btn-ghost","Markbook");
-        mb.addEventListener("click", () => openMarkbook(true));
-        krow.appendChild(mb);
-      }
-      const pg = el("button","btn-ghost","Progress");
-      pg.addEventListener("click", () => openWorkPage(lessonId, "progress"));
-      krow.appendChild(pg);
-      work.appendChild(krow);
-      paintTasks();
+      modalTitle(box, titleOf(lessonId));
+      const sub = el("p","pace-sub"); sub.id = "paceSub"; box.appendChild(sub);
+      const head = el("div","pace-head"); head.id = "paceHead"; box.appendChild(head);
+      const msg = el("p","hint pace-msg",""); msg.id = "relMsg"; box.appendChild(msg);
+      const list = el("div","pace-list"); list.id = "paceList"; box.appendChild(list);
+      window.paintTasks();
     });
+  };
+  /* Everything that changes the locks ends by calling paintTasks, so the
+     pacing view is drawn from here whenever it is the one on screen. */
+  window.paintTasks = function(){
+    const list = $("paceList");
+    if (!list || !lessonJson) return basePaintTasks.apply(this, arguments);
+    const blocks = lessonJson.blocks || [];
+    const head = $("paceHead"), sub = $("paceSub"), msg = $("relMsg");
+    list.innerHTML = ""; head.innerHTML = "";
+    const mine = assigns.find(a => a.lesson_id === lessonId && a.group_name.toLowerCase() === cls.toLowerCase());
+    const live = mine ? !!mine.published : !!catOf(lessonId).published;
+    sub.textContent = "Pacing for " + cls + (live ? "" : "  ·  not published yet, so " + cls + " cannot see it");
+
+    if (lessonJson.assessment){
+      list.appendChild(el("p","modal-text","An assessment has nothing to pace: every question is open to " + cls +
+        " while it is published."));
+      if (msg) msg.textContent = "";
+      return;
+    }
+    const total = blocks.length + 1;                     // the summary page is one past the last task
+    const openAt = (i) => !locks.has(i);
+    const opened = Array.from({ length: total }, (_, i) => i).filter(openAt).length;
+    const setLocks = (next) => postLocks(next);
+    const all = () => new Set(Array.from({ length: total }, (_, i) => i));
+    const firstShut = Array.from({ length: total }, (_, i) => i).find(i => !openAt(i));
+
+    /* where the class has got to, and the one-press way on */
+    const stat = el("div","pace-stat");
+    stat.appendChild(el("b","", opened + " of " + total));
+    stat.appendChild(el("span","", opened === total ? "Everything is open" : "open, including the summary"));
+    head.appendChild(stat);
+    const track = el("div","pace-track");
+    track.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < total; i++){
+      const seg = el("span","pace-seg" + (openAt(i) ? " on" : "") + (i === blocks.length ? " end" : ""));
+      seg.title = (i === blocks.length ? "Summary page" : (i + 1) + ". " + stepTitle(blocks[i], i)) + (openAt(i) ? ": open" : ": locked");
+      track.appendChild(seg);
+    }
+    head.appendChild(track);
+    const acts = el("div","pace-acts");
+    const next = el("button","btn-primary","");
+    next.innerHTML = ic("unlock", 16);
+    next.appendChild(document.createTextNode(firstShut === undefined ? " Everything is open"
+      : firstShut === blocks.length ? " Let them finish" : " Open task " + (firstShut + 1)));
+    next.disabled = firstShut === undefined || locksUnknown;
+    next.addEventListener("click", () => { const n = new Set(locks); n.delete(firstShut); setLocks(n); });
+    const oa = el("button","btn-ghost","Open all");
+    oa.disabled = opened === total;
+    oa.addEventListener("click", () => setLocks(new Set()));
+    const la = el("button","btn-ghost","Lock all");
+    la.disabled = opened === 0;
+    la.addEventListener("click", () => setLocks(all()));
+    acts.appendChild(next); acts.appendChild(oa); acts.appendChild(la);
+    head.appendChild(acts);
+
+    if (msg){
+      msg.textContent = locksUnknown ? "Could not check which tasks are locked for " + cls + ". Try again in a moment."
+        : usingDefaults ? "This is the starting pattern. Open tasks as you teach." : "";
+    }
+
+    /* one line per task, down to the summary */
+    const line = (i, number, title, kind) => {
+      const isOpen = openAt(i);
+      const r = el("div","pace-row" + (isOpen ? " on" : "") + (i === firstShut ? " next" : ""));
+      const n = el("span","pace-n", number);
+      r.appendChild(n);
+      const w = el("div","pace-words");
+      w.appendChild(el("b","", title));
+      if (kind) w.appendChild(el("span","", kind));
+      r.appendChild(w);
+      /* on a locked task below the first locked one, a way to open the run
+         of them in one go */
+      if (!isOpen && firstShut !== undefined && i > firstShut){
+        const upto = el("button","btn-ghost bmini2 pace-upto","Open up to here");
+        upto.addEventListener("click", () => {
+          const n2 = new Set(locks); for (let j = 0; j <= i; j++) n2.delete(j); setLocks(n2);
+        });
+        r.appendChild(upto);
+      }
+      const sw = el("button","pace-switch" + (isOpen ? " on" : ""));
+      sw.type = "button";
+      sw.setAttribute("role", "switch");
+      sw.setAttribute("aria-checked", isOpen ? "true" : "false");
+      sw.setAttribute("aria-label", (isOpen ? "Lock " : "Open ") + title);
+      sw.disabled = locksUnknown;
+      sw.appendChild(el("span","pace-switch-words", isOpen ? "Open" : "Locked"));
+      sw.appendChild(el("span","pace-knob"));
+      sw.addEventListener("click", () => {
+        const n2 = new Set(locks);
+        if (isOpen) n2.add(i); else n2.delete(i);
+        setLocks(n2);
+      });
+      r.appendChild(sw);
+      list.appendChild(r);
+    };
+    blocks.forEach((b, i) => {
+      const title = stepTitle(b, i);
+      const kind = b && b.type === "page"
+        ? (b.blocks || []).length + " task" + ((b.blocks || []).length === 1 ? "" : "s") + " on this page"
+        : (KIND[b && b.type] && KIND[b.type] !== title ? KIND[b.type] : "");
+      line(i, String(i + 1), title, kind);
+    });
+    line(blocks.length, "✓", "Summary page", openAt(blocks.length) ? "Students can finish the lesson" : "Students cannot finish yet");
   };
 
   /* ================= students ================= */

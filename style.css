@@ -5602,3 +5602,84 @@ body.entry-open .page{min-height:70vh}
 .tt-suggest-head{display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:6px}
 .tt-suggest-head b{flex:1 1 200px}
 .tt-suggest .tt-line{padding:5px 0; border-top:1px solid var(--line)}
+
+/* ---------- lesson builder: what a warning triangle is about ---------- */
+.probdot{cursor:pointer; border-radius:var(--rad-xs)}
+.probdot:focus-visible{outline:2px solid var(--amber); outline-offset:2px}
+.probtip{position:fixed; z-index:10001; max-width:300px; padding:10px 13px; border-radius:var(--rad-md);
+  background:var(--panel); color:var(--text); border:1.5px solid var(--amber); box-shadow:0 8px 24px rgba(0,0,0,.18);
+  font-size:var(--text-sm); line-height:1.45}
+.probtip b{display:block; margin-bottom:4px; color:var(--amber-dark); font-size:var(--text-sm)}
+.probtip p{margin:0}
+.probtip ul{margin:0; padding-left:18px}
+.probtip li + li{margin-top:3px}
+
+/* ---------- side menu: the admin screens at the bottom, a rule above the last two ---------- */
+.rail-line{flex:none; height:1px; margin:6px 10px; background:var(--line)}
+/* Settings is at the bottom of the menu, so the top bar's own is not needed */
+body.has-rail #setBtn{display:none}
+@media (max-width:900px){ body.has-rail #setBtn{display:inline-flex} }
+
+/* ---------- Home as a dashboard: the greeting is the title ---------- */
+#homeView.homedash > .viewhead, #homeView.homedash > h2, #homeView.homedash .bigcards{display:none}
+#homeView.homedash .home-greet{margin:22px 0 4px}
+#homeView.homedash h2.home-hello{margin:0; font-size:var(--text-4xl); line-height:1.2}
+#homeView.homedash .home-date{display:block; margin:6px 0 0; font-size:var(--text-md); font-weight:600; color:var(--muted)}
+#homeView.homedash .homedash-grid{grid-template-columns:repeat(2, minmax(0, 1fr)); align-items:start; margin-top:20px}
+.homedash-grid #dashToday{grid-row:auto}
+@media (max-width:760px){ #homeView.homedash .homedash-grid{grid-template-columns:minmax(0,1fr)} }
+
+/* ---------- Manage: pacing a lesson ---------- */
+.pacebox .pace-sub{margin:-6px 0 14px; color:var(--muted); font-size:var(--text-base); text-align:left}
+.pacebox h2{text-align:left}
+.pace-head{display:grid; grid-template-columns:auto 1fr; align-items:center; gap:10px 16px; text-align:left;
+  padding:14px 16px; border-radius:var(--rad-lg); background:var(--panel-2); border:1.5px solid var(--line); margin-bottom:10px}
+.pace-stat{display:flex; flex-direction:column; line-height:1.15}
+.pace-stat b{font-family:var(--display); font-size:var(--text-3xl)}
+.pace-stat span{font-size:var(--text-sm); color:var(--muted)}
+.pace-track{display:flex; gap:3px; min-width:0}
+.pace-seg{flex:1; height:12px; border-radius:var(--rad-pill); background:var(--line-2); min-width:4px}
+.pace-seg.on{background:var(--mint)}
+.pace-seg.end{flex:0 0 22px; border-radius:var(--rad-pill); outline:2px solid var(--panel-2)}
+.pace-acts{grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:8px}
+.pace-acts .btn-primary{display:inline-flex; align-items:center; gap:6px}
+.pace-acts button:disabled{opacity:.5; cursor:default}
+.pace-msg{text-align:left; margin:0 0 8px; min-height:1em}
+.pace-list{display:flex; flex-direction:column; gap:6px; text-align:left}
+.pace-row{display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:var(--rad-md);
+  border:1.5px solid var(--line); background:var(--panel)}
+.pace-row.on{border-color:color-mix(in srgb, var(--mint) 45%, var(--line))}
+.pace-row.next{border-color:var(--amber); box-shadow:0 0 0 3px color-mix(in srgb, var(--amber) 12%, transparent)}
+.pace-n{flex:none; width:28px; height:28px; border-radius:50%; display:grid; place-items:center;
+  font-weight:800; font-size:var(--text-sm); background:var(--panel-2); color:var(--muted); border:1.5px solid var(--line-2)}
+.pace-row.on .pace-n{background:var(--mint); border-color:var(--mint); color:#fff}
+.pace-words{flex:1; min-width:0}
+.pace-words b{display:block; font-size:var(--text-base); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.pace-words span{display:block; font-size:var(--text-xs); color:var(--dim)}
+.pace-row:not(.on) .pace-words b{color:var(--muted)}
+.pace-upto{flex:none; opacity:0; transition:opacity .12s}
+.pace-row:hover .pace-upto, .pace-upto:focus-visible{opacity:1}
+@media (hover:none){ .pace-upto{opacity:1} }
+.pace-switch{flex:none; display:inline-flex; align-items:center; gap:8px; padding:4px 4px 4px 10px; border-radius:var(--rad-pill);
+  border:1.5px solid var(--line-2); background:var(--panel); cursor:pointer; font-family:var(--body);
+  font-size:var(--text-sm); font-weight:700; color:var(--muted)}
+.pace-switch.on{color:var(--mint); border-color:color-mix(in srgb, var(--mint) 50%, var(--line-2))}
+.pace-switch-words{min-width:46px; text-align:right}
+.pace-knob{width:34px; height:20px; border-radius:var(--rad-pill); background:var(--line-2); position:relative; transition:background .15s}
+.pace-knob::after{content:""; position:absolute; top:3px; left:3px; width:14px; height:14px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.2); transition:transform .15s}
+.pace-switch.on .pace-knob{background:var(--mint)}
+.pace-switch.on .pace-knob::after{transform:translateX(14px)}
+.pace-switch:disabled{opacity:.5; cursor:default}
+@media (max-width:560px){
+  .pace-head{grid-template-columns:1fr}
+  .pace-switch-words{display:none}
+}
+
+/* ---------- a class's lessons: room for all the buttons on one line ---------- */
+#lessonGrid .lessongrid{grid-template-columns:repeat(auto-fill, minmax(380px, 1fr))}
+#lessonGrid .lp-acts{flex-wrap:nowrap; align-items:center}
+@media (max-width:640px){
+  #lessonGrid .lessongrid{grid-template-columns:minmax(0,1fr)}
+  #lessonGrid .lp-acts{flex-wrap:wrap}
+}
