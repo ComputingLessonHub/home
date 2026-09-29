@@ -5750,3 +5750,26 @@ body.has-rail #setBtn{display:none}
 /* the name is in the card with the initials, so not twice */
 #studentView > .viewhead, #studentView > h2{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
 .prof-hero .bmini2, .prof-fact .bmini2, .prof-lesson .bmini2, .pracbar .bmini2{font-size:var(--text-sm); padding:6px 14px; line-height:1.4}
+/* the summary page, pinned under the list */
+.pace-foot{margin-top:10px; padding-top:10px}
+.pace-foot .pace-row{border-width:2px; background:var(--panel-2)}
+.pace-foot .pace-row .pace-words b{color:var(--text)}
+.pace-eye{flex:none}
+
+/* ---------- student profile: three boxes, what is open, the key ---------- */
+:root{--avg:#8A4FC9}
+html[data-bg=night]{--avg:#C39BF0}
+.prof-facts{grid-template-columns:repeat(3, minmax(0, 1fr))}
+@media (max-width:820px){ .prof-facts{grid-template-columns:minmax(0,1fr)} }
+.prof-open{display:flex; flex-direction:column; gap:6px; width:100%; margin-top:2px}
+.prof-open-row{display:flex; align-items:center; gap:10px; justify-content:space-between}
+.prof-open-row b{font-size:var(--text-base); line-height:1.3; min-width:0}
+.prof-open-row .bmini2{flex:none; margin-top:0}
+.prof-avg{background:var(--avg); opacity:1; width:3px; margin-left:-1.5px; top:-4px; bottom:-4px}
+.prof-avg-num{font-size:var(--text-sm); font-weight:700; color:var(--avg); white-space:nowrap}
+.prof-key{display:flex; gap:18px; flex-wrap:wrap; margin:0 0 6px; font-size:var(--text-sm); font-weight:700; color:var(--muted)}
+.prof-key-item{display:inline-flex; align-items:center; gap:7px}
+.prof-key-bar{width:22px; height:8px; border-radius:var(--rad-pill); background:var(--mint)}
+.prof-key-avg{color:var(--avg)}
+.prof-key-tick{width:3px; height:14px; border-radius:1px; background:var(--avg)}
+.prof-key{margin-top:0}

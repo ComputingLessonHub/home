@@ -193,13 +193,10 @@
     stuTimer = setTimeout(async () => {
       const seq = ++stuSeq;
       try{
-        const r = await fetch(API + "/api/teacher/students?find=" + encodeURIComponent(term),
-                              { headers: H(), cache: "no-store" });
-        const d = await r.json();
+        /* every word typed, across the name and the username together */
+        const found = await findStudents(term);
         if (seq !== stuSeq) return;
-        if (!r.ok) throw new Error(d.error || "");
         /* This teacher's classes only, as on the Practice screen. */
-        const found = d.students || [];
         const mine = meCode ? found.filter(st => myClasses([{ name: st.group_name || "" }]).length) : found;
         stuRows = mine.slice(0, 8).map(st => ({
           name: st.display_name || st.username, icon:"classes",
