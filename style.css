@@ -5435,6 +5435,9 @@ body.has-rail .page, body.has-rail .crumbbar{margin-left:228px}
    happens to end. On a phone it drops to a row of its own. */
 body.console .homebar .title{flex:1 1 0}
 .homebar-end{flex:1 1 0; min-width:0; display:flex; align-items:center; justify-content:flex-end; gap:inherit}
+/* the teacher's name and Settings sit hard against the right, Settings last;
+   .auth's own margin:0 auto would otherwise float the name in the middle */
+.homebar-end .auth{margin:0}
 .jump{position:relative; flex:0 1 480px; min-width:180px; display:flex; align-items:center; gap:8px;
   height:40px; padding:0 10px 0 12px; background:var(--panel); border:1.5px solid var(--line-2); border-radius:var(--rad-md)}
 .jump[hidden]{display:none}
