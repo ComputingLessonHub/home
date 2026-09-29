@@ -626,6 +626,9 @@
       const head = el("div","pace-head"); head.id = "paceHead"; box.appendChild(head);
       const msg = el("p","hint pace-msg",""); msg.id = "relMsg"; box.appendChild(msg);
       const list = el("div","pace-list"); list.id = "paceList"; box.appendChild(list);
+      /* The summary page is what lets a class finish, so it is pinned under
+         the list where it can always be reached, however long the lesson. */
+      const foot = el("div","modal-foot pace-foot"); foot.id = "paceFoot"; box.appendChild(foot);
       window.paintTasks();
     });
   };
@@ -635,8 +638,8 @@
     const list = $("paceList");
     if (!list || !lessonJson) return basePaintTasks.apply(this, arguments);
     const blocks = lessonJson.blocks || [];
-    const head = $("paceHead"), sub = $("paceSub"), msg = $("relMsg");
-    list.innerHTML = ""; head.innerHTML = "";
+    const head = $("paceHead"), sub = $("paceSub"), msg = $("relMsg"), foot = $("paceFoot");
+    list.innerHTML = ""; head.innerHTML = ""; if (foot) foot.innerHTML = "";
     const mine = assigns.find(a => a.lesson_id === lessonId && a.group_name.toLowerCase() === cls.toLowerCase());
     const live = mine ? !!mine.published : !!catOf(lessonId).published;
     sub.textContent = "Pacing for " + cls + (live ? "" : "  ·  not published yet, so " + cls + " cannot see it");
@@ -689,7 +692,7 @@
     }
 
     /* one line per task, down to the summary */
-    const line = (i, number, title, kind) => {
+    const line = (i, number, title, kind, into) => {
       const isOpen = openAt(i);
       const r = el("div","pace-row" + (isOpen ? " on" : "") + (i === firstShut ? " next" : ""));
       const n = el("span","pace-n", number);
@@ -707,6 +710,16 @@
         });
         r.appendChild(upto);
       }
+      /* what a student sees on this page, in a tab of its own */
+      if (i < blocks.length){
+        const eye = el("button","btn-ghost iconbtn pace-eye","");
+        eye.type = "button";
+        eye.innerHTML = ic("eye", 17);
+        eye.title = "View as a student";
+        eye.setAttribute("aria-label", "View " + title + " as a student");
+        eye.addEventListener("click", () => window.open("lesson.html?id=" + encodeURIComponent(lessonId) + "&preview=" + i, "_blank"));
+        r.appendChild(eye);
+      }
       const sw = el("button","pace-switch" + (isOpen ? " on" : ""));
       sw.type = "button";
       sw.setAttribute("role", "switch");
@@ -721,7 +734,7 @@
         setLocks(n2);
       });
       r.appendChild(sw);
-      list.appendChild(r);
+      (into || list).appendChild(r);
     };
     blocks.forEach((b, i) => {
       const title = stepTitle(b, i);
@@ -730,7 +743,8 @@
         : (KIND[b && b.type] && KIND[b.type] !== title ? KIND[b.type] : "");
       line(i, String(i + 1), title, kind);
     });
-    line(blocks.length, "✓", "Summary page", openAt(blocks.length) ? "Students can finish the lesson" : "Students cannot finish yet");
+    line(blocks.length, "✓", "Summary page", openAt(blocks.length) ? "Students can finish the lesson" : "Students cannot finish yet",
+         foot || list);
   };
 
   /* ================= students ================= */

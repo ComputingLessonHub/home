@@ -4252,6 +4252,37 @@ function openUnit(name){
   loadClassLocks().catch(() => {});
 }
 
+/* A lesson on its class's lessons page, picked out: the class named, the
+   catalogue there, the unit and the part it is filed under, then the card
+   glows. Used by a student's profile. */
+let flashLesson = "", flashUntil = 0;
+async function showLessonInClass(group, id){
+  try{
+    nameClass(group);
+    await loadCatalogue();
+    const l = (cat.lessons || []).find(x => x.lesson_id === id) || {};
+    flashLesson = id; flashUntil = 0;
+    openUnit(l.unit || "");
+    if (partsOfUnit().length) openPart(l.subunit || "");
+  }catch(e){ openClass(group); }
+}
+/* The grid is drawn twice on the way in (again once the padlocks arrive),
+   so the glow is put back on the new card until its time is up. */
+function flashCard(){
+  if (!flashLesson) return;
+  if (flashUntil && Date.now() > flashUntil){ flashLesson = ""; flashUntil = 0; return; }
+  const card = document.querySelector('#lessonGrid .lessonpill[data-lesson="' + CSS.escape(flashLesson) + '"]');
+  if (!card) return;
+  if (!flashUntil){
+    flashUntil = Date.now() + 2300;
+    card.scrollIntoView({ block:"center", behavior:"smooth" });
+  }
+  card.classList.remove("jump-found");
+  void card.offsetWidth;
+  card.classList.add("jump-found");
+  card.addEventListener("animationend", () => card.classList.remove("jump-found"), { once:true });
+}
+
 /* One part of a unit, or everything filed against the whole of it. */
 function openPart(name){
   subunit = name;
@@ -4422,6 +4453,7 @@ function paintLessonGrid(){
     const waiting = live && a && a.release_at && a.release_at > new Date().toISOString();
     const closed = live && a && a.close_on && a.close_on < ymd(new Date());
     const card = el("div","lessonpill");
+    card.dataset.lesson = l.lesson_id;
     const head = el("div","lp-head");
     head.appendChild(el("b","", titleOf(l.lesson_id)));
     /* The pill shows its state, and swaps to the date when pointed at —
@@ -4503,6 +4535,7 @@ function paintLessonGrid(){
     card.appendChild(acts);
     grid.appendChild(card);
   });
+  flashCard();
 }
 
 /* The sub-point headings that used to sit inside this list have gone: the

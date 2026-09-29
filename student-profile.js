@@ -129,11 +129,21 @@
     fact("classes", "Class", group || "None", teachers.length ? "Taught by " + teachers.join(", ") : "",
          group ? btn("View Class", "btn-ghost bmini2", () => openClass(group)) : null);
     const next = fact("calendar", "Next lesson", "…", "");
-    fact("key", "Username", st.username,
-         st.pw_set === false || st.pw_set === 0 ? "No password set yet" : st.reset_req ? "Waiting for a password reset" : "Password set");
-    const liveCount = assigns.filter(a => a.group_name.toLowerCase() === String(group).toLowerCase() && isOpen(a)).length;
-    fact("eye", "Open to them now", liveCount + " lesson" + (liveCount === 1 ? "" : "s"),
-         liveCount ? "Published to " + group : "Nothing is open to " + group);
+    /* The lessons themselves rather than a count, each with the way to it on
+       the class's own lessons page. */
+    const live = assigns.filter(a => a.group_name.toLowerCase() === String(group).toLowerCase() && isOpen(a));
+    const openFact = fact("eye", "Open to them now", live.length ? "" : "Nothing", live.length ? "" : "Nothing is open to " + group);
+    if (live.length){
+      openFact.v.remove(); openFact.s.remove();
+      const list = el("div","prof-open");
+      live.forEach(a => {
+        const r = el("div","prof-open-row");
+        r.appendChild(el("b","", titleOf(a.lesson_id)));
+        r.appendChild(btn("View Lesson", "btn-ghost bmini2", () => showLessonInClass(group, a.lesson_id)));
+        list.appendChild(r);
+      });
+      openFact.f.appendChild(list);
+    }
     box.appendChild(facts);
 
     /* progress, filled in once it has been added up */
@@ -265,7 +275,8 @@
         }
         meter.appendChild(bar);
         meter.appendChild(el("span","covernum", (p === null ? "–" : p + "%") +
-          (l.mr.pct !== null && (l.started || []).length ? "  ·  class " + l.mr.pct + "%" : "")));
+          ""));
+        if (l.mr.pct !== null && (l.started || []).length) meter.appendChild(el("span","prof-avg-num", "class " + l.mr.pct + "%"));
       } else {
         meter.appendChild(el("span","prof-dim", l.mr.isAssessment ? "An assessment: see Specification coverage" : "Nothing marked automatically"));
       }
@@ -274,11 +285,13 @@
         "&group=" + encodeURIComponent(group) + "&student=" + encodeURIComponent(me), "_blank")));
       rows.appendChild(r);
     });
-    box.appendChild(rows);
-    const key = el("p","hint prof-key");
-    key.appendChild(el("span","prof-avg-key"));
-    key.appendChild(document.createTextNode(" the class average for each lesson"));
+    /* The key sits above the lessons, in the colours it describes. */
+    const key = el("div","prof-key");
+    const k1 = el("span","prof-key-item"); k1.appendChild(el("span","prof-key-bar")); k1.appendChild(document.createTextNode("Their score"));
+    const k2 = el("span","prof-key-item prof-key-avg"); k2.appendChild(el("span","prof-key-tick")); k2.appendChild(document.createTextNode("Class average"));
+    key.appendChild(k1); key.appendChild(k2);
     box.appendChild(key);
+    box.appendChild(rows);
   }
 
   window.studentProfile = {
