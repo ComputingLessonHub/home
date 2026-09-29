@@ -8,6 +8,10 @@
                   Week A, then half term, then Week B.
      Holidays     one day or many. A single day off leaves the week as it
                   is; a week with no school days in it at all is skipped.
+                  The holidays set under All (Admin) are the school's, and
+                  every teacher uses them until they choose to customise
+                  their own. A teacher with their own list is offered any
+                  school holiday they do not have yet.
      Dashboard    Home shows today's lessons in period order, what is live
                   now, what is coming up and what is waiting on the teacher.
                   Settings > Console layout > Home dashboard turns it off.
@@ -63,6 +67,8 @@
       ],
       slots: { A:{}, B:{} },   // slots[week][day 1-5][period id] = { cls | text, room }
       holidays: [],            // { id, name, start, end } as YYYY-MM-DD
+      holidayMode: "school",   // "school": Admin's holidays; "own": the list above
+      dismissed: [],           // school holidays this teacher said no to, as start|end
       savedAt: ""
     };
   }
@@ -83,8 +89,14 @@
       holidays: Array.isArray(t.holidays) ? t.holidays.filter(h => h && parseDay(h.start)).map(h => ({
         id: String(h.id || newId("h")), name: String(h.name || "Holiday"),
         start: h.start, end: parseDay(h.end) && h.end >= h.start ? h.end : h.start })) : [],
+      holidayMode: "school",
+      dismissed: Array.isArray(t.dismissed) ? t.dismissed.map(String) : [],
       savedAt: String(t.savedAt || "")
     };
+    /* A timetable from before the school's holidays existed kept its own, so
+       a list that is already there stays in use. */
+    out.holidayMode = t.holidayMode === "own" || t.holidayMode === "school" ? t.holidayMode
+                    : out.holidays.length ? "own" : "school";
     ["A","B"].forEach(w => {
       const src = (t.slots && t.slots[w]) || {};
       for (let d = 1; d <= 5; d++){
@@ -103,9 +115,14 @@
   const sortedPeriods = (t) => t.periods.slice().sort((a, b) => (toMins(a.start) ?? 9999) - (toMins(b.start) ?? 9999));
 
   /* ---------- holidays and weeks ---------- */
+  /* The holidays that count for this timetable: its own, or the school's. */
+  function holsOf(t){
+    if (t.holidayMode === "own" || !schoolHols) return t.holidays;
+    return schoolHols;
+  }
   function holidayOn(t, day){
     const s = typeof day === "string" ? day : isoDay(day);
-    return t.holidays.find(h => h.start <= s && s <= h.end) || null;
+    return holsOf(t).find(h => h.start <= s && s <= h.end) || null;
   }
   /* A week with no school day left in it. One day off is still a school
      week, and still counts as its A or B. */
@@ -161,34 +178,46 @@
   /* ================= keeping it ================= */
   let tt = null, ttFor = null, loading = null;
   let serverKeeps = null;           // null until asked, then whether the server kept it
+  let schoolHols = null;            // Admin's holidays, for a teacher; null for Admin
   const who = () => (typeof meCode === "string" ? meCode : "") || "";
   const localKey = () => "hub_timetable:" + (who() || "_all");
 
-  function readLocal(){
-    try{ return JSON.parse(localStorage.getItem(localKey()) || "null"); }catch(e){ return null; }
+  function readLocal(code){
+    try{ return JSON.parse(localStorage.getItem("hub_timetable:" + (code || "_all")) || "null"); }catch(e){ return null; }
   }
+  /* One teacher's timetable from the server, or undefined when it could not
+     be asked. "" is All (Admin), whose holidays are the school's. */
+  async function fetchOne(code){
+    if (OFFLINE || !API || (typeof TOKEN !== "undefined" && !TOKEN && !KEY)) return undefined;
+    try{
+      const r = await fetch(API + "/api/teacher/timetable?teacher=" + encodeURIComponent(code),
+                            { headers: H(), cache:"no-store" });
+      if (!r.ok) return undefined;
+      const d = await r.json();
+      return d.timetable || null;
+    }catch(e){ return undefined; }
+  }
+  const newer = (a, b) => a && b ? ((a.savedAt || "") >= (b.savedAt || "") ? a : b) : (a || b);
   function load(force){
     const me = who();
     if (tt && ttFor === me && !force) return Promise.resolve(tt);
     if (loading && loading.me === me) return loading.p;
     const p = (async () => {
-      const local = readLocal();
-      let remote = null;
-      if (!OFFLINE && API && (typeof TOKEN === "undefined" || TOKEN || KEY)){
-        try{
-          const r = await fetch(API + "/api/teacher/timetable?teacher=" + encodeURIComponent(me),
-                                { headers: H(), cache:"no-store" });
-          if (r.ok){ const d = await r.json(); serverKeeps = true; remote = d.timetable || null; }
-          else serverKeeps = false;
-        }catch(e){ serverKeeps = false; }
-      }
+      const local = readLocal(me);
+      /* A teacher's own and, alongside it, Admin's for the school holidays. */
+      const [remote, schoolRemote] = await Promise.all([fetchOne(me), me ? fetchOne("") : Promise.resolve(undefined)]);
+      serverKeeps = remote !== undefined;
       /* The newer of the two, so a timetable made on this machine before the
          server could keep one is not lost the day it starts to. */
-      const pick = remote && local ? ((remote.savedAt || "") >= (local.savedAt || "") ? remote : local)
-                                   : (remote || local);
+      const pick = newer(remote, local);
       if (who() !== me) return tt;         // they changed teacher while this was out
       tt = normal(pick);
       ttFor = me;
+      if (me){
+        const sc = newer(schoolRemote, readLocal(""));
+        schoolHols = sc ? normal(sc).holidays : [];
+      } else schoolHols = null;
+
       if (serverKeeps && local && pick === local) push();
       return tt;
     })();
@@ -517,12 +546,86 @@
     for (let d = a; d <= b && n < 400; d = addDays(d, 1)) if (d.getDay() !== 0 && d.getDay() !== 6) n++;
     return n;
   }
+  const holKey = (h) => h.start + "|" + h.end;
   function holidaysSection(){
-    const s = section("calendar", "Holidays",
+    const admin = !who();
+    const school = schoolHols || [];
+    const useSchool = !admin && tt.holidayMode !== "own";
+    const s = section("calendar", admin ? "School holidays" : "Holidays",
       "Half terms, INSET days, bank holidays: anything from one day upwards. There are no lessons on a holiday, " +
-      "and a week that is all holiday does not count as Week A or Week B.");
-    const list = el("div","tt-list");
+      "and a week that is all holiday does not count as Week A or Week B." +
+      (admin ? " These are the school's holidays: every teacher uses them unless they customise their own." : ""));
     const today = isoDay(new Date());
+
+    /* A teacher on the school's holidays sees them, but changes nothing
+       until they choose to have their own. */
+    if (useSchool){
+      const note = el("div","tt-school");
+      note.appendChild(el("p","tt-school-words", school.length
+        ? "Using the school holidays set by Admin."
+        : "Admin has not set any school holidays yet."));
+      const own = el("button","btn-ghost bmini2", school.length ? "Customise" : "Add my own");
+      own.type = "button";
+      own.addEventListener("click", () => {
+        tt.holidayMode = "own";
+        tt.holidays = school.map(h => ({ id: newId("h"), name: h.name, start: h.start, end: h.end }));
+        tt.dismissed = [];
+        save(); paintEditor(); paintHome();
+        toast(school.length ? "Your own copy of the school holidays, to change as you like" : "Add your holidays below");
+      });
+      note.appendChild(own);
+      s.appendChild(note);
+      const list = el("div","tt-list");
+      school.slice().sort((a, b) => a.start.localeCompare(b.start)).forEach(h => {
+        const row = el("div","tt-line tt-hol tt-ro" + (h.end < today ? " past" : ""));
+        row.appendChild(el("b","tt-hname-ro", h.name));
+        row.appendChild(el("span","tt-when-ro", niceDate(h.start) + (h.end !== h.start ? " to " + niceDate(h.end) : "")));
+        const n = schoolDaysIn(h);
+        row.appendChild(el("span","tt-count", n === 1 ? "1 day" : n + " days"));
+        list.appendChild(row);
+      });
+      s.appendChild(list);
+      return s;
+    }
+
+    /* Their own list: anything the school has that they have not got, and
+       have not turned down, is offered to them. */
+    if (!admin){
+      const mine = new Set(tt.holidays.map(holKey));
+      const missing = school.filter(h => !mine.has(holKey(h)) && tt.dismissed.indexOf(holKey(h)) < 0 && h.end >= today);
+      if (missing.length){
+        const sug = el("div","tt-suggest");
+        const head = el("div","tt-suggest-head");
+        head.appendChild(el("b","", "Admin has set " + missing.length + " school holiday" + (missing.length === 1 ? "" : "s") + " you do not have"));
+        const all = el("button","btn-primary bmini2", missing.length === 1 ? "Add it" : "Add all");
+        all.type = "button";
+        all.addEventListener("click", () => {
+          missing.forEach(h => tt.holidays.push({ id: newId("h"), name: h.name, start: h.start, end: h.end }));
+          save(); paintEditor(); paintHome();
+        });
+        head.appendChild(all);
+        sug.appendChild(head);
+        missing.slice().sort((a, b) => a.start.localeCompare(b.start)).forEach(h => {
+          const r = el("div","tt-line");
+          r.appendChild(el("b","tt-hname-ro", h.name));
+          r.appendChild(el("span","tt-when-ro", niceDate(h.start) + (h.end !== h.start ? " to " + niceDate(h.end) : "")));
+          const add = el("button","btn-ghost bmini2","Add");
+          add.type = "button";
+          add.addEventListener("click", () => {
+            tt.holidays.push({ id: newId("h"), name: h.name, start: h.start, end: h.end });
+            save(); paintEditor(); paintHome();
+          });
+          const no = el("button","btn-ghost bmini2","Not for me");
+          no.type = "button";
+          no.addEventListener("click", () => { tt.dismissed.push(holKey(h)); save(); paintEditor(); });
+          r.appendChild(add); r.appendChild(no);
+          sug.appendChild(r);
+        });
+        s.appendChild(sug);
+      }
+    }
+
+    const list = el("div","tt-list");
     const hols = tt.holidays.slice().sort((a, b) => a.start.localeCompare(b.start));
     if (!hols.length) list.appendChild(el("p","hint","No holidays yet."));
     hols.forEach(h => {
@@ -548,9 +651,13 @@
       x.addEventListener("click", () => {
         const was = JSON.stringify(tt.holidays);
         tt.holidays = tt.holidays.filter(q => q.id !== h.id);
+        /* a school holiday taken out on purpose is not offered straight back */
+        if (!admin && school.some(q => holKey(q) === holKey(h))) tt.dismissed.push(holKey(h));
         save(); paintEditor(); paintHome();
         toast(h.name + " removed", { action:"Undo", onAction: () => {
-          tt.holidays = JSON.parse(was); save(); paintEditor(); paintHome();
+          tt.holidays = JSON.parse(was);
+          tt.dismissed = tt.dismissed.filter(k => k !== holKey(h));
+          save(); paintEditor(); paintHome();
         } });
       });
       row.appendChild(name);
@@ -562,6 +669,7 @@
       list.appendChild(row);
     });
     s.appendChild(list);
+    const tools = el("div","tt-row");
     const addBtn = el("button","btn-ghost bmini2","+ Add a holiday");
     addBtn.type = "button";
     addBtn.addEventListener("click", () => {
@@ -575,7 +683,22 @@
         if (fresh){ fresh.focus(); fresh.select(); }
       });
     });
-    s.appendChild(addBtn);
+    tools.appendChild(addBtn);
+    if (!admin){
+      const back = el("button","btn-ghost bmini2","Use the school holidays instead");
+      back.type = "button";
+      back.addEventListener("click", () => {
+        const was = { hols: JSON.stringify(tt.holidays), dis: JSON.stringify(tt.dismissed) };
+        tt.holidayMode = "school";
+        save(); paintEditor(); paintHome();
+        toast("Using the school holidays", { action:"Undo", onAction: () => {
+          tt.holidayMode = "own"; tt.holidays = JSON.parse(was.hols); tt.dismissed = JSON.parse(was.dis);
+          save(); paintEditor(); paintHome();
+        } });
+      });
+      tools.appendChild(back);
+    }
+    s.appendChild(tools);
     return s;
   }
   function dateIn(value, label){
@@ -828,7 +951,7 @@
     items.sort((a, b) => a.at.localeCompare(b.at));
     /* the next holiday, however far off */
     const todayIso = isoDay(now);
-    const hol = tt.holidays.filter(h => h.start > todayIso).sort((a, b) => a.start.localeCompare(b.start))[0];
+    const hol = holsOf(tt).filter(h => h.start > todayIso).sort((a, b) => a.start.localeCompare(b.start))[0];
     count(p, items.length);
     if (!items.length && !hol) p.appendChild(el("p","hint","Nothing scheduled for the next seven days."));
     items.slice(0, 6).forEach(x => row(p, x.words, x.sub, [btn("Open", "btn-ghost bmini2", () => openClass(x.g))]));
@@ -871,5 +994,5 @@
 
   window.timetable = { open, paintEditor, paintHome, load,
                        weekOf: (d) => tt ? weekOf(tt, d || new Date()) : undefined,
-                       _test: { normal, weekOf, dayPlan, holidayWeek, nextSchoolDay } };
+                       _test: { normal, weekOf, holsOf, dayPlan, holidayWeek, nextSchoolDay } };
 })();
