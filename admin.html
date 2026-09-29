@@ -3581,6 +3581,24 @@ function openPrograms(st){
               "&student=" + encodeURIComponent(st.username), "_blank");
 }
 
+/* Students matching everything typed. The server matches one run of letters
+   against a name or a username, so "Amelia Brooks" found nobody whose
+   display name is Amelia and whose username is brooksa26. It is asked for
+   the longest word instead, and every word then has to appear somewhere in
+   the name and username together. */
+async function findStudents(term){
+  const words = String(term || "").toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const ask = words.slice().sort((a, b) => b.length - a.length)[0];
+  const r = await fetch(API + "/api/teacher/students?find=" + encodeURIComponent(ask),
+                        { headers: H(), cache: "no-store" });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || "Could not search just now.");
+  return (d.students || []).filter(st => {
+    const hay = (String(st.display_name || "") + " " + String(st.username || "")).toLowerCase();
+    return words.every(w => hay.indexOf(w) >= 0);
+  });
+}
 async function searchStudents(){
   const term = ($("pracSearch").value || "").trim();
   const list = $("pracList"), msg = $("pracMsg");
@@ -3588,11 +3606,7 @@ async function searchStudents(){
   if (term.length < 2) return;
   $("pracWait").hidden = false;
   try{
-    const r = await fetch(API + "/api/teacher/students?find=" + encodeURIComponent(term),
-                          { headers: H(), cache: "no-store" });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || "Could not search just now.");
-    const found = d.students || [];
+    const found = await findStudents(term);
     /* The console shows one teacher their own classes everywhere else, and
        this must not be the one screen that hands over the whole school. The
        ones left out are counted rather than hidden silently, so a search that
