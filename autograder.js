@@ -816,9 +816,6 @@
     strip.appendChild(prev); strip.appendChild(dotRow); strip.appendChild(next);
     if (several) head.appendChild(strip);
 
-    const score = document.createElement("span");
-    score.className = "checklist-score";
-    head.appendChild(score);
     const modeBtn = document.createElement("button");
     modeBtn.type = "button";
     modeBtn.className = "checklist-mode";
@@ -967,7 +964,6 @@
         counted++;
         if (done(it)) doneCount++;
       });
-      score.textContent = doneCount + " of " + counted + (several ? " done" : "");
       wrap.dataset.allDone = doneCount === counted ? "yes" : "no";
       paintOne();
       return doneCount === counted;
