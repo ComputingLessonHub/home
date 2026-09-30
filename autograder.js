@@ -874,7 +874,12 @@
       } else text.textContent = c.label || "Check";
       const note = document.createElement("span");
       note.className = "check-note";
-      li.appendChild(mark); li.appendChild(text); li.appendChild(note);
+      /* The words, the note and the hint in one column beside the circle, so
+         the circle sits level with the middle of all of them. */
+      const words = document.createElement("span");
+      words.className = "check-body";
+      li.appendChild(mark); li.appendChild(words);
+      words.appendChild(text); words.appendChild(note);
       /* The teacher's hint, kept behind a link so it is asked for rather
          than read before trying. Shown only on a line that is not ticked. */
       const hint = document.createElement("span");
@@ -893,7 +898,7 @@
         hintText.hidden = false;
       });
       hint.appendChild(hintBtn); hint.appendChild(hintText);
-      li.appendChild(hint);
+      words.appendChild(hint);
       (isManual(c) ? manualList : autoList).appendChild(li);
       const dot = document.createElement("button");
       dot.type = "button";

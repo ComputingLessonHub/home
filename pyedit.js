@@ -364,10 +364,11 @@ function caretPoint(ta){
   };
 }
 
-/* Ranks the matches. Something starting with what was typed beats something
-   merely containing it, and a shorter word beats a longer one, so typing
-   "pr" offers print before property. Case is ignored, so "PRI" still finds
-   print. */
+/* Ranks the matches. Only words that start with what was typed are offered:
+   "xc" finding except, because the letters are somewhere in it, filled the
+   box with words nobody was typing. A shorter word beats a longer one, so
+   typing "pr" offers print before property. Case is ignored, so "PRI" still
+   finds print. */
 function matches(items, typed){
   if (!typed) return items.slice(0, 40);
   const want = typed.toLowerCase();
@@ -377,7 +378,6 @@ function matches(items, typed){
     let rank;
     if (low === want) rank = 0;
     else if (low.indexOf(want) === 0) rank = 1;
-    else if (low.indexOf(want) > 0) rank = 2;
     else return;
     scored.push({ it: it, rank: rank, len: it.label.length });
   });
@@ -652,6 +652,10 @@ function attach(opts){
        the dot after a toolbox: random. has one short answer and it is worth
        showing. Ctrl and space asks for the list without typing anything. */
     if (!typed && !res.now && !force){ acHide(); return; }
+    /* and not until two letters: one letter matches half the language, and
+       the box over every word as it is started is more in the way than help.
+       "ex" is enough to be offered except. */
+    if (typed && typed.length < 2 && !force && !res.now){ acHide(); return; }
     const list = matches(res.items, typed);
     /* One suggestion, and they have already typed it: there is nothing left
        to offer. */
@@ -697,6 +701,8 @@ function attach(opts){
     acHide();
   });
   ta.addEventListener("blur", acHide);
+  /* Clicking somewhere in the code is moving on from the word being typed. */
+  ta.addEventListener("mousedown", acHide);
   ta.addEventListener("keydown", (e) => {
     /* While the box is open it gets the keys it needs first, and everything
        else closes it. */

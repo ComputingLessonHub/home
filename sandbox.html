@@ -802,10 +802,14 @@ function pythonEditor(p){
     out.textContent = "";
     for (let i = 0; i < list.length; i++){
       const ev = list[i];
+      /* Added as a piece rather than by rebuilding the whole text, and only
+         scrolled before a wait and at the end: a long run of prints redrew
+         and measured the console once per print, which on a big output was
+         enough to freeze the page. */
       if (ev[0] === "out"){
-        out.textContent += ev[1];
-        out.scrollTop = out.scrollHeight;
+        out.appendChild(document.createTextNode(ev[1]));
       } else if (ev[0] === "wait"){
+        out.scrollTop = out.scrollHeight; if (out.parentNode) out.parentNode.scrollTop = out.parentNode.scrollHeight;
         /* Answering a question runs the whole program again from the top, so
            the part already sat through must not be waited out a second
            time. */
@@ -817,6 +821,7 @@ function pythonEditor(p){
       }
       if (playRun !== mine) return false;    // Run or Clear was pressed meanwhile
     }
+    out.scrollTop = out.scrollHeight; if (out.parentNode) out.parentNode.scrollTop = out.parentNode.scrollHeight;
     shownSteps = list.length;
     return true;
   }
@@ -828,7 +833,7 @@ function pythonEditor(p){
     py.globals.set("_hub_next_inputs", answers.join("\u0000"));
     py.runPython("_hub_set_inputs(_hub_next_inputs.split(chr(0)) if _hub_next_inputs != '' else [])");
     py.globals.set("_hub_src", p.code || "");
-    const res = JSON.parse(py.runPython("_hub_run(_hub_src, 10.0)"));
+    const res = JSON.parse(py.runPython("_hub_run(_hub_src, 5.0)"));
     if (!await playback(res.events)) return true;    // something newer is running now
     out.classList.toggle("has-error", res.status === "done" && !res.ok);
     if (res.status === "input"){

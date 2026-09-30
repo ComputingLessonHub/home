@@ -327,24 +327,71 @@ def _hub_set_inputs(lines):
     global _hub_queue
     _hub_queue = [x for x in (lines or [])]
 
-class HubNeedsInput(Exception):
+# Both of these are BaseException, like KeyboardInterrupt, so a student's own
+# "except Exception:" cannot catch them. A bare "except:" still can, which is
+# what _stop below is for.
+class HubNeedsInput(BaseException):
     def __init__(self, prompt):
-        Exception.__init__(self, prompt)
+        BaseException.__init__(self, prompt)
         self.prompt = prompt
 
+# Once a run has to end, why it has to. The guard raises it again on every
+# line from then on, so a program that catches it (the usual input check,
+# "while True: try: ... except: print('Try again')") is stopped on the very
+# next line it runs, inside its own except, rather than looping for ever.
+_stop = [None]
+
+# Raising from inside the guard has a catch: Python switches tracing off for
+# good the moment a trace function raises. So a program that swallows the
+# stop with a bare "except:" and loops on is no longer being watched at all,
+# which is how an input check that never gets its answer used to lock the tab.
+# print(), input(), sleep() and the turtle are ordinary functions, not the
+# guard, so they raise it again every time they are called, and any loop that
+# does anything a student can see is ended by them.
+def _still_stopping():
+    if _running[0] and _stop[0] is not None:
+        raise _stop[0]
+
+# ...and the guard itself is put back. A profile function is called on every
+# function call and, because it never raises, Python never switches it off.
+# Once a run has to stop, it puts the line guard back on every frame of the
+# student's program, so the next line to run (their own "except:" line
+# included) raises the stop again and it leaves the loop. Only switched on
+# once there is something to stop, so an ordinary run pays nothing for it.
+def _hub_rearm(frame, event, arg):
+    if _stop[0] is None or not _running[0]:
+        return
+    try:
+        if sys.gettrace() is None:
+            sys.settrace(_hub_guard)
+        f = frame
+        while f is not None:
+            if f.f_code.co_filename == "your program" and f.f_trace is None:
+                f.f_trace = _hub_guard
+            f = f.f_back
+    except Exception:
+        pass
+
+def _halt(exc):
+    _stop[0] = exc
+    if _TOOL[0] is None:
+        sys.setprofile(_hub_rearm)
+    return exc
+
 def _hub_input(prompt=""):
+    _still_stopping()
     text = str(prompt)
     if _hub_queue:
         value = str(_hub_queue.pop(0))
         print(text + value)
         return value
     # nothing left to answer with: hand control back so the console can ask
-    raise HubNeedsInput(text)
+    raise _halt(HubNeedsInput(text))
 
 builtins.input = _hub_input
 
 # -------------------------------------------------- sleep and endless loops
-class HubTooLong(Exception):
+class HubTooLong(BaseException):
     pass
 
 # Almost every module is here, and anything Pyodide keeps as a separate
@@ -371,6 +418,19 @@ _NO_MODULE = {
 _deadline = [0.0]
 _ticks = [0]
 _limit = [10.0]
+_running = [False]
+
+# How much one run may print, and how many things it may do that the console
+# has to play back. A loop that never ends and prints as it goes used to pile
+# up millions of lines in the seconds before the time limit, and then the
+# page choked on drawing them all. Far more than any real program needs.
+_OUT_MAX = 60000
+_EVENTS_MAX = 60000
+_out_len = [0]
+
+def _too_much(what):
+    if _running[0] and _stop[0] is None:
+        raise _halt(HubTooLong("Your program " + what + " so much that it was stopped. Is there a loop that never ends?"))
 
 # ------------------------------------------------ recording what a run did
 # JavaScript has one thread. While Python is running, nothing on the page can
@@ -394,7 +454,10 @@ def _emit(event):
     # text written before this moment has to be pinned down first, or it would
     # play back after the wait it was printed before
     _flush_text()
+    _still_stopping()
     _events.append(event)
+    if len(_events) > _EVENTS_MAX:
+        _too_much("did")
 
 def _draw(op, *args):
     _emit(["draw", op, list(args)])
@@ -405,7 +468,11 @@ def _clear():
 class _HubOut(io.TextIOBase):
     def write(self, text):
         text = str(text)
+        _still_stopping()
         _pending.append(text)
+        _out_len[0] += len(text)
+        if _out_len[0] > _OUT_MAX:
+            _too_much("printed")
         return len(text)
     def writable(self):
         return True
@@ -433,6 +500,7 @@ _real_perf = time.perf_counter
 _clock_shift = [0.0]
 
 def _hub_sleep(seconds):
+    _still_stopping()
     try:
         seconds = float(seconds)
     except Exception:
@@ -456,11 +524,48 @@ time.monotonic = lambda: _real_monotonic() + _clock_shift[0]
 time.perf_counter = lambda: _real_perf() + _clock_shift[0]
 
 # --------------------------------------------------------- endless loops
-def _hub_guard(frame, event, arg):
+def _hub_tick():
+    if _stop[0] is not None:
+        raise _stop[0]
     _ticks[0] += 1
     if _ticks[0] % 400 == 0 and _real_time() > _deadline[0]:
-        raise HubTooLong("Your program was still running after " + str(int(_limit[0])) + " seconds. Is there a loop that never ends?")
+        raise _halt(HubTooLong("Your program was still running after " + str(int(_limit[0])) + " seconds. Is there a loop that never ends?"))
+
+def _hub_guard(frame, event, arg):
+    _hub_tick()
     return _hub_guard
+
+# The guard proper, where Python has sys.monitoring (3.12 on). Unlike a trace
+# function, a monitoring callback that raises is not switched off, so every
+# line of the student's program raises the stop once it is set, their own
+# "except:" line included, however they catch it. Only their code is
+# watched, not this file or the standard library.
+_MON = getattr(sys, "monitoring", None)
+_TOOL = [None]
+if _MON is not None:
+    for _id in (4, 3, 1):
+        try:
+            _MON.use_tool_id(_id, "hub-guard")
+            _TOOL[0] = _id
+            break
+        except Exception:
+            pass
+    if _TOOL[0] is not None:
+        _MON.register_callback(_TOOL[0], _MON.events.LINE, lambda code, line: _hub_tick())
+
+def _all_code(code):
+    out = [code]
+    for c in code.co_consts:
+        if isinstance(c, types.CodeType):
+            out.extend(_all_code(c))
+    return out
+
+def _watch(code, on):
+    if _TOOL[0] is None:
+        return False
+    for c in _all_code(code):
+        _MON.set_local_events(_TOOL[0], c, _MON.events.LINE if on else 0)
+    return True
 
 def _hub_run(source, seconds=10.0):
     global _hub_queue
@@ -470,6 +575,8 @@ def _hub_run(source, seconds=10.0):
     _sleep_told[0] = False
     _clock_shift[0] = 0.0
     _ticks[0] = 0
+    _stop[0] = None
+    _out_len[0] = 0
     _limit[0] = seconds
     _deadline[0] = _real_time() + seconds
     _hub_reset_turtle()
@@ -478,10 +585,22 @@ def _hub_run(source, seconds=10.0):
     ok = True
     try:
         code = compile(source, "your program", "exec")
-        sys.settrace(_hub_guard)
-        exec(code, {"__name__": "__main__"})
+        _running[0] = True
+        watched = _watch(code, True)
+        if not watched:
+            sys.settrace(_hub_guard)
+        try:
+            exec(code, {"__name__": "__main__"})
+        finally:
+            sys.settrace(None)
+            sys.setprofile(None)
+            if watched:
+                _watch(code, False)
+            _running[0] = False
+        # it caught the stop and carried on to the end all the same
+        if _stop[0] is not None:
+            raise _stop[0]
     except HubNeedsInput as ask:
-        sys.settrace(None)
         sys.stdout, sys.stderr = old_out, old_err
         _flush_text()
         return json.dumps({"status": "input", "out": _hub_text(),
@@ -525,6 +644,8 @@ def _hub_run(source, seconds=10.0):
         print("\\n".join(keep[1:] if len(keep) > 1 else keep))
     finally:
         sys.settrace(None)
+        sys.setprofile(None)
+        _running[0] = False
         sys.stdout, sys.stderr = old_out, old_err
     _flush_text()
     return json.dumps({"status": "done", "out": _hub_text(),
