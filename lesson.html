@@ -3922,17 +3922,18 @@ function openModel(b){
       py.globals.set("_hub_next_inputs", answers.join("\u0000"));
       py.runPython("_hub_set_inputs(_hub_next_inputs.split(chr(0)) if _hub_next_inputs != '' else [])");
       py.globals.set("_hub_src", src);
-      const res = JSON.parse(py.runPython("_hub_run(_hub_src, 10.0)"));
+      const res = JSON.parse(py.runPython("_hub_run(_hub_src, 5.0)"));
       out.textContent = "";
       const list = res.events || [];
       for (let i = 0; i < list.length; i++){
         const ev = list[i];
-        if (ev[0] === "out"){ out.textContent += ev[1]; out.scrollTop = out.scrollHeight; }
-        else if (ev[0] === "wait"){ if (i >= shown) await pause(ev[1]); }
+        if (ev[0] === "out") out.appendChild(document.createTextNode(ev[1]));
+        else if (ev[0] === "wait"){ out.scrollTop = out.scrollHeight; if (out.parentNode) out.parentNode.scrollTop = out.parentNode.scrollHeight; if (i >= shown) await pause(ev[1]); }
         else if (ev[0] === "draw"){ if (window.hubDraw) window.hubDraw.apply(null, [ev[1]].concat(ev[2] || [])); }
         else if (ev[0] === "clear"){ if (window.hubTurtleClear) window.hubTurtleClear(); }
         if (mine !== runId) return;
       }
+      out.scrollTop = out.scrollHeight; if (out.parentNode) out.parentNode.scrollTop = out.parentNode.scrollHeight;
       shown = list.length;
       out.classList.toggle("has-error", res.status === "done" && !res.ok);
       if (res.status === "input"){
@@ -4044,15 +4045,43 @@ function attachChecklist(section, checks, runner, blockId, b){
       });
     }
     const all = list.show(results, fresh.length ? fresh : null);
-    if (fresh.length)
+    if (fresh.length){
+      cheering = true;
       cheerChecklist(cheerOver, holder, list, fresh,
-                     () => { if (mine === showing) list.show(results); });
+                     () => { cheering = false; if (mine === showing) list.show(results); });
+    }
     markDirty();
     return all;
   }
+  /* ---------- ticking off as they type ----------
+     A line that only looks at the code ("uses a for loop", "has an <h1>")
+     can be answered without running anything, so it ticks itself off a
+     moment after they stop typing, with the same glow a run gives it. Lines
+     about what the program printed still wait for Run: the output they are
+     judged on is the last run's, and that does not change as they type. The
+     teacher can turn this off in the checklist pop-up. */
+  let cheering = false, typing = null;
+  function typed(){
+    if (!b || b.checksLive === false) return;
+    clearTimeout(typing);
+    typing = setTimeout(() => {
+      typing = null;
+      if (cheering) return;             // a run's tick is still on its way
+      const before = list.ticked();
+      let results;
+      try{ results = runner(); }catch(e){ return; }
+      if (!Array.isArray(results)) return;
+      last = results;
+      ++showing;
+      list.show(results);
+      results.forEach((r, i) => {
+        if (r && !r.manual && r.ok && !r.broken && !before[i]) list.point(i);
+      });
+    }, 700);
+  }
   /* An assessment adds a coding task up from these, so the result of the last
      run has to be readable rather than only drawn on the page. */
-  return { list, refresh, mark, results: () => last };
+  return { list, refresh, mark, typed, results: () => last };
 }
 
 /* The bubble that explains a word in a code box. It sits on <body>, fixed,
@@ -4209,7 +4238,7 @@ function rIDE(b){
     autocomplete: b.autocomplete !== false,
     /* Once they have typed here it is their work, and nothing carries into it
        again. See carryIn below. */
-    onInput: () => { lastCarried = null; markDirty(); }
+    onInput: () => { lastCarried = null; markDirty(); if (checklist) checklist.typed(); }
   });
   const editor = ed.editor, codeWrap = ed.codeWrap, ta = ed.ta,
         probs = ed.probs, repaint = ed.repaint;
@@ -4323,10 +4352,14 @@ function rIDE(b){
     out.textContent = "";
     for (let i = 0; i < list.length; i++){
       const ev = list[i];
+      /* Added as a piece rather than by rebuilding the whole text, and only
+         scrolled before a wait and at the end: a long run of prints redrew
+         and measured the console once per print, which on a big output was
+         enough to freeze the page. */
       if (ev[0] === "out"){
-        out.textContent += ev[1];
-        out.scrollTop = out.scrollHeight;
+        out.appendChild(document.createTextNode(ev[1]));
       } else if (ev[0] === "wait"){
+        out.scrollTop = out.scrollHeight; if (out.parentNode) out.parentNode.scrollTop = out.parentNode.scrollHeight;
         /* Answering a question runs the whole program again from the top, so
            the part already sat through must not be waited out a second time.
            This counts steps rather than letters printed: a turtle program can
@@ -4340,6 +4373,7 @@ function rIDE(b){
       }
       if (playRun !== mine) return false;   // Run or Clear was pressed meanwhile
     }
+    out.scrollTop = out.scrollHeight; if (out.parentNode) out.parentNode.scrollTop = out.parentNode.scrollHeight;
     shownSteps = list.length;
     return true;
   }
@@ -4350,7 +4384,7 @@ function rIDE(b){
     py.globals.set("_hub_next_inputs", answers.join("\u0000"));
     py.runPython("_hub_set_inputs(_hub_next_inputs.split(chr(0)) if _hub_next_inputs != '' else [])");
     py.globals.set("_hub_src", ta.value);
-    const res = JSON.parse(py.runPython("_hub_run(_hub_src, 10.0)"));
+    const res = JSON.parse(py.runPython("_hub_run(_hub_src, 5.0)"));
     lastOut = res.out || "";
     if (!await playback(res.events)) return true;   // something newer is running now
     out.classList.toggle("has-error", res.status === "done" && !res.ok);
@@ -4624,7 +4658,7 @@ function rWeb(b){
     tips: wantTips,
     lang: window.pyEdit.webLang(files[0]),
     autocomplete: b.autocomplete !== false,
-    onInput: () => { code[current] = ta.value; markDirty(); }
+    onInput: () => { code[current] = ta.value; markDirty(); if (checklist) checklist.typed(); }
   });
   const editor = ed.editor, codeWrap = ed.codeWrap, ta = ed.ta,
         probs = ed.probs, repaint = ed.repaint;
@@ -7190,7 +7224,7 @@ function showLessonComplete(revisit, justFinished, sentAlready){
    classes lost machines to it before anyone worked out what they had typed.
 
    It now goes through _hub_run in pyhub.js, the same guarded runner the full
-   editor uses, which gives up after ten seconds and says in plain words what
+   editor uses, which gives up after five seconds and says in plain words what
    probably went wrong. Returns what the run said so the caller can deal with
    a program that stopped to ask a question. */
 async function runPython(code, out, err, answers){
@@ -7201,7 +7235,7 @@ async function runPython(code, out, err, answers){
     py.globals.set("_hub_next_inputs", (answers || []).join("\u0000"));
     py.runPython("_hub_set_inputs(_hub_next_inputs.split(chr(0)) if _hub_next_inputs != '' else [])");
     py.globals.set("_hub_src", code);
-    const res = JSON.parse(py.runPython("_hub_run(_hub_src, 10.0)"));
+    const res = JSON.parse(py.runPython("_hub_run(_hub_src, 5.0)"));
     /* Waits are played back by the full editor's console, which this task
        does not have, so everything the program printed arrives at once. That
        is what this task always did. */

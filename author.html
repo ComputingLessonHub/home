@@ -1022,6 +1022,7 @@ function compileOne(b, id, target){
       if (b.tooltips === false) blk.tooltips = false;
       if (b.autocomplete === false) blk.autocomplete = false;
       if (blk.checks && b.checksShowAll === true) blk.checksShowAll = true;
+      if (blk.checks && b.checksLive === false) blk.checksLive = false;
       if (String(b.modelCode || "").trim()) blk.modelCode = b.modelCode;
       push(blk);
     }
@@ -1074,6 +1075,7 @@ function compileOne(b, id, target){
       if (b.tooltips === false) blk.tooltips = false;
       if (b.autocomplete === false) blk.autocomplete = false;
       if (blk.checks && b.checksShowAll === true) blk.checksShowAll = true;
+      if (blk.checks && b.checksLive === false) blk.checksLive = false;
       /* the model answer: a page they can try but not read */
       if (["modelHtml","modelCss","modelJs"].some(k => String(b[k] || "").trim())){
         blk.modelHtml = b.modelHtml || ""; blk.modelCss = b.modelCss || ""; blk.modelJs = b.modelJs || "";
@@ -2720,8 +2722,28 @@ function checklistPopup(block, isWeb){
     });
     paintShow();
     showRow.appendChild(showBtn);
-    showRow.appendChild(helpDot("Off, students see one line at a time, with the rest numbered above it "
-      + "and a button to show them all. On, they start with the whole list and can switch to one at a time."));
+    /* Lines that only look at the code can tick themselves off as the
+       student types, without waiting for Run. On unless a teacher would
+       rather the Run button was the only thing that ticks anything. */
+    const liveBtn = el("button","btn-ghost bmini2");
+    liveBtn.type = "button";
+    const paintLive = () => {
+      const on = block.checksLive !== false;
+      liveBtn.textContent = "Tick off as they type: " + (on ? "on" : "off");
+      liveBtn.classList.toggle("right", on);
+    };
+    liveBtn.addEventListener("click", () => {
+      if (block.checksLive === false) delete block.checksLive;
+      else block.checksLive = false;
+      paintLive(); saveDraft(); schedulePreview();
+    });
+    paintLive();
+    showRow.appendChild(liveBtn);
+    showRow.appendChild(helpDot(["Start with every line showing: off, students see one line at a time, with the "
+      + "rest numbered above it and a button to show them all. On, they start with the whole list and can "
+      + "switch to one at a time.",
+      "Tick off as they type: lines that only look at the code tick themselves off a moment after the "
+      + "student stops typing. Lines about what the program prints still wait for Run."]));
     box.appendChild(showRow);
     const list = el("div");
     box.appendChild(list);
