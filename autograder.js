@@ -377,7 +377,7 @@
       exactSpace: check.exactSpace === true,
       label: check.label || "Check"
     });
-    delete c.more; delete c.hint; delete c.manual;
+    delete c.more; delete c.hint; delete c.hintAfter; delete c.manual;
     if (opts.web){
       /* narrowed down there are no three files any more, only the lines that
          were picked out, so each of them is those lines */
@@ -566,15 +566,19 @@
     }
   }
 
-  /* A line the student has not met yet says only what the teacher wrote
-     under it, and nothing at all when they wrote nothing: the wording built
-     in above ("Only 2 lines so far, 4 are needed") is not shown to a student
-     any more. Only for a plain miss: a "broken" result
-     means the check itself is set up wrong, and hiding that would leave a
-     lesson quietly not working. */
-  function ownWords(check, res){
+  /* A line the student has not met yet says nothing under it of its own:
+     the wording built in above ("Only 2 lines so far, 4 are needed") is not
+     shown to a student any more. What the teacher wrote as its hint is
+     handed on instead, with how many runs to wait before offering it, and
+     the list puts it behind a Need a hint? link. Only for a plain miss: a
+     "broken" result means the check itself is set up wrong, and hiding that
+     would leave a lesson quietly not working. */
+  function ownWords(check, res, runs){
     if (!res || res.ok || res.broken) return res;
-    res.note = String((check && check.hint) || "").trim();
+    res.note = "";
+    res.hint = String((check && check.hint) || "").trim();
+    res.hintAfter = Math.max(0, parseInt(check && check.hintAfter, 10) || 0);
+    res.runs = Number(runs) || 0;
     return res;
   }
 
@@ -591,7 +595,7 @@
           web: false, code: raw, runs: runs,
           output: String(output == null ? "" : output)
         });
-        return ownWords(c, joined);
+        return ownWords(c, joined, runs);
       }
       catch(e){ return broken(c.label || "Check", "This check could not run."); }
     });
@@ -715,7 +719,7 @@
         const joined = withExtras(c, first, {
           web: true, files: files || {}, code: all, output: all, runs: runs
         });
-        return ownWords(c, joined);
+        return ownWords(c, joined, runs);
       }
       catch(e){ return broken(c.label || "Check", "This check could not run."); }
     });
@@ -871,13 +875,33 @@
       const note = document.createElement("span");
       note.className = "check-note";
       li.appendChild(mark); li.appendChild(text); li.appendChild(note);
+      /* The teacher's hint, kept behind a link so it is asked for rather
+         than read before trying. Shown only on a line that is not ticked. */
+      const hint = document.createElement("span");
+      hint.className = "check-hint";
+      hint.hidden = true;
+      const hintBtn = document.createElement("button");
+      hintBtn.type = "button";
+      hintBtn.className = "check-hintbtn";
+      hintBtn.textContent = "Need a hint?";
+      const hintText = document.createElement("span");
+      hintText.className = "check-hinttext";
+      hintText.hidden = true;
+      hintBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hintBtn.hidden = true;
+        hintText.hidden = false;
+      });
+      hint.appendChild(hintBtn); hint.appendChild(hintText);
+      li.appendChild(hint);
       (isManual(c) ? manualList : autoList).appendChild(li);
       const dot = document.createElement("button");
       dot.type = "button";
       dot.className = "checklist-dot" + (isManual(c) ? " manual" : "");
       dot.textContent = String(i + 1);
       dotRow.appendChild(dot);
-      items.push({ li, mark, note, dot, manual: isManual(c) });
+      items.push({ li, mark, note, dot, manual: isManual(c),
+                   hint, hintBtn, hintText, hintReady: false });
     });
 
     /* ---------- one at a time ---------- */
@@ -895,7 +919,37 @@
       if (at < 0) at = items.findIndex(it => !done(it));
       return at;
     }
+    /* The line that was on show last time, so moving to another one can be
+       seen happening: the new line slides in from the side it came from and
+       its dot pops, rather than the words quietly changing in place. */
+    let shownAt = null;
+    function arrive(from, to){
+      const it = items[to];
+      const cls = to > from ? "arrive-next" : "arrive-back";
+      ["arrive-next","arrive-back"].forEach(k => it.li.classList.remove(k));
+      it.dot.classList.remove("arrive");
+      void it.li.offsetWidth;
+      it.li.classList.add(cls);
+      it.dot.classList.add("arrive");
+      setTimeout(() => { it.li.classList.remove(cls); it.dot.classList.remove("arrive"); }, 1300);
+    }
+    /* Hints wait while a run's ticks are still being pointed at, so a Need a
+       hint? never turns up on a line that is a moment away from going green. */
+    let hintsWait = false;
+    function paintHints(){
+      items.forEach(it => {
+        const want = !hintsWait && it.hintReady && it.li.dataset.state === "no";
+        it.hint.hidden = !want;
+        if (!want && it.li.dataset.state === "yes"){
+          it.hintBtn.hidden = false;
+          it.hintText.hidden = true;
+        }
+      });
+    }
     function paintOne(){
+      if (one && shownAt !== null && shownAt !== current) arrive(shownAt, current);
+      shownAt = one ? current : null;
+      paintHints();
       wrap.classList.toggle("one-at-a-time", one);
       body.classList.toggle("one", one);
       modeBtn.textContent = one ? "Show all" : "One at a time";
@@ -985,8 +1039,13 @@
         it.li.dataset.state = r.broken ? "broken" : r.ok ? "yes" : "no";
         it.mark.textContent = r.broken ? "!" : r.ok ? "✓" : blank(i);
         it.note.textContent = r.note || "";
+        const words = String(r.hint || "");
+        it.hintText.textContent = words;
+        it.hintReady = !r.ok && !r.broken && !!words.trim()
+          && (Number(r.runs) || 0) >= (Number(r.hintAfter) || 0);
         if (!was && done(it)) turned = true;
       });
+      hintsWait = !!held;
       /* something ticked off: whatever they were looking at, the list goes
          back to showing what is next */
       if (turned) picked = false;
@@ -999,7 +1058,9 @@
         it.li.dataset.state = "";
         it.mark.textContent = blank(i);
         it.note.textContent = "";
+        it.hintReady = false;
       });
+      hintsWait = false;
       picked = false;
       follow();
       tally();
