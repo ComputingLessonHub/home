@@ -3761,8 +3761,16 @@ function checkFlags(checklist){
    it is known whether a teacher is looking. The blocks are drawn before that is
    worked out, so setting it at build time would always say no. */
 const allChecklists = [];
+/* Anyone the page knows to be a teacher can tick them: the marking screen's
+   own frame included, which is embedded and so never has teacherTools set,
+   and was the one place a teacher actually goes to tick them off. */
+function canTickManual(){
+  if (teacherTools) return true;
+  try{ return teacherHere(); }catch(e){ return false; }
+}
 function refreshChecklistMode(){
-  allChecklists.forEach(l => { try{ l.allowManual(!!teacherTools); }catch(e){} });
+  const on = canTickManual();
+  allChecklists.forEach(l => { try{ l.allowManual(on); }catch(e){} });
 }
 
 /* ---------- when a run ticks something off ----------
@@ -3818,7 +3826,159 @@ function cheerChecklist(over, holder, list, fresh, reveal){
   }, CHEER_WAIT);
 }
 
-function attachChecklist(section, checks, runner, blockId){
+/* A teacher reading work, or printing it, wants every line of a checklist
+   at once rather than having to step through them. */
+const CHECKS_ALL_AT_ONCE = viewParam !== null || pdfParam !== null || allParam !== null;
+
+/* ---------- the model answer program ----------
+   A teacher's finished version of a coding task. The student never sees its
+   code: a Try it button in the corner of the checklist runs it in a pop-up,
+   so they can see what they are aiming for. The code is in the lesson the
+   page is given, as everything is, so this keeps it out of sight rather than
+   out of reach of someone who goes digging. */
+function hasModel(b){
+  if (!b) return false;
+  if (b.type === "web") return ["modelHtml","modelCss","modelJs"].some(k => String(b[k] || "").trim());
+  return !!String(b.modelCode || "").trim();
+}
+function modelCorner(b){
+  const box = el("div","model-try");
+  box.appendChild(el("span","model-try-label","Model answer"));
+  const btn = el("button","btn-primary model-try-btn","\u25B6 Try it");
+  btn.type = "button";
+  btn.title = "Run your teacher's finished program to see what yours should do";
+  btn.addEventListener("click", () => openModel(b));
+  box.appendChild(btn);
+  return box;
+}
+function openModel(b){
+  const back = el("div","modal-back");
+  const box = el("div","modal wide model-pop");
+  const close = () => { document.removeEventListener("keydown", onKey); stop(); back.remove(); };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  document.addEventListener("keydown", onKey);
+  let stop = () => {};
+  const xBtn = el("button","btn-ghost iconbtn modal-x","\u2715");
+  xBtn.title = "Close";
+  xBtn.addEventListener("click", close);
+  box.appendChild(xBtn);
+  box.appendChild(el("p","modal-eyebrow","Model answer"));
+  box.appendChild(el("h2","","Try the finished program"));
+  box.appendChild(el("p","modal-text",
+    "This is your teacher's version, finished. You can't see its code, only what it does. "
+    + "Try it, then make yours do the same."));
+  const again = el("button","btn-primary modal-cta","\u25B6 Run it again");
+  again.type = "button";
+  if (b.type === "web"){
+    const frame = el("iframe","web-preview model-frame");
+    frame.setAttribute("sandbox","allow-scripts allow-forms allow-modals");
+    frame.title = "The model answer";
+    const show = () => {
+      frame.srcdoc = window.webAssemble
+        ? window.webAssemble(b.modelHtml || "", b.modelCss || "", b.modelJs || "")
+        : (b.modelHtml || "");
+    };
+    box.appendChild(frame);
+    again.addEventListener("click", show);
+    show();
+  } else {
+    const shell = el("div","ide model-ide");
+    if (window.pyEdit && window.pyEdit.follow) window.pyEdit.follow(shell);
+    let canvas = null;
+    if (b.turtle){
+      const cwrap = el("div","ide-canvaswrap");
+      canvas = el("canvas","ide-canvas");
+      canvas.width = 480; canvas.height = 360;
+      cwrap.appendChild(canvas);
+      shell.appendChild(cwrap);
+    }
+    const consoleBox = el("div","ide-console");
+    const out = el("pre","ide-out"); out.setAttribute("aria-live","polite");
+    const askRow = el("div","ide-ask"); askRow.hidden = true;
+    const askText = el("span","ide-askprompt");
+    const askIn = el("input","ide-askin");
+    askIn.type = "text"; askIn.autocomplete = "off"; askIn.spellcheck = false;
+    askRow.appendChild(askText); askRow.appendChild(askIn);
+    consoleBox.appendChild(out); consoleBox.appendChild(askRow);
+    shell.appendChild(consoleBox);
+    box.appendChild(shell);
+
+    /* Run the way the task's own console runs: the whole program from the
+       top on each answer, with the answers so far fed back in, and what it
+       printed played back with its waits. */
+    let answers = [], shown = 0, runId = 0;
+    stop = () => { runId++; };
+    const pause = (secs) => new Promise(go => setTimeout(go, Math.max(0, secs) * 1000));
+    async function execute(){
+      const mine = ++runId;
+      const src = String(b.modelCode || "");
+      const py = await ensureHubPython(out);
+      await loadPyImports(py, src, out);
+      if (mine !== runId) return;
+      if (window.hubTurtleAttach) window.hubTurtleAttach(canvas);
+      py.globals.set("_hub_next_inputs", answers.join("\u0000"));
+      py.runPython("_hub_set_inputs(_hub_next_inputs.split(chr(0)) if _hub_next_inputs != '' else [])");
+      py.globals.set("_hub_src", src);
+      const res = JSON.parse(py.runPython("_hub_run(_hub_src, 10.0)"));
+      out.textContent = "";
+      const list = res.events || [];
+      for (let i = 0; i < list.length; i++){
+        const ev = list[i];
+        if (ev[0] === "out"){ out.textContent += ev[1]; out.scrollTop = out.scrollHeight; }
+        else if (ev[0] === "wait"){ if (i >= shown) await pause(ev[1]); }
+        else if (ev[0] === "draw"){ if (window.hubDraw) window.hubDraw.apply(null, [ev[1]].concat(ev[2] || [])); }
+        else if (ev[0] === "clear"){ if (window.hubTurtleClear) window.hubTurtleClear(); }
+        if (mine !== runId) return;
+      }
+      shown = list.length;
+      out.classList.toggle("has-error", res.status === "done" && !res.ok);
+      if (res.status === "input"){
+        askText.textContent = res.prompt || ">";
+        askRow.hidden = false; askIn.value = ""; askIn.focus();
+        return;
+      }
+      askRow.hidden = true;
+      if (!res.out) out.textContent = "(the program printed nothing)";
+    }
+    async function run(){
+      answers = []; shown = 0;
+      out.textContent = ""; out.classList.remove("has-error"); askRow.hidden = true;
+      again.disabled = true;
+      try{ await execute(); }
+      catch(e){ out.textContent = "Python could not start here: " + String(e.message || "unknown problem").replace(/\.+$/, "") + "."; }
+      finally{ again.disabled = false; }
+    }
+    askIn.addEventListener("keydown", async (e) => {
+      if (e.key !== "Enter") return;
+      answers.push(askIn.value);
+      askRow.hidden = true;
+      try{ await execute(); }catch(err){ askRow.hidden = true; }
+    });
+    again.addEventListener("click", run);
+    run();
+  }
+  box.appendChild(again);
+  const done = el("button","btn-ghost modal-stay","Close");
+  done.type = "button";
+  done.addEventListener("click", close);
+  box.appendChild(done);
+  scrollBody(box);
+  back.appendChild(box);
+  back.addEventListener("mousedown", (e) => { if (e.target === back) close(); });
+  document.body.appendChild(back);
+}
+
+/* `b` is the task itself, for its model answer and whether its checklist
+   starts with every line showing. */
+function attachChecklist(section, checks, runner, blockId, b){
+  const model = hasModel(b) ? modelCorner(b) : null;
+  if ((!checks || !checks.length || !window.buildChecklist) && model){
+    /* No checklist to sit in, so the model answer has the corner to itself. */
+    const alone = el("div","checklist-wrap model-alone");
+    alone.appendChild(model);
+    if (section.firstChild) section.insertBefore(alone, section.firstChild);
+    else section.appendChild(alone);
+  }
   if (!checks || !checks.length || !window.buildChecklist) return null;
   let last = null;                    // what the checks said the last time they ran
   /* What was ticked when Run was last pressed. A program that stops to ask a
@@ -3832,13 +3992,15 @@ function attachChecklist(section, checks, runner, blockId){
      first is still working through its tick must not have the older results
      painted back over it when that tick lands. */
   let showing = 0;
-  const list = window.buildChecklist(checks);
+  const list = window.buildChecklist(checks,
+    { showAll: CHECKS_ALL_AT_ONCE || !!(b && b.checksShowAll === true) });
+  if (model && list.corner){ list.corner.appendChild(model); list.corner.hidden = false; }
   allChecklists.push(list);
   /* Lines a teacher has to judge by eye can only be ticked by a teacher, and
      only while they are looking at the work rather than while it is being
      done. The tick is sent up to the marking screen the same way changed marks
      are, so it is saved with the feedback. */
-  list.allowManual(!!teacherTools);
+  list.allowManual(canTickManual());
   list.onManual = (flags) => {
     markDirty();
     try{ window.parent.postMessage({ hubManual: { id: blockId || "", flags: flags } }, "*"); }catch(e){}
@@ -4205,7 +4367,7 @@ function rIDE(b){
   /* the teacher's checklist, if this task has one. Declared before run()
      so it can tick itself off when the code has finished. */
   const checklist = attachChecklist(s, b.checks,
-    () => window.runPythonChecks(b.checks, ta.value, lastOut, runs), b.id);
+    () => window.runPythonChecks(b.checks, ta.value, lastOut, runs), b.id, b);
 
   async function run(cheer){
     cheerNext = !!cheer;
@@ -4741,7 +4903,7 @@ function rWeb(b){
   /* the teacher's checklist, run against all three files. Declared before
      run() so it can tick itself off once the page has been built. */
   const checklist = attachChecklist(s, b.checks,
-    () => window.runWebChecks(b.checks, codeNow(), runs), b.id);
+    () => window.runWebChecks(b.checks, codeNow(), runs), b.id, b);
 
   /* `cheer` is true only when a student pressed Run. The page runs this by
      itself when the task opens and again when saved work is put back, and

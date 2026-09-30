@@ -1276,6 +1276,7 @@ html.builder .loadscreen{z-index:90}
 .pal.strong{border-color:var(--amber); background:var(--panel-2)}
 .pagekids{margin:6px 0 10px; padding:10px 0 2px 12px; border-left:3px solid var(--line-2)}
 .pagekids .bcard{background:var(--panel-2)}
+.pagekids.empty{min-height:28px}
 .qsub{border:1px solid var(--line); border-radius:var(--rad-md); padding:12px 14px; margin:0 0 10px; background:var(--panel-2)}
 .qsub-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:9px}
 .bhelp.warn{color:var(--amber-dark); font-weight:700}
@@ -2536,9 +2537,56 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 /* the checklist above a coding task */
 .checklist-wrap{margin:0 0 10px}
 .checklist{background:var(--panel-2); border:1px solid var(--line); border-radius:var(--rad-md); padding:9px 12px}
-.checklist-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px}
+.checklist{display:flow-root}          /* holds the model answer's corner */
+.checklist-head{display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin-bottom:6px}
 .checklist-head b{font-size:var(--text-base); letter-spacing:.06em; text-transform:uppercase; color:var(--dim)}
-.checklist-score{font-weight:700; font-size:var(--text-base); color:var(--muted)}
+.checklist-score{font-weight:700; font-size:var(--text-base); color:var(--muted); margin-left:auto}
+.checklist-mode{background:none; border:none; padding:2px 4px; font:inherit; font-size:var(--text-sm);
+  font-weight:600; color:var(--amber-dark); text-decoration:underline; text-underline-offset:2px; cursor:pointer}
+.checklist-mode:hover{color:var(--amber)}
+
+/* One line at a time: every line as a numbered dot, filled once it is ticked
+   off, with a ring round the one on show. The length of the list and how far
+   through it they are, at a glance, without the rest of the list. */
+.checklist-strip{display:inline-flex; align-items:center; gap:2px; min-width:0}
+.checklist-dots{display:inline-flex; flex-wrap:wrap; align-items:center; gap:4px}
+.checklist-dot, .checklist-step{
+  width:22px; height:22px; border-radius:50%; padding:0; display:inline-flex;
+  align-items:center; justify-content:center; font:inherit; font-size:var(--text-2xs);
+  font-weight:800; line-height:1; cursor:pointer; flex:none}
+.checklist-dot{background:var(--panel); border:1.5px solid var(--line-2); color:var(--muted)}
+.checklist-dot.manual{border-style:dashed}
+.checklist-dot[data-state=yes]{background:var(--mint); border-color:var(--mint); color:#fff}
+.checklist-dot[data-state=no]{border-color:var(--amber); color:var(--amber-dark)}
+.checklist-dot[data-state=broken]{background:var(--red); border-color:var(--red); color:#fff}
+.checklist-dot.on{box-shadow:0 0 0 2px var(--panel-2), 0 0 0 4px var(--amber)}
+.checklist-dot:hover{border-color:var(--amber)}
+.checklist-step{background:none; border:none; color:var(--muted); font-size:var(--text-lg)}
+.checklist-step:hover:not(:disabled){color:var(--amber-dark)}
+.checklist-step:disabled{opacity:.3; cursor:default}
+.checklist-dot.justticked{animation:checkpop .55s cubic-bezier(.2,1.4,.4,1)}
+/* the one line on show, with the teacher's column note above it if it is theirs */
+.checklist-body.one, .checklist-body.split.one{display:block}
+.checklist-body.split.one .checklist-col.manual{border:none; padding:0}
+
+/* The model answer, in the checklist's top right corner. Kept to one short
+   row, so even a checklist of a single line is taller than it. */
+.checklist-corner{float:right; margin:-3px -5px 4px 12px}
+.model-try{display:flex; align-items:center; gap:8px; padding:3px 3px 3px 10px;
+  background:var(--panel); border:1px solid var(--line); border-radius:999px}
+.model-try-label{font-size:var(--text-2xs); font-weight:700; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--dim); white-space:nowrap}
+.model-try-btn{padding:4px 12px; font-size:var(--text-sm); min-height:0; line-height:1.3; border-radius:999px}
+.model-alone{display:flex; justify-content:flex-end}
+@media (max-width:620px){
+  .model-try-label{display:none}
+}
+/* the pop-up it opens */
+.model-pop{max-width:760px}
+.model-pop .model-ide{border-radius:var(--rad-md); overflow:hidden; border:1px solid var(--line)}
+.model-pop .ide-console{min-height:160px; max-height:46vh}
+.model-pop .ide-out:empty::before{content:"Starting\2026"}
+.model-frame{min-height:44vh; border:1px solid var(--line); border-radius:var(--rad-md)}
 .checklist-items{list-style:none; margin:0; padding:0}
 /* The note is meant to sit on its own line under the label, which is what the
    29px indent below is for, and that needs the row to be allowed to wrap. It
@@ -2621,6 +2669,7 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 @media (prefers-reduced-motion:reduce){
   .check.justticked{animation:var(--tick-glow) !important}
   .check.justticked .check-mark{animation:var(--tick-pop) !important}
+  .checklist-dot.justticked{animation:checkpop .55s cubic-bezier(.2,1.4,.4,1) !important}
   .ide-cheer{animation:var(--cheer-in) !important}
 }
 
