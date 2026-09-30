@@ -3843,7 +3843,10 @@ function hasModel(b){
 }
 function modelCorner(b){
   const box = el("div","model-try");
-  box.appendChild(el("span","model-try-label","Model answer"));
+  const words = el("div","model-try-words");
+  words.appendChild(el("span","model-try-label","Model answer"));
+  words.appendChild(el("span","model-try-say","See the finished program in action."));
+  box.appendChild(words);
   const btn = el("button","btn-primary model-try-btn","\u25B6 Try it");
   btn.type = "button";
   btn.title = "Run your teacher's finished program to see what yours should do";
@@ -3865,8 +3868,8 @@ function openModel(b){
   box.appendChild(el("p","modal-eyebrow","Model answer"));
   box.appendChild(el("h2","","Try the finished program"));
   box.appendChild(el("p","modal-text",
-    "This is your teacher's version, finished. You can't see its code, only what it does. "
-    + "Try it, then make yours do the same."));
+    "This is a finished version of the program. Run it to see what it does. "
+    + "Try to make your program similar to this!"));
   const again = el("button","btn-primary modal-cta","\u25B6 Run it again");
   again.type = "button";
   if (b.type === "web"){

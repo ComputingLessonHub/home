@@ -2540,8 +2540,7 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 .checklist{display:flow-root}          /* holds the model answer's corner */
 .checklist-head{display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin-bottom:6px}
 .checklist-head b{font-size:var(--text-base); letter-spacing:.06em; text-transform:uppercase; color:var(--dim)}
-.checklist-score{font-weight:700; font-size:var(--text-base); color:var(--muted); margin-left:auto}
-.checklist-mode{background:none; border:none; padding:2px 4px; font:inherit; font-size:var(--text-sm);
+.checklist-mode{margin-left:auto; background:none; border:none; padding:2px 4px; font:inherit; font-size:var(--text-sm);
   font-weight:600; color:var(--amber-dark); text-decoration:underline; text-underline-offset:2px; cursor:pointer}
 .checklist-mode:hover{color:var(--amber)}
 
@@ -2559,7 +2558,10 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 .checklist-dot[data-state=yes]{background:var(--mint); border-color:var(--mint); color:#fff}
 .checklist-dot[data-state=no]{border-color:var(--amber); color:var(--amber-dark)}
 .checklist-dot[data-state=broken]{background:var(--red); border-color:var(--red); color:#fff}
-.checklist-dot.on{box-shadow:0 0 0 2px var(--panel-2), 0 0 0 4px var(--amber)}
+/* the line on show: its own outline turns blue, rather than a ring round it,
+   and a thick one once it is ticked so it still shows against the green */
+.checklist-dot.on{border-color:var(--amber); color:var(--amber-dark)}
+.checklist-dot.on[data-state=yes]{border:3px solid var(--amber); color:#fff}
 .checklist-dot:hover{border-color:var(--amber)}
 .checklist-step{background:none; border:none; color:var(--muted); font-size:var(--text-lg)}
 .checklist-step:hover:not(:disabled){color:var(--amber-dark)}
@@ -2572,14 +2574,16 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 /* The model answer, in the checklist's top right corner. Kept to one short
    row, so even a checklist of a single line is taller than it. */
 .checklist-corner{float:right; margin:-3px -5px 4px 12px}
-.model-try{display:flex; align-items:center; gap:8px; padding:3px 3px 3px 10px;
-  background:var(--panel); border:1px solid var(--line); border-radius:999px}
+.model-try{display:flex; align-items:center; gap:12px; min-height:54px; padding:6px 7px 6px 12px;
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--rad-md)}
+.model-try-words{display:flex; flex-direction:column; gap:1px; min-width:0}
 .model-try-label{font-size:var(--text-2xs); font-weight:700; letter-spacing:.06em;
   text-transform:uppercase; color:var(--dim); white-space:nowrap}
-.model-try-btn{padding:4px 12px; font-size:var(--text-sm); min-height:0; line-height:1.3; border-radius:999px}
+.model-try-say{font-size:var(--text-sm); color:var(--muted); line-height:1.3}
+.model-try-btn{padding:6px 14px; font-size:var(--text-sm); min-height:0; line-height:1.3; border-radius:999px; flex:none}
 .model-alone{display:flex; justify-content:flex-end}
 @media (max-width:620px){
-  .model-try-label{display:none}
+  .model-try-say{display:none}
 }
 /* the pop-up it opens */
 .model-pop{max-width:760px}
