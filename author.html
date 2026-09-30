@@ -3019,12 +3019,32 @@ function checklistPopup(block, isWeb){
            line says nothing under it. Teacher-checked lines never reach here:
            they have nothing to fail at, so there is nothing to say about it. */
         const hrow = el("div","bfield wide");
-        hrow.appendChild(el("label","","What to say if they have not got it yet"));
+        hrow.appendChild(el("label","","Hint"));
+        const hline = el("div","brow hintrow");
         const hin = el("input");
         hin.value = c.hint || "";
         hin.placeholder = "Leave empty for no hint";
         hin.addEventListener("input", () => { c.hint = hin.value; saveDraft(); });
-        hrow.appendChild(hin);
+        hline.appendChild(hin);
+        /* How many times they have to have pressed Run before Need a hint?
+           appears under the line. Nought offers it as soon as the line is
+           not ticked. */
+        const after = el("label","hintafter");
+        after.appendChild(document.createTextNode("Offer after "));
+        const hnum = el("input");
+        hnum.type = "number"; hnum.min = "0"; hnum.max = "99"; hnum.className = "stepnum";
+        hnum.value = String(Math.max(0, parseInt(c.hintAfter, 10) || 0));
+        hnum.addEventListener("input", () => {
+          const n = Math.max(0, Math.min(99, parseInt(hnum.value, 10) || 0));
+          if (n) c.hintAfter = n; else delete c.hintAfter;
+          saveDraft();
+        });
+        after.appendChild(hnum);
+        after.appendChild(document.createTextNode(" runs"));
+        hline.appendChild(after);
+        hline.appendChild(helpDot("Students see Need a hint? under this line once they have pressed Run "
+          + "this many times and the line is still not ticked. It never shows on a line that is ticked off."));
+        hrow.appendChild(hline);
         card.appendChild(hrow);
 
         list.appendChild(card);

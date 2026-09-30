@@ -2540,7 +2540,7 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 .checklist{display:flow-root}          /* holds the model answer's corner */
 .checklist-head{display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin-bottom:6px}
 .checklist-head b{font-size:var(--text-base); letter-spacing:.06em; text-transform:uppercase; color:var(--dim)}
-.checklist-mode{margin-left:auto; background:none; border:none; padding:2px 4px; font:inherit; font-size:var(--text-sm);
+.checklist-mode{margin-left:2px; background:none; border:none; padding:2px 4px; font:inherit; font-size:var(--text-sm);
   font-weight:600; color:var(--amber-dark); text-decoration:underline; text-underline-offset:2px; cursor:pointer}
 .checklist-mode:hover{color:var(--amber)}
 
@@ -2567,6 +2567,34 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 .checklist-step:hover:not(:disabled){color:var(--amber-dark)}
 .checklist-step:disabled{opacity:.3; cursor:default}
 .checklist-dot.justticked{animation:checkpop .55s cubic-bezier(.2,1.4,.4,1)}
+/* Moving on to another line: it slides in from the side it came from, with
+   a wash of colour behind it, and its dot pops. Without this the words just
+   changed in place and the list looked as if nothing had happened. */
+.check.arrive-next{--arrive:checkin-next .6s cubic-bezier(.2,.9,.3,1), checkwash 1.2s ease-out;
+  animation:var(--arrive); border-radius:var(--rad-sm)}
+.check.arrive-back{--arrive:checkin-back .6s cubic-bezier(.2,.9,.3,1), checkwash 1.2s ease-out;
+  animation:var(--arrive); border-radius:var(--rad-sm)}
+@keyframes checkin-next{0%{transform:translateX(44px); opacity:0} 100%{transform:none; opacity:1}}
+@keyframes checkin-back{0%{transform:translateX(-44px); opacity:0} 100%{transform:none; opacity:1}}
+@keyframes checkwash{
+  0%,30%{background:color-mix(in srgb, var(--amber) 16%, transparent)}
+  100%{background:transparent}
+}
+.checklist-dot.arrive{--dot-arrive:checkpop .55s cubic-bezier(.2,1.4,.4,1); animation:var(--dot-arrive)}
+
+/* the checklist pop-up's hint box, with its run count beside it */
+.hintrow{align-items:center; flex-wrap:nowrap}
+.hintrow > input:first-child{flex:1 1 auto; min-width:0}
+.hintafter{display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
+  font-size:var(--text-sm); font-weight:600; color:var(--muted); margin:0}
+/* the teacher's hint, asked for rather than shown straight away */
+.check-hint{flex:1 1 100%; margin-left:29px; font-size:var(--text-base)}
+.check-hintbtn{background:none; border:none; padding:0; font:inherit; font-weight:600;
+  color:var(--amber-dark); text-decoration:underline; text-underline-offset:2px; cursor:pointer}
+.check-hintbtn:hover{color:var(--amber)}
+.check-hinttext{display:block; padding:6px 10px; border-radius:var(--rad-sm);
+  background:color-mix(in srgb, var(--amber) 10%, transparent);
+  border-left:3px solid var(--amber)}
 /* the one line on show, with the teacher's column note above it if it is theirs */
 .checklist-body.one, .checklist-body.split.one{display:block}
 .checklist-body.split.one .checklist-col.manual{border:none; padding:0}
@@ -2674,6 +2702,8 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
   .check.justticked{animation:var(--tick-glow) !important}
   .check.justticked .check-mark{animation:var(--tick-pop) !important}
   .checklist-dot.justticked{animation:checkpop .55s cubic-bezier(.2,1.4,.4,1) !important}
+  .check.arrive-next, .check.arrive-back{animation:var(--arrive) !important}
+  .checklist-dot.arrive{animation:var(--dot-arrive) !important}
   .ide-cheer{animation:var(--cheer-in) !important}
 }
 
