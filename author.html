@@ -1021,6 +1021,8 @@ function compileOne(b, id, target){
       if (b.help === false) blk.help = false;      // no Help tab
       if (b.tooltips === false) blk.tooltips = false;
       if (b.autocomplete === false) blk.autocomplete = false;
+      if (blk.checks && b.checksShowAll === true) blk.checksShowAll = true;
+      if (String(b.modelCode || "").trim()) blk.modelCode = b.modelCode;
       push(blk);
     }
     else if (b.type === "question")
@@ -1071,6 +1073,11 @@ function compileOne(b, id, target){
       if (b.help === false) blk.help = false;
       if (b.tooltips === false) blk.tooltips = false;
       if (b.autocomplete === false) blk.autocomplete = false;
+      if (blk.checks && b.checksShowAll === true) blk.checksShowAll = true;
+      /* the model answer: a page they can try but not read */
+      if (["modelHtml","modelCss","modelJs"].some(k => String(b[k] || "").trim())){
+        blk.modelHtml = b.modelHtml || ""; blk.modelCss = b.modelCss || ""; blk.modelJs = b.modelJs || "";
+      }
       push(blk);
     }
     else if (b.type === "code"){ /* not chosen yet, nothing to build */ }
@@ -2695,6 +2702,27 @@ function checklistPopup(block, isWeb){
     box.appendChild(el("p","modal-text",
       "Each line becomes something the student can tick off. Keep the wording plain, " +
       "it is what they read when they are stuck."));
+    /* Students get one line at a time unless this is on: a long list read
+       all at once is a wall, and one thing to do next is somewhere to start.
+       They can always press Show all themselves. */
+    const showRow = el("div","brow checkshowall");
+    const showBtn = el("button","btn-ghost bmini2");
+    showBtn.type = "button";
+    const paintShow = () => {
+      const on = block.checksShowAll === true;
+      showBtn.textContent = "Start with every line showing: " + (on ? "on" : "off");
+      showBtn.classList.toggle("right", on);
+    };
+    showBtn.addEventListener("click", () => {
+      if (block.checksShowAll === true) delete block.checksShowAll;
+      else block.checksShowAll = true;
+      paintShow(); saveDraft(); schedulePreview();
+    });
+    paintShow();
+    showRow.appendChild(showBtn);
+    showRow.appendChild(helpDot("Off, students see one line at a time, with the rest numbered above it "
+      + "and a button to show them all. On, they start with the whole list and can switch to one at a time."));
+    box.appendChild(showRow);
     const list = el("div");
     box.appendChild(list);
 

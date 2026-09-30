@@ -769,23 +769,60 @@
     }
   }
 
-  window.buildChecklist = function(checks){
+  /* `opts.showAll` starts the list with every line on show. Without it a
+     list of more than one line shows one line at a time: the next thing to
+     do, with every line numbered in a strip above it so the length of the
+     list and how far through it they are are both in sight. Either way there
+     is a button to switch. */
+  window.buildChecklist = function(checks, opts){
+    const o = opts || {};
     const all = checks || [];
     const isManual = (c) => c && c.manual === true;
     const autoCount = all.filter(c => !isManual(c)).length;
     const manualCount = all.filter(isManual).length;
     const mixed = autoCount > 0 && manualCount > 0;
+    const several = all.length > 1;
+    /* An empty circle for a single line; a numbered one when there are
+       several, so a line can be talked about ("number 3 won't tick"). */
+    const blank = (i) => several ? String(i + 1) : "○";
 
     const wrap = document.createElement("div");
     wrap.className = "checklist";
+    /* The corner the model answer's Try it sits in, when there is one. Put
+       first so the heading and the lines flow around it. */
+    const corner = document.createElement("div");
+    corner.className = "checklist-corner";
+    corner.hidden = true;
+    wrap.appendChild(corner);
+    wrap.corner = corner;
     const head = document.createElement("div");
     head.className = "checklist-head";
     const title = document.createElement("b");
     title.textContent = "Checklist";
     head.appendChild(title);
+
+    /* The strip of numbered dots: one per line, filled as they are ticked
+       off, with a ring round the one on show. Pressing one shows that line. */
+    const strip = document.createElement("div");
+    strip.className = "checklist-strip";
+    const prev = document.createElement("button");
+    prev.type = "button"; prev.className = "checklist-step"; prev.textContent = "‹";
+    prev.title = "The line before"; prev.setAttribute("aria-label", prev.title);
+    const dotRow = document.createElement("span");
+    dotRow.className = "checklist-dots";
+    const next = document.createElement("button");
+    next.type = "button"; next.className = "checklist-step"; next.textContent = "›";
+    next.title = "The next line"; next.setAttribute("aria-label", next.title);
+    strip.appendChild(prev); strip.appendChild(dotRow); strip.appendChild(next);
+    if (several) head.appendChild(strip);
+
     const score = document.createElement("span");
     score.className = "checklist-score";
     head.appendChild(score);
+    const modeBtn = document.createElement("button");
+    modeBtn.type = "button";
+    modeBtn.className = "checklist-mode";
+    if (several) head.appendChild(modeBtn);
     wrap.appendChild(head);
 
     /* Two columns only when there is something in both: the checks the page can
@@ -818,12 +855,12 @@
 
     /* Kept in the order they were written, so results line up by position. */
     const items = [];
-    all.forEach(c => {
+    all.forEach((c, i) => {
       const li = document.createElement("li");
       li.className = "check" + (isManual(c) ? " check-manual" : "");
       const mark = document.createElement("span");
       mark.className = "check-mark";
-      mark.textContent = "○";
+      mark.textContent = blank(i);
       const text = document.createElement("span");
       text.className = "check-text";
       /* A teacher can style the wording of a line, so it arrives as HTML.
@@ -838,7 +875,71 @@
       note.className = "check-note";
       li.appendChild(mark); li.appendChild(text); li.appendChild(note);
       (isManual(c) ? manualList : autoList).appendChild(li);
-      items.push({ li, mark, note, manual: isManual(c) });
+      const dot = document.createElement("button");
+      dot.type = "button";
+      dot.className = "checklist-dot" + (isManual(c) ? " manual" : "");
+      dot.textContent = String(i + 1);
+      dotRow.appendChild(dot);
+      items.push({ li, mark, note, dot, manual: isManual(c) });
+    });
+
+    /* ---------- one at a time ---------- */
+    let one = several && !o.showAll;
+    let current = 0;
+    /* Set when they pick a line themselves, so the list stops moving on to
+       the next unticked line under them until something is ticked off. */
+    let picked = false;
+    let moveOn = null;
+    const done = (it) => it.li.dataset.state === "yes";
+    /* The next thing to do: the first line not ticked off, and one they can
+       do themselves before one only a teacher can tick. */
+    function nextToDo(){
+      let at = items.findIndex(it => !it.manual && !done(it));
+      if (at < 0) at = items.findIndex(it => !done(it));
+      return at;
+    }
+    function paintOne(){
+      wrap.classList.toggle("one-at-a-time", one);
+      body.classList.toggle("one", one);
+      modeBtn.textContent = one ? "Show all" : "One at a time";
+      modeBtn.title = one ? "Show every line of the checklist" : "Show one line at a time";
+      strip.hidden = !one;
+      items.forEach((it, i) => {
+        it.li.hidden = one && i !== current;
+        it.dot.classList.toggle("on", one && i === current);
+        it.dot.dataset.state = it.li.dataset.state || "";
+        it.dot.title = "Line " + (i + 1) + (done(it) ? ", ticked off" : "");
+        it.dot.setAttribute("aria-label", it.dot.title);
+        it.dot.setAttribute("aria-current", one && i === current ? "true" : "false");
+      });
+      /* a column with nothing on show would leave its note or its rule behind */
+      if (autoList) autoList.parentNode.hidden = one && items[current].manual;
+      if (manualList) manualList.parentNode.hidden = one && !items[current].manual;
+      prev.disabled = current <= 0;
+      next.disabled = current >= items.length - 1;
+    }
+    function goTo(at, byHand){
+      if (at < 0 || at >= items.length) return;
+      clearTimeout(moveOn); moveOn = null;
+      current = at;
+      if (byHand) picked = true;
+      paintOne();
+    }
+    /* Back to the next thing to do, unless they are looking at a line they
+       chose. Everything ticked off leaves the last line they saw on show. */
+    function follow(){
+      if (!one || picked || moveOn) return;
+      const at = nextToDo();
+      if (at >= 0) current = at;
+    }
+    items.forEach((it, i) => it.dot.addEventListener("click", () => goTo(i, true)));
+    prev.addEventListener("click", () => goTo(current - 1, true));
+    next.addEventListener("click", () => goTo(current + 1, true));
+    modeBtn.addEventListener("click", () => {
+      one = !one;
+      picked = false;
+      follow();
+      paintOne();
     });
 
     /* A teacher looking at the work can tick these; a student cannot. */
@@ -849,21 +950,27 @@
         if (!manualOn) return;
         const now = it.li.dataset.state === "yes";
         it.li.dataset.state = now ? "" : "yes";
-        it.mark.textContent = now ? "○" : "✓";
+        it.mark.textContent = now ? blank(i) : "✓";
         tally();
         if (typeof wrap.onManual === "function") wrap.onManual(wrap.getManual());
+      });
+      it.li.addEventListener("keydown", (e) => {
+        if (!manualOn || (e.key !== "Enter" && e.key !== " ")) return;
+        e.preventDefault();
+        it.li.click();
       });
     });
 
     function tally(){
-      let done = 0, counted = 0;
+      let doneCount = 0, counted = 0;
       items.forEach(it => {
         counted++;
-        if (it.li.dataset.state === "yes") done++;
+        if (done(it)) doneCount++;
       });
-      score.textContent = done + " of " + counted;
-      wrap.dataset.allDone = done === counted ? "yes" : "no";
-      return done === counted;
+      score.textContent = doneCount + " of " + counted + (several ? " done" : "");
+      wrap.dataset.allDone = doneCount === counted ? "yes" : "no";
+      paintOne();
+      return doneCount === counted;
     }
 
     /* Called with the results of running the checks. `hold` is the lines to
@@ -873,23 +980,32 @@
        back, once that tick has had its say. */
     wrap.show = function(results, hold){
       const held = (hold && hold.length) ? hold : null;
+      let turned = false;
       (results || []).forEach((r, i) => {
         const it = items[i];
         if (!it || it.manual) return;         // a teacher's tick is not overwritten
         if (held && held.indexOf(i) >= 0) return;
+        const was = done(it);
         it.li.dataset.state = r.broken ? "broken" : r.ok ? "yes" : "no";
-        it.mark.textContent = r.broken ? "!" : r.ok ? "✓" : "○";
+        it.mark.textContent = r.broken ? "!" : r.ok ? "✓" : blank(i);
         it.note.textContent = r.note || "";
+        if (!was && done(it)) turned = true;
       });
+      /* something ticked off: whatever they were looking at, the list goes
+         back to showing what is next */
+      if (turned) picked = false;
+      follow();
       return tally();
     };
     wrap.reset = function(){
-      items.forEach(it => {
+      items.forEach((it, i) => {
         if (it.manual) return;
         it.li.dataset.state = "";
-        it.mark.textContent = "○";
+        it.mark.textContent = blank(i);
         it.note.textContent = "";
       });
+      picked = false;
+      follow();
       tally();
     };
     /* Which lines are ticked, by position, so the page can tell what has
@@ -898,18 +1014,41 @@
       return items.map(it => it.li.dataset.state === "yes");
     };
     /* One line of the list, so the page can ask where it is before deciding
-       whether it has to move at all. */
+       whether it has to move at all. One at a time, that is the line on show:
+       the others are hidden and have nowhere to be. */
     wrap.lineAt = function(at){
-      const it = items[at];
+      const it = items[one ? current : at];
       return it ? it.li : null;
     };
     /* Point at a line that has just been ticked off. The class is taken off
        and forced to be laid out again before it goes back on, or a second run
        that ticks the same line would add a class that is already there and
-       nothing would move. */
+       nothing would move.
+
+       One at a time, the line is brought on show for the glow, and a moment
+       later the list moves on to the next thing to do. Several lines ticked
+       by one run show the first of them; the rest glow in the strip. */
+    let pointing = null;
     wrap.point = function(at){
       const it = items[at];
       if (!it) return null;
+      if (one){
+        if (pointing === null){
+          pointing = at;
+          setTimeout(() => { pointing = null; }, 0);
+          goTo(at, false);
+          moveOn = setTimeout(() => {
+            moveOn = null;
+            picked = false;
+            follow();
+            paintOne();
+          }, 1800);
+        }
+        it.dot.classList.remove("justticked");
+        void it.dot.offsetWidth;
+        it.dot.classList.add("justticked");
+        setTimeout(() => it.dot.classList.remove("justticked"), 2400);
+      }
       it.li.classList.remove("justticked");
       void it.li.offsetWidth;
       it.li.classList.add("justticked");
@@ -930,15 +1069,30 @@
         if (!it.manual) return;
         const on = !!flags[i];
         it.li.dataset.state = on ? "yes" : "";
-        it.mark.textContent = on ? "✓" : "○";
+        it.mark.textContent = on ? "✓" : blank(i);
       });
+      follow();
       tally();
     };
     wrap.allowManual = function(on){
       manualOn = !!on;
       wrap.classList.toggle("can-tick", manualOn);
-      items.forEach(it => { if (it.manual) it.li.title = manualOn ? "Click to tick this off" : ""; });
+      items.forEach(it => {
+        if (!it.manual) return;
+        it.li.title = manualOn ? "Click to tick this off" : "";
+        if (manualOn){ it.li.tabIndex = 0; it.li.setAttribute("role", "button"); }
+        else { it.li.removeAttribute("tabindex"); it.li.removeAttribute("role"); }
+      });
     };
+    /* Show every line, or one at a time, from outside: a teacher reading
+       saved work wants the whole list. */
+    wrap.showAll = function(on){
+      one = several && !on;
+      picked = false;
+      follow();
+      paintOne();
+    };
+    follow();
     tally();
     return wrap;
   };

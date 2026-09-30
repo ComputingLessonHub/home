@@ -313,8 +313,12 @@ function childList(get, opts){
   const arr = get();
   const adder = o.adder !== false;
   const inner = el("div","pagekids");
-  if (!arr.length)
-    inner.appendChild(el("p","bhelp dropzone", o.empty || "Drag a task here, or press + Add task."));
+  /* An empty list says nothing unless the caller has something to say: the
+     + Add task under it is prompt enough, and it still takes drops. */
+  if (!arr.length){
+    inner.classList.add("empty");
+    if (o.empty) inner.appendChild(el("p","bhelp dropzone", o.empty));
+  }
   arr.forEach((child, n) => {
     if (adder && n > 0) inner.appendChild(insertHere(arr, n, o.inside));
     inner.appendChild(card(child, n, arr));
@@ -894,6 +898,7 @@ EDITORS.web = function(b, k){
   });
   /* what they are marked against, in the body where it can be seen */
   checklistField(b, k);
+  modelField(b, k);
 };
 
 EDITORS.ide = function(b, k){
@@ -951,6 +956,7 @@ EDITORS.ide = function(b, k){
   });
   /* what they are marked against, in the body where it can be seen */
   checklistField(b, k);
+  modelField(b, k);
 };
 
 EDITORS.question = function(b, k){
@@ -1144,7 +1150,7 @@ EDITORS.page = function(b, k){
   }
   if (!b.blocks) b.blocks = [];
   childList(() => b.blocks, { adder: !viewAll,
-    empty: viewAll ? "Nothing on this page yet." : "Drag a task here, or press + Add task." }).forEach(add);
+    empty: viewAll ? "Nothing on this page yet." : "" }).forEach(add);
 };
 
 EDITORS.extension = function(b, k){
@@ -1290,6 +1296,46 @@ function checklistField(b, k){
   checkRow.appendChild(helpDot(
     "Students see these above the editor and press Check my work. Leave empty for no checklist."));
   w.appendChild(checkRow);
+  add(w);
+}
+
+/* A model answer program: the teacher's own finished version, which a
+   student can run from a Try it button beside the checklist but never read.
+   Folded to a button until there is one, like the other optional boxes. */
+function modelField(b, k){
+  const { F, PY, add, redraw } = k;
+  const isWeb = b.type === "web";
+  const keys = isWeb ? ["modelHtml","modelCss","modelJs"] : ["modelCode"];
+  const has = keys.some(key => String(b[key] || "").trim());
+  const help = "Students never see this code. A Try it button in the corner of the checklist "
+    + "runs it in a pop-up, so they can see what the finished program should do.";
+  if (!has && !isRevealed(b, "model")){
+    const w = el("div","bfield");
+    const row = el("div","brow");
+    const btn = el("button","btn-ghost bmini2","+ Add a model answer program");
+    btn.type = "button";
+    btn.addEventListener("click", () => { reveal(b, "model"); redraw(); });
+    row.appendChild(btn);
+    row.appendChild(helpDot(help));
+    w.appendChild(row);
+    add(w);
+    return;
+  }
+  if (isWeb){
+    const on = b.files || ["html","css","js"];
+    if (on.indexOf("html") >= 0) F("Model answer HTML", "modelHtml", { area:true, rows:5, mono:true, help });
+    if (on.indexOf("css") >= 0) F("Model answer CSS", "modelCss", { area:true, rows:4, mono:true });
+    if (on.indexOf("js") >= 0) F("Model answer JavaScript", "modelJs", { area:true, rows:4, mono:true });
+  } else PY("Model answer program (students cannot see this code)", "modelCode", { help });
+  const w = el("div","brow");
+  const drop = el("button","btn-ghost bmini2","Remove the model answer");
+  drop.type = "button";
+  drop.addEventListener("click", () => {
+    keys.forEach(key => { delete b[key]; });
+    unreveal(b, "model");
+    saveDraft(); redraw(); schedulePreview();
+  });
+  w.appendChild(drop);
   add(w);
 }
 
