@@ -100,10 +100,6 @@ const viewParam = qs.get("view");
 const stepParam = qs.get("step");
 const pdfParam = qs.get("pdf");                                  // teacher wants the PDF view
 const builderParam = qs.get("builder");
-/* The builder drawing the lesson as the place it is built in, rather than as
-   a preview beside it. Only ever inside the builder's own frame: the same
-   address opened in a tab of its own is a preview and nothing else. */
-const editParam = builderParam !== null && qs.get("edit") === "1" && window.parent !== window;
 const allParam = qs.get("all");                                  // every page on one scroll
 const embedParam = qs.get("embed");
 const summaryParam = qs.get("summary");   // show the finished screen instead of a task                              // shown inside the teacher console                          // preview inside the lesson builder
@@ -1040,13 +1036,10 @@ const handedOver = handedLesson();
         }catch(e){}
         if (!steps.length){
           $("briefTitle").textContent = "Nothing to preview yet";
-          $("briefText").textContent = editParam ? "Add the first task and the lesson starts here."
-                                                 : "Add a task on the left and it appears here.";
+          $("briefText").textContent = "Add a task on the left and it appears here.";
           $("dock").classList.add("gone");
-          if (editParam) pfEmpty();
           return;
         }
-        if (editParam) pfDecorate();
         showStep(Math.min(Math.max(stepParam !== null ? parseInt(stepParam, 10) : step, 0), steps.length - 1));
         return;
       }
@@ -1419,420 +1412,11 @@ if (builderParam !== null && window.parent && window.parent !== window){
     highlightBlock(id);
   });
   document.addEventListener("click", (e) => {
-    if (editParam) return;                 // the edit layer below picks tasks itself
     const item = e.target.closest && e.target.closest(".pg-item");
     if (!item || !item.dataset.blockId) return;
     /* trying the task out is not asking to edit it */
     if (e.target.closest("input, textarea, select, button, a, [contenteditable], .ide, iframe, canvas, label")) return;
     try{ window.parent.postMessage({ hubPick: item.dataset.blockId }, location.origin === "null" ? "*" : location.origin); }catch(err){}
-  });
-}
-/* ---------- building the lesson in the preview ----------
-   With the builder's "Build lessons in the preview" setting on, this frame is
-   where a lesson is put together. Every task is drawn exactly as a student
-   gets it, and the builder beside it holds the settings of whichever one is
-   picked. Nothing is changed in here: every button says what was pressed to
-   the builder, which changes the lesson and draws this page again.
-
-   A first click on a task picks it rather than doing whatever was under the
-   pointer, so choosing a quiz to change does not answer it. Once picked, the
-   task works the way it does for a student and can be tried out. */
-let pfSel = null;               // the id of the task picked in the builder
-let pfLabels = {};              // what each task is called, sent by the builder
-function pfSay(act){
-  try{ window.parent.postMessage({ hubAct: act }, location.origin === "null" ? "*" : location.origin); }catch(e){}
-}
-/* Every task on a page is a .pg-item; extension tasks sit apart from them
-   at the foot of the page and are marked to be picked as well. */
-const PF_PICK = ".pg-item[data-block-id], .pf-pick[data-block-id]";
-function pfItems(){ return Array.from(document.querySelectorAll(PF_PICK)); }
-function pfBtn(cls, words, title, act){
-  const b = el("button", "pf-b " + cls, words);
-  b.type = "button";
-  b.title = title;
-  b.setAttribute("aria-label", title);
-  b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); act(); });
-  return b;
-}
-/* One set of buttons, moved onto whichever task the pointer is over and
-   otherwise left on the picked one, rather than a set on every task: the
-   page is laid out exactly as a student's would be, with nothing added to
-   any task that pushes the next one down. */
-const pfChrome = (function(){
-  if (!editParam) return null;
-  const bar = el("div","pf-bar");
-  const name = el("span","pf-name","");
-  bar.appendChild(name);
-  const id = () => bar.__for || "";
-  bar.appendChild(pfBtn("pf-edit", "Settings", "This task's settings", () => {
-    const item = pfItems().find(x => x.dataset.blockId === id());
-    pfPick(id());
-    pfSay({ do:"settings", id:id(), at: pfRect(item) });
-  }));
-  bar.appendChild(pfBtn("", "↑", "Move up", () => pfSay({ do:"up", id:id() })));
-  bar.appendChild(pfBtn("", "↓", "Move down", () => pfSay({ do:"down", id:id() })));
-  bar.appendChild(pfBtn("", "⧉", "Duplicate: add a copy just below", () => pfSay({ do:"dup", id:id() })));
-  bar.appendChild(pfBtn("pf-del", "✕", "Delete", () => pfSay({ do:"del", id:id() })));
-  const above = pfBtn("pf-add pf-above", "+", "Add a task above this one", () => pfSay({ do:"addBefore", id:id() }));
-  const below = pfBtn("pf-add pf-below", "+", "Add a task below this one", () => pfSay({ do:"addAfter", id:id() }));
-  return { bar, name, above, below };
-})();
-function pfShowOn(item){
-  if (!pfChrome) return;
-  const { bar, name, above, below } = pfChrome;
-  if (!item){ [bar, above, below].forEach(x => x.remove()); return; }
-  if (bar.parentNode === item) return;
-  bar.__for = item.dataset.blockId;
-  name.textContent = pfLabels[item.dataset.blockId] || "Task";
-  item.appendChild(bar); item.appendChild(above); item.appendChild(below);
-}
-function pfPaintSel(){
-  pfItems().forEach(x => x.classList.toggle("pf-sel", !!pfSel && x.dataset.blockId === pfSel));
-  const sel = pfSel ? pfItems().find(x => x.dataset.blockId === pfSel) : null;
-  if (pfChrome && !pfChrome.bar.matches(":hover")) pfShowOn(sel || null);
-  /* Words can be typed into once their task is picked. Before that a click
-     on them picks the task, the same as anywhere else on it. The page's own
-     title and subtitle belong to no task, so they can always be typed in. */
-  document.querySelectorAll(".pf-text").forEach(t => {
-    const owner = t.closest(PF_PICK);
-    const on = !owner || owner.classList.contains("pf-sel");
-    if (on && t.contentEditable !== "true") t.contentEditable = "true";
-    if (!on && t.contentEditable === "true"){ if (document.activeElement === t) t.blur(); t.contentEditable = "false"; }
-  });
-}
-/* Where something is in this frame, for the builder to put a pop-up beside. */
-function pfRect(node){
-  if (!node || !node.getBoundingClientRect) return null;
-  const r = node.getBoundingClientRect();
-  return { top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height) };
-}
-function pfPick(id){
-  if (!id) return;
-  pfSel = id;
-  pfPaintSel();
-  try{ window.parent.postMessage({ hubPick: id }, location.origin === "null" ? "*" : location.origin); }catch(e){}
-}
-/* Which page is on screen, so the builder beside it shows that page's
-   settings. Said by the page's own id, because the builder numbers its
-   pages differently from the steps here once anything is not a page. */
-function pfTellStep(){
-  const st = steps[step];
-  if (!st || !st.section) return;
-  const pg = st.section.matches && st.section.matches("[data-page-id]")
-    ? st.section : st.section.querySelector("[data-page-id]");
-  pfSay({ do:"step", page: pg ? pg.dataset.pageId : "", at: step });
-}
-/* A way to add a task under the last one on every page, and a new page after
-   it. The only things this layer puts into the page itself, and both come
-   after everything a student would see. */
-function pfDecorate(){
-  document.documentElement.classList.add("pfedit");
-  /* Enter in a paragraph makes a paragraph, the way the builder's own
-     formatting boxes do, rather than a bare <div>. */
-  try{ document.execCommand("defaultParagraphSeparator", false, "p"); }catch(e){}
-  pfMarkWords();
-  document.querySelectorAll(".pagegroup[data-page-id]").forEach(pg => {
-    if (pg.querySelector(":scope > .pf-foot")) return;
-    const foot = el("div","pf-foot");
-    if (!pg.querySelector(".pg-item")) foot.appendChild(el("p","pf-emptypage","No tasks on this page yet."));
-    foot.appendChild(pfBtn("pf-addtask", "+ Add task", "Add a task to the end of this page",
-      () => pfSay({ do:"addEnd", page: pg.dataset.pageId })));
-    foot.appendChild(pfBtn("pf-addpage", "+ New page", "Add a page after the last one",
-      () => pfSay({ do:"newPage" })));
-    pg.appendChild(foot);
-  });
-}
-function pfEmpty(){
-  document.documentElement.classList.add("pfedit");
-  const holder = $("blocks");
-  if (!holder) return;
-  const foot = el("div","pf-foot pf-first");
-  foot.appendChild(pfBtn("pf-addtask", "+ Add the first task", "Add a task", () => pfSay({ do:"addEnd", page:"" })));
-  holder.appendChild(foot);
-}
-/* ---------- typing straight into the preview ----------
-   The words a teacher wrote are found on the page by what they say, and
-   marked with where they came from in the lesson: a task's heading, a
-   paragraph, a question, a quiz option. Typing into one tells the builder,
-   which writes it into the lesson without drawing this page again, so the
-   cursor stays where it is.
-
-   Words the page has changed on the way to the screen (gaps in Fill the
-   gaps, a picture inside a paragraph) do not match anything and are left
-   alone: those are changed in the task's settings. */
-/* Where each kind keeps the heading it shows over itself, so a task with no
-   heading yet still has somewhere to type one once it is picked. */
-const PF_TITLE = { text:"heading", question:"heading", frame:"heading", link:"heading", pastelink:"heading",
-  quiz:"title", ide:"title", web:"title", keywords:"title", notes:"title", mindmap:"title", board:"title",
-  label:"title", binary:"title", binadd:"title", table:"title", image:"title", embed:"title" };
-/* Fields written in a formatting box, so bold and lists typed here are kept. */
-const PF_RICH = ["text.html","web.task","ide.task","question.context","question.prompt","page.task",
-  "extension.task","group.task","choice.prompt","embed.note","mc.prompt","keywords.task","short.prompt",
-  "table.task","exam.prompt"];
-/* Anything the page builds out of these is not safe to write back from the
-   screen, so those stay in the settings. */
-const PF_UNSAFE = /<(img|table|iframe|svg|video|h2|pre)\b/i;
-const pfNorm = (v) => String(v || "").replace(/\s+/g, "").toLowerCase();
-function pfPlain(html){
-  /* A detached document fetches no pictures while it is parsed. */
-  try{ return new DOMParser().parseFromString(String(html || ""), "text/html").body.textContent || ""; }
-  catch(e){ return String(html || "").replace(/<[^>]*>/g, ""); }
-}
-function pfBlocks(){
-  const out = new Map();
-  (function walk(arr){
-    (arr || []).forEach(b => {
-      if (!b) return;
-      if (b.id) out.set(b.id, b);
-      if (b.blocks) walk(b.blocks);
-      if (b.options && b.type === "choice") b.options.forEach(o => walk(o.blocks));
-    });
-  })(lesson && lesson.blocks);
-  return out;
-}
-function pfFields(b){
-  const out = [];
-  const add = (path, v) => { if (typeof v === "string" && v.trim()) out.push({ path, v }); };
-  ["title","heading","task","note","prompt","context","caption","html","centre"].forEach(k => add(k, b[k]));
-  (b.questions || []).forEach((q, i) => {
-    add("questions." + i + ".q", q.q);
-    (q.options || []).forEach((o, j) => add("questions." + i + ".options." + j, o));
-  });
-  (b.extra || []).forEach((q, i) => add("extra." + i + ".prompt", q.prompt));
-  if (b.type === "mc") (b.options || []).forEach((o, j) => add("options." + j, o));
-  if (b.type === "order") (b.items || []).forEach((o, j) => add("items." + j, o));
-  return out;
-}
-const PF_SKIP = "input, textarea, select, button, iframe, canvas, svg, video, .ide, .pf-bar, .pf-add";
-function pfFind(item, want, taken){
-  let best = null;
-  item.querySelectorAll("*").forEach(n => {
-    if (taken.has(n) || n.closest(PF_PICK) !== item) return;
-    if (n.matches(PF_SKIP) || n.closest(".pf-bar, .ide, .pf-foot") || n.querySelector(PF_SKIP)) return;
-    if (pfNorm(n.textContent) !== want) return;
-    if (!best || best.contains(n)) best = n;      // the closest fit
-  });
-  return best;
-}
-function pfMark(n, path, was, rich, ph){
-  n.classList.add("pf-text");
-  n.dataset.pfField = path;
-  n.dataset.pfWas = was;
-  if (rich) n.dataset.pfRich = "1";
-  if (ph) n.dataset.ph = ph;
-  n.spellcheck = true;
-}
-function pfMarkWords(){
-  const blocks = pfBlocks();
-  pfItems().forEach(item => {
-    const b = blocks.get(item.dataset.blockId);
-    if (!b) return;
-    const taken = new Set();
-    const isRich = (path, v) => PF_RICH.includes(b.type + "." + path) || /^questions\.\d+\.q$/.test(path)
-                                || /^extra\.\d+\.prompt$/.test(path) || /<[a-z]/i.test(v);
-    /* A paragraph's words are always its box, written in or not yet. */
-    if (b.type === "text"){
-      const prose = Array.from(item.querySelectorAll(".prose")).find(p => p.closest(PF_PICK) === item);
-      if (prose && !PF_UNSAFE.test(b.html || "")){
-        pfMark(prose, "html", b.html || "", true, "Write the paragraph here");
-        taken.add(prose);
-      }
-    }
-    pfFields(b).forEach(f => {
-      if (f.path === "html" && b.type === "text") return;
-      const rich = isRich(f.path, f.v);
-      if (rich && PF_UNSAFE.test(f.v)) return;
-      const n = pfFind(item, pfNorm(pfPlain(f.v)), taken);
-      if (!n) return;
-      taken.add(n);
-      pfMark(n, f.path, f.v, rich);
-    });
-    /* No heading yet: one to type into, shown only while the task is picked. */
-    const key = PF_TITLE[b.type];
-    if (key && !String(b[key] || "").trim() && !item.querySelector(":scope > .pg-h")){
-      const h = el("h3","pg-h pf-ghost");
-      pfMark(h, key, "", false, "Add a heading");
-      item.insertBefore(h, item.firstChild);
-    }
-  });
-}
-/* The page's title and subtitle, over the page, once it is on screen. */
-function pfMarkBrief(){
-  const st = steps[step];
-  const pg = st && st.section && (st.section.matches("[data-page-id]") ? st.section
-             : st.section.querySelector("[data-page-id]"));
-  const t = $("briefTitle"), x = $("briefText");
-  [t, x].forEach(n => { n.classList.remove("pf-text"); n.contentEditable = "false"; delete n.dataset.pfPage; });
-  if (!pg) return;
-  const b = pfBlocks().get(pg.dataset.pageId) || {};
-  pfMark(t, "title", b.title || "", false, "Page title");
-  t.dataset.pfPage = pg.dataset.pageId;
-  t.hidden = false;
-  /* A subtitle not written yet is added from Page settings, rather than an
-     empty line under every title waiting to be typed into. */
-  if (String(b.task || "").trim() && !PF_UNSAFE.test(b.task)){
-    pfMark(x, "task", b.task, true, "Subtitle");
-    x.dataset.pfPage = pg.dataset.pageId;
-  }
-  $("brief").hidden = false;
-  t.contentEditable = "true";
-  if (x.classList.contains("pf-text")) x.contentEditable = "true";
-  /* the settings for the page as a whole, beside its title */
-  let gear = $("pfPageGear");
-  if (!gear){
-    gear = pfBtn("pf-pagegear", "Page settings", "Settings for this page", () => {
-      pfSay({ do:"pageSettings", page: gear.dataset.page, at: pfRect(gear) });
-    });
-    gear.id = "pfPageGear";
-    $("brief").appendChild(gear);
-  }
-  gear.dataset.page = pg.dataset.pageId;
-}
-/* What is in the box now, the way the lesson keeps it. */
-function pfValue(n){
-  if (n.dataset.pfRich) return n.innerHTML.replace(/^(<br\s*\/?>)+$/i, "");
-  return n.textContent.replace(/ /g, " ");
-}
-let pfTypeTimer = null;
-function pfSend(n){
-  clearTimeout(pfTypeTimer);
-  if (!n || !n.dataset || n.dataset.pfField === undefined) return;
-  const value = pfValue(n);
-  if (value === n.dataset.pfWas) return;
-  const owner = n.dataset.pfPage ? null : n.closest(PF_PICK);
-  const id = n.dataset.pfPage || (owner && owner.dataset.blockId);
-  if (!id) return;
-  pfSay({ do:"text", id, field: n.dataset.pfField, was: n.dataset.pfWas, value, rich: !!n.dataset.pfRich });
-  n.dataset.pfWas = value;
-}
-/* A few buttons for a box written with formatting, over it while it is
-   being typed in. Pressed without taking the cursor out of the box. */
-const pfFormat = (function(){
-  if (!editParam) return null;
-  const bar = el("div","pf-fmt");
-  [["bold","<b>B</b>","Bold (Ctrl+B)"], ["italic","<i>I</i>","Italic (Ctrl+I)"],
-   ["underline","<u>U</u>","Underline (Ctrl+U)"],
-   ["insertUnorderedList","• List","Bullet points"], ["insertOrderedList","1. List","Numbered list"]]
-  .forEach(c => {
-    const b = el("button","pf-b", c[1]);
-    b.type = "button"; b.title = c[2];
-    b.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      try{ document.execCommand(c[0], false, null); }catch(err){}
-      const n = document.activeElement;
-      if (n && n.classList.contains("pf-text")){
-        clearTimeout(pfTypeTimer);
-        pfTypeTimer = setTimeout(() => pfSend(n), 350);
-      }
-    });
-    bar.appendChild(b);
-  });
-  return bar;
-})();
-function pfShowFormat(n){
-  if (!pfFormat) return;
-  if (!n || !n.dataset.pfRich){ pfFormat.remove(); return; }
-  document.body.appendChild(pfFormat);
-  pfPlaceFormat(n);
-}
-/* Under the box rather than over it, where the heading above it and the
-   task's own bar are. It follows the box as it grows and as the page scrolls. */
-function pfPlaceFormat(n){
-  if (!pfFormat || !pfFormat.isConnected || !n) return;
-  const r = n.getBoundingClientRect();
-  const below = r.bottom + 6;
-  pfFormat.style.top = (below + 40 > window.innerHeight ? Math.max(4, r.top - 42) : below) + "px";
-  pfFormat.style.left = Math.max(4, r.left) + "px";
-}
-if (editParam){
-  document.addEventListener("mouseover", (e) => {
-    if (!e.target.closest) return;
-    if (pfChrome && (pfChrome.bar.contains(e.target) || e.target.classList.contains("pf-add"))) return;
-    const item = e.target.closest(PF_PICK);
-    if (item){ pfShowOn(item); return; }
-    const sel = pfSel ? pfItems().find(x => x.dataset.blockId === pfSel) : null;
-    pfShowOn(sel || null);
-  });
-  /* Caught on the way down, before the task itself hears of it. */
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest || e.target.closest(".pf-bar, .pf-add, .pf-foot")) return;
-    const item = e.target.closest(PF_PICK);
-    if (!item || item.classList.contains("pf-sel")) return;
-    e.preventDefault(); e.stopPropagation();
-    pfPick(item.dataset.blockId);
-    /* Clicked on its words: the cursor goes where the click was. */
-    const words = e.target.closest(".pf-text");
-    if (words && words.contentEditable === "true"){
-      words.focus();
-      try{
-        const sel = window.getSelection();
-        let r = document.caretRangeFromPoint && document.caretRangeFromPoint(e.clientX, e.clientY);
-        /* An empty box has nothing under the pointer but its placeholder,
-           and the point lands outside it: the cursor goes in at its end. */
-        if (!r || !words.contains(r.startContainer)){
-          r = document.createRange();
-          r.selectNodeContents(words);
-          r.collapse(false);
-        }
-        sel.removeAllRanges(); sel.addRange(r);
-      }catch(err){}
-    }
-  }, true);
-  /* Words inside a label (a quiz option) or a button: clicking to type in
-     them must not also tick the option or press the button. */
-  document.addEventListener("click", (e) => {
-    const words = e.target.closest && e.target.closest(".pf-text");
-    if (!words || words.contentEditable !== "true") return;
-    if (words.closest("label, button, a")) e.preventDefault();
-  });
-  window.addEventListener("message", (e) => {
-    if (e.source !== window.parent) return;
-    const d = e.data && e.data.hubEdit;
-    if (!d) return;
-    pfLabels = d.labels || pfLabels;
-    pfSel = d.sel || null;
-    pfPaintSel();
-  });
-  document.addEventListener("keydown", (e) => {
-    const n = e.target;
-    if (n && n.classList && n.classList.contains("pf-text")){
-      /* A heading is one line: Enter is done, not a new line. Escape leaves
-         the box rather than putting the task down. */
-      if (e.key === "Escape" || (e.key === "Enter" && !n.dataset.pfRich)){ e.preventDefault(); n.blur(); }
-      return;
-    }
-    if (e.key === "Escape" && pfSel) pfSay({ do:"unpick" });
-  });
-  document.addEventListener("input", (e) => {
-    const n = e.target;
-    if (!n || !n.classList || !n.classList.contains("pf-text")) return;
-    clearTimeout(pfTypeTimer);
-    pfTypeTimer = setTimeout(() => pfSend(n), 350);
-    if (n.dataset.pfRich) pfPlaceFormat(n);
-  });
-  document.addEventListener("scroll", () => {
-    const n = document.activeElement;
-    if (n && n.classList && n.classList.contains("pf-text")) pfPlaceFormat(n);
-  }, true);
-  document.addEventListener("focusin", (e) => {
-    const n = e.target;
-    if (n && n.classList && n.classList.contains("pf-text")) pfShowFormat(n);
-  });
-  document.addEventListener("focusout", (e) => {
-    const n = e.target;
-    if (!n || !n.classList || !n.classList.contains("pf-text")) return;
-    pfSend(n);
-    pfShowFormat(null);
-  });
-  /* Pasted into a one-line box, only the words come: no colours or fonts
-     from wherever they were copied. A formatting box keeps the formatting,
-     and the builder tidies it the way it tidies its own boxes. */
-  document.addEventListener("paste", (e) => {
-    const n = e.target && e.target.closest && e.target.closest(".pf-text");
-    if (!n || n.dataset.pfRich) return;
-    e.preventDefault();
-    const text = ((e.clipboardData && e.clipboardData.getData("text/plain")) || "").replace(/\s+/g, " ");
-    try{ document.execCommand("insertText", false, text); }catch(err){}
   });
 }
 function showStep(i){
@@ -1841,7 +1425,6 @@ function showStep(i){
   if (builderParam !== null){
     try{ sessionStorage.setItem("hub_preview_step", String(i)); }catch(e){}
   }
-  if (editParam) setTimeout(() => { pfTellStep(); pfMarkBrief(); }, 0);
   /* the page around an embedded view keeps its place when the student changes */
   if (embedParam !== null){
     try{ parent.postMessage({ hubWorkStep: i }, "*"); }catch(e){}
@@ -3405,7 +2988,6 @@ function gateWords(b){
    This is how a Trinket-style page works, explanation, code, then questions. */
 function rPage(b){
   const s = el("section","pagegroup");
-  s.dataset.pageId = b.id || "";        // for the builder, to tell which page is on screen
   const kids = [];
   const items = [];      // each task on this page, so we can move on to the next
   const extras = [];     // extension containers, held back until the rest is done
@@ -3422,8 +3004,6 @@ function rPage(b){
       /* not hidden any more: the "Finished early?" question has to be reachable
          whether or not the rest of the page is finished */
       extras.push(built);
-      /* not a task of the page's own, but it is still picked to be changed */
-      if (editParam){ built.section.classList.add("pf-pick"); built.section.dataset.blockId = child.id; }
       return;
     }
     if (child.required === false){
@@ -3491,8 +3071,7 @@ function rPage(b){
     /* A teacher reading a student's work, or printing it, needs all of it.
        Hiding what came after an unfinished quiz hid the very answers they
        had opened the page to mark. */
-    const holdsOff = viewParam !== null || pdfParam !== null || allParam !== null
-                     || editParam;           // building it needs every task in reach
+    const holdsOff = viewParam !== null || pdfParam !== null || allParam !== null;
     for (let i = 0; i < items.length && !holdsOff; i++){
       const h = items[i].built.hold;
       if (!h || !h.on() || h.passed()) continue;
