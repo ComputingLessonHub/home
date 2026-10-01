@@ -23,16 +23,14 @@
     skeletons: true,        // grey shapes while a screen loads
     richCards: true,        // lesson cards in the hub with more on them
     classDash: true,        // a class opens onto its dashboard
-    homeDash: true,         // Home as a dashboard: today's lessons and what needs doing
-    previewFirst: true      // the lesson builder is the preview, with each task's settings beside it
+    homeDash: true          // Home as a dashboard: today's lessons and what needs doing
   };
   const LABELS = {
     sidebar: ["Side menu", "Lessons, classes and the rest down the left of the console."],
     skeletons: ["Placeholder shapes while loading", "Grey shapes where the screen is about to be, rather than dots."],
     richCards: ["Detailed lesson cards", "Pages, tasks, when it was changed and which classes have it."],
     classDash: ["Class dashboard", "A class opens on what is live and what needs marking."],
-    homeDash: ["Home dashboard", "Home shows today's lessons from your timetable, what is live and what needs doing."],
-    previewFirst: ["Build lessons in the preview", "The lesson builder shows each page as students will see it. Type straight into a task's words, open its settings beside it, and add tasks where they will appear."]
+    homeDash: ["Home dashboard", "Home shows today's lessons from your timetable, what is live and what needs doing."]
   };
   function prefs(){ try{ return JSON.parse(localStorage.getItem("hub_prefs") || "{}"); }catch(e){ return {}; } }
   function pref(name){

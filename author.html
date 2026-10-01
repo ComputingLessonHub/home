@@ -294,13 +294,17 @@
 
   <main class="build-list" id="list"></main>
 
+  <!-- Drag to give the preview more room, from the narrow phone-shaped
+       column it starts as up to most of the screen. Double-click puts it
+       back. Only on a wide screen: below that the preview sits underneath. -->
+  <div class="build-split" id="buildSplit" role="separator" aria-orientation="vertical"
+       aria-label="Preview width" tabindex="0"
+       title="Drag to make the preview wider or narrower. Double-click to put it back."></div>
+
   <section class="build-preview">
     <div class="prev-head">
       <b>Live preview</b>
       <span class="hint" id="prevMsg"></span>
-      <!-- Building in the preview only: the column on the right folded away,
-           for the lesson at nearly the width a student sees it. -->
-      <button class="btn-ghost bmini2 pfside-btn" id="pfSideBtn" type="button"></button>
       <button class="btn-ghost iconbtn" id="prevBtn" title="Refresh preview">&#8635;</button>
       <button class="btn-ghost iconbtn" id="prevPop" title="Open the preview in a new tab">&#10696;</button>
       <button class="btn-ghost iconbtn" id="prevFull" title="Full screen preview">&#9974;</button>
@@ -1441,19 +1445,10 @@ function render(){
   const list = $("list");
   const keepList = list ? list.scrollTop : 0;
   const keepPage = window.scrollY;
-  const pickedBefore = previewFirst() ? openTask() : null;
   renderNow();
   builderRendered();
-  paintPop();                          // settings open over the preview follow along
   const want = scrollToBlock; scrollToBlock = null;
   if (!list) return;
-  if (previewFirst() && !viewAll && openTask() !== pickedBefore){ list.scrollTop = 0; return; }
-  /* Building in the preview, the column holds only the task picked, so its
-     top is where to be: the way back to the page is there. */
-  if (want && previewFirst() && !viewAll){
-    if (want.type !== "page") list.scrollTop = 0;
-    return;
-  }
   if (want){
     /* after the browser has laid the new card out, or it has no position yet */
     requestAnimationFrame(() => {
@@ -1478,7 +1473,6 @@ function renderNow(){
   /* the dot a note was hanging off is about to be thrown away */
   closeHelp();
   wireList();
-  paintPreviewFirst();
   firstPageOpen();
   /* the palette is hidden only while writing feedback sentences */
   const writingTargets = (lesson.assessment || lesson.practical) && assessTab === "targets" && !respEditing;
@@ -1594,119 +1588,8 @@ function renderNow(){
      tasks and they are the list. All pages keeps a card for each page, which
      is what folds there. */
   if (viewAll) lesson.blocks.forEach((b, n) => list.appendChild(card(b, n, lesson.blocks)));
-  else if (previewFirst()) list.appendChild(sidePanel(openPageRef));
   else list.appendChild(pageView(openPageRef));
   saveDraft();
-}
-
-/* ---------- building in the preview ----------
-   Settings > Console layout > Build lessons in the preview, on unless it is
-   turned off. The lesson is built in the preview, which takes the room, and
-   this column holds the settings of whatever is picked there: a task, or
-   with nothing picked, the page itself and the outline of its tasks.
-
-   Only for work made of pages, and only with room for the two side by side.
-   An assessment is a flat list of questions and its feedback tabs are not in
-   the preview at all, and a narrow screen has one column, so those are built
-   the way they always were. */
-function previewFirst(){
-  if (!window.hubUI || !window.hubUI.pref("previewFirst")) return false;
-  if (typeof bankOpen !== "undefined" && bankOpen) return false;
-  /* asked of the window directly: the builder's own test for a narrow screen
-     is declared at the foot of the file, after the first render has run */
-  if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1100px)").matches) return false;
-  if (lesson.assessment && !lesson.practical) return false;
-  if ((lesson.assessment || lesson.practical) && (assessTab === "targets" || assessTab === "responses" || respEditing)) return false;
-  return true;
-}
-/* Whether the column beside the preview has been folded away. Kept for this
-   browser, like the rest of the layout choices. */
-function sideHidden(){
-  try{ return localStorage.getItem("hub_pf_side") === "hidden"; }catch(e){ return false; }
-}
-function paintSide(){
-  const hidden = sideHidden();
-  document.documentElement.dataset.pfside = hidden ? "hidden" : "shown";
-  const btn = $("pfSideBtn");
-  if (!btn) return;
-  btn.textContent = hidden ? "Show side panel" : "Hide side panel";
-  btn.title = hidden ? "Bring back the column of settings on the right"
-                     : "Fold the column on the right away for a wider preview. Settings stay on each task's bar.";
-}
-on("pfSideBtn", "click", () => {
-  try{ localStorage.setItem("hub_pf_side", sideHidden() ? "shown" : "hidden"); }catch(e){}
-  paintSide();
-  /* the preview has changed width, so whatever is open over it moves too */
-  requestAnimationFrame(() => placePop(document.getElementById("pfPop")));
-});
-var previewFirstShown = null;    // whether the preview last drawn has the edit layer
-function paintPreviewFirst(){
-  const on = previewFirst();
-  document.documentElement.dataset.pf = on ? "on" : "off";
-  paintSide();
-  const head = document.querySelector(".build-preview .prev-head b");
-  if (head) head.textContent = on ? "Your lesson" : "Live preview";
-  /* switched over: the preview has to be drawn again, with or without the
-     buttons on its tasks */
-  if (previewFirstShown !== null && previewFirstShown !== on) schedulePreview();
-}
-/* The column beside the preview. A task picked there gets its settings, with
-   the way back to the page above them; nothing picked, and it is the page. */
-function sidePanel(page){
-  const sel = openTask();
-  if (!sel){
-    const box = el("div","pf-side");
-    box.appendChild(el("p","pf-tip",
-      "Click a task in the preview to pick it, then type straight into its words. "
-      + "Its bar has Settings, moving, copying and deleting, and the + above or below it "
-      + "adds a task right there."));
-    box.appendChild(pageView(page));
-    return box;
-  }
-  const w = whereIs(sel);
-  const box = el("div","pf-side pf-picked");
-  const crumbs = el("div","pf-crumbs");
-  const pages = pageList();
-  const back = el("button","btn-ghost bmini2 pf-back",
-    "\u2190 Page " + (pages.indexOf(page) + 1) + (page.title ? ": " + page.title : ""));
-  back.type = "button";
-  back.title = "Back to this page's settings (Esc)";
-  /* Everything on the way down is put away, so the page comes back rather
-     than the group the task was in. */
-  back.addEventListener("click", () => {
-    sel.folded = true;
-    if (w) w.chain.forEach(c => { if (c.type !== "page") c.folded = true; });
-    followed = null;
-    render();
-  });
-  crumbs.appendChild(back);
-  /* A task inside a group, extension tasks or a choice: the holder is one
-     step up, and picking it shows the holder's settings. */
-  if (w) w.chain.filter(c => c.type !== "page").forEach((c, n, all) => {
-    crumbs.appendChild(el("span","pf-sep","\u203A"));
-    const up = el("button","btn-ghost bmini2 pf-up", LABEL[c.type] || c.type);
-    up.type = "button";
-    up.addEventListener("click", () => {
-      sel.folded = true;
-      all.slice(n + 1).forEach(x => { x.folded = true; });
-      render();
-    });
-    crumbs.appendChild(up);
-  });
-  box.appendChild(crumbs);
-  /* Open over the preview already: one place to change it at a time. */
-  if (popOpen && popOpen.kind === "task" && popOpen.block === sel){
-    box.appendChild(el("p","pf-tip","This task's settings are open over the preview."));
-    const here = el("button","btn-ghost bmini2","Show them here instead");
-    here.type = "button";
-    here.addEventListener("click", () => { closePop(); render(); });
-    box.appendChild(here);
-    return box;
-  }
-  box.appendChild(card(sel, w ? w.i : 0, w ? w.arr : page.blocks));
-  box.appendChild(el("p","pf-tip","Changes show in the preview as you make them. "
-    + "Words can also be typed straight into the task in the preview."));
-  return box;
 }
 
 /* The page chips, without the two buttons on the end of the strip: those are
@@ -5818,12 +5701,9 @@ function schedulePreview(){
      Compiling on every keystroke there would be work nobody can see. */
   if (bankOpen) return;
   clearTimeout(prevTimer);
-  previewDirty = true;
   $("prevMsg").textContent = "updating\u2026";
   prevTimer = setTimeout(refreshPreview, 900);
 }
-/* Something has changed that the preview has not been drawn with yet. */
-var previewDirty = false;
 /* The preview in its own tab, at the size a student would really see it. It
    reads the compiled lesson out of localStorage exactly as the panel does, so
    the only thing to be careful about is writing that first: opening the tab
@@ -5875,11 +5755,7 @@ function refreshPreview(){
        every change, so without this a teacher editing the foot of a long page
        was thrown back to the top of it after each keystroke. */
     const keep = previewScroll(frame);
-    previewDirty = false;
-    clearTimeout(prevTimer);
-    previewFirstShown = previewFirst();
-    frame.src = "lesson.html?id=__preview&builder=1" + (previewFirstShown ? "&edit=1" : "")
-              + "&t=" + Date.now();
+    frame.src = "lesson.html?id=__preview&builder=1&t=" + Date.now();
     frame.addEventListener("load", function once(){
       frame.removeEventListener("load", once);
       /* The lesson draws itself after load, so the place to scroll to does not
@@ -7181,6 +7057,74 @@ function fitPreview(){
   if (list) list.style.paddingBottom = (box.getBoundingClientRect().height + 20) + "px";
 }
 
+/* ---------- the width of the preview ----------
+   The bar between the tasks and the preview drags the preview wider, so a
+   page can be seen at nearer the width a class sees it, and back down to the
+   narrow column it starts as. It never takes so much that the tasks are left
+   too thin to write in. Kept for this browser, like the rest of the layout. */
+const PREVIEW_MIN = 460;            // the narrow column the preview has always been
+const PREVIEW_MAX = 1200;           // about a classroom laptop's worth of lesson
+const LIST_MIN = 480;               // what the tasks need to stay usable
+function previewMax(){
+  return Math.max(PREVIEW_MIN, Math.min(PREVIEW_MAX, window.innerWidth - LIST_MIN));
+}
+function savedPreviewWidth(){
+  try{ return parseInt(localStorage.getItem("hub_prev_w") || "", 10) || PREVIEW_MIN; }catch(e){ return PREVIEW_MIN; }
+}
+function setPreviewWidth(w, keep){
+  const width = Math.round(Math.max(PREVIEW_MIN, Math.min(previewMax(), w)));
+  document.documentElement.style.setProperty("--prev-w", width + "px");
+  const bar = $("buildSplit");
+  if (bar){
+    bar.setAttribute("aria-valuemin", String(PREVIEW_MIN));
+    bar.setAttribute("aria-valuemax", String(previewMax()));
+    bar.setAttribute("aria-valuenow", String(width));
+  }
+  if (keep){ try{ localStorage.setItem("hub_prev_w", String(width)); }catch(e){} }
+  return width;
+}
+(function wireSplit(){
+  const bar = $("buildSplit");
+  if (!bar) return;
+  setPreviewWidth(savedPreviewWidth(), false);
+  let from = null;
+  bar.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const box = document.querySelector(".build-preview");
+    from = { x: e.clientX, w: box ? box.getBoundingClientRect().width : savedPreviewWidth() };
+    try{ bar.setPointerCapture(e.pointerId); }catch(err){}
+    /* the preview is a page of its own and would swallow the drag */
+    document.documentElement.classList.add("splitting");
+  });
+  bar.addEventListener("pointermove", (e) => {
+    if (!from) return;
+    /* the preview is on the right, so dragging left widens it */
+    setPreviewWidth(from.w + (from.x - e.clientX), false);
+  });
+  const done = (e) => {
+    if (!from) return;
+    from = null;
+    try{ bar.releasePointerCapture(e.pointerId); }catch(err){}
+    document.documentElement.classList.remove("splitting");
+    const box = document.querySelector(".build-preview");
+    if (box) setPreviewWidth(box.getBoundingClientRect().width, true);
+  };
+  bar.addEventListener("pointerup", done);
+  bar.addEventListener("pointercancel", done);
+  bar.addEventListener("dblclick", () => setPreviewWidth(PREVIEW_MIN, true));
+  bar.addEventListener("keydown", (e) => {
+    const step = e.shiftKey ? 120 : 40;
+    const now = savedPreviewWidth();
+    if (e.key === "ArrowLeft"){ e.preventDefault(); setPreviewWidth(now + step, true); }
+    else if (e.key === "ArrowRight"){ e.preventDefault(); setPreviewWidth(now - step, true); }
+    else if (e.key === "Home"){ e.preventDefault(); setPreviewWidth(PREVIEW_MIN, true); }
+    else if (e.key === "End"){ e.preventDefault(); setPreviewWidth(previewMax(), true); }
+  });
+  /* a narrower window can no longer hold what was dragged out */
+  window.addEventListener("resize", () => setPreviewWidth(savedPreviewWidth(), false));
+})();
+
 try{
   compactQ().addEventListener("change", applyBuildLayout);
   roomyQ().addEventListener("change", () => { applyBuildLayout(); fitPreview(); });
@@ -7189,13 +7133,6 @@ try{
   roomyQ().addListener(fitPreview);
 }
 window.addEventListener("resize", fitPreview);
-/* Build lessons in the preview, switched in Settings or by the window
-   narrowing past the point where the two columns fit. */
-window.addEventListener("hubui", (e) => {
-  if (e.detail && e.detail.name === "previewFirst" && !bankOpen) render();
-});
-mq("(max-width: 1100px)").addEventListener &&
-  mq("(max-width: 1100px)").addEventListener("change", () => { if (!bankOpen) render(); });
 
 
 /* ---------------- go ---------------- */
