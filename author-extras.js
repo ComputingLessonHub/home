@@ -396,7 +396,27 @@ function unpickTask(){
 }
 function previewAct(a){
   if (a.do === "newPage"){ addPage(); return; }
-  if (a.do === "unpick"){ unpickTask(); return; }
+  if (a.do === "unpick"){
+    if (popOpen){ closePop(); render(); return; }
+    unpickTask(); return;
+  }
+  if (a.do === "text"){ previewText(a); return; }
+  if (a.do === "settings"){
+    const b = compiledBlocks.get(a.id);
+    if (!b || !whereIs(b)) return;
+    if (openTask() !== b) revealTask(b, true);
+    popOpen = { kind:"task", block:b, at:a.at || null };
+    render();
+    return;
+  }
+  if (a.do === "pageSettings"){
+    const page = compiledBlocks.get(a.page);
+    if (!page || page.type !== "page") return;
+    openPageRef = page;
+    popOpen = { kind:"page", block:page, at:a.at || null };
+    render();
+    return;
+  }
   if (a.do === "step"){
     /* The teacher has gone to another page in the preview, so the column
        follows with that page's settings. Nothing is picked on arrival: a
@@ -435,6 +455,134 @@ function previewAct(a){
   if (a.do === "addBefore"){ openTaskPicker(w.arr, w.inside, w.i); return; }
   if (a.do === "addAfter"){ openTaskPicker(w.arr, w.inside, w.i + 1); return; }
 }
+/* ---------------- words typed into the preview ----------------
+   The preview already shows what was typed, so the lesson is changed and
+   the column redrawn, and the preview is left alone: drawing it again would
+   take the cursor out of the box being typed in. The next change that does
+   redraw it is compiled from the lesson, which by then says the same. */
+function sameWords(a, b){
+  const flat = (v) => String(v == null ? "" : v).replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/\s+/g, "").toLowerCase();
+  return flat(a) === flat(b);
+}
+/* Where a field of a task is, from the path the preview gives it. A path
+   through a list is checked against what the preview was showing, because
+   the lesson file leaves out empty options and questions and the numbers
+   the preview counts by can be one or two short of the builder's. */
+function fieldSpot(b, parts, was){
+  const listy = parts.some(p => /^\d+$/.test(p));
+  function go(obj, i){
+    if (obj === null || typeof obj !== "object") return null;
+    const key = parts[i], last = i === parts.length - 1;
+    if (Array.isArray(obj)){
+      if (!/^\d+$/.test(key)) return null;
+      const n = Number(key);
+      const order = [n].concat(obj.map((_, k) => k).filter(k => k !== n));
+      for (const k of order){
+        if (k >= obj.length) continue;
+        if (last){ if (typeof obj[k] === "string" && sameWords(obj[k], was)) return { holder: obj, key: k }; }
+        else { const r = go(obj[k], i + 1); if (r) return r; }
+      }
+      return null;
+    }
+    if (!last) return go(obj[key], i + 1);
+    if (obj[key] !== undefined && typeof obj[key] !== "string") return null;
+    if (listy && was !== "" && !sameWords(obj[key] || "", was)) return null;
+    return { holder: obj, key };
+  }
+  return go(b, 0);
+}
+function previewText(a){
+  const b = compiledBlocks.get(a.id);
+  if (!b || typeof a.field !== "string") return;
+  const spot = fieldSpot(b, a.field.split("."), String(a.was == null ? "" : a.was));
+  if (!spot) return;
+  let v = String(a.value == null ? "" : a.value);
+  v = a.rich ? (window.cleanRichText ? window.cleanRichText(v) : v) : v.replace(/ /g, " ");
+  spot.holder[spot.key] = v;
+  saveDraft();
+  render();
+}
+
+/* ---------------- settings over the preview ----------------
+   Settings on a task's bar in the preview opens that task's settings in a
+   pop-up beside it, so a task can be written and set up without the column
+   on the right at all. A page's settings open the same way from beside its
+   title. Only one at a time, and it follows the lesson: it shuts when its
+   task is put down or deleted, or another page is gone to. */
+let popOpen = null;          // { kind: "task" | "page", block, at }
+function closePop(){
+  popOpen = null;
+  const box = document.getElementById("pfPop");
+  if (box) box.remove();
+}
+function paintPop(){
+  if (!popOpen) return;
+  const p = popOpen;
+  const stillThere = p.kind === "task"
+    ? (openTask() === p.block && whereIs(p.block))
+    : (openPageRef === p.block && lesson.blocks.indexOf(p.block) >= 0);
+  if (!stillThere || typeof previewFirst !== "function" || !previewFirst() || viewAll){ closePop(); return; }
+  let box = document.getElementById("pfPop");
+  const made = !box;
+  if (made){
+    box = el("div","pf-pop");
+    box.id = "pfPop";
+    box.setAttribute("role", "dialog");
+    const head = el("div","pf-pop-head");
+    head.appendChild(el("b","pf-pop-title",""));
+    const x = el("button","btn-ghost iconbtn pf-pop-x","✕");
+    x.type = "button";
+    x.title = "Close (Esc)";
+    x.setAttribute("aria-label", "Close");
+    x.addEventListener("click", () => { closePop(); render(); });
+    head.appendChild(x);
+    box.appendChild(head);
+    box.appendChild(el("div","pf-pop-body"));
+    document.body.appendChild(box);
+  }
+  const body = box.querySelector(".pf-pop-body");
+  const keep = body.scrollTop;
+  box.querySelector(".pf-pop-title").textContent = p.kind === "task"
+    ? (LABEL[p.block.type] || "Task") + " settings" : "Page settings";
+  body.innerHTML = "";
+  if (p.kind === "task"){
+    const w = whereIs(p.block);
+    /* the settings are the point of opening it, so they start unfolded */
+    if (typeof SETTINGS_OPEN !== "undefined") SETTINGS_OPEN.add(p.block);
+    body.appendChild(card(p.block, w.i, w.arr));
+  } else {
+    const top = pageView(p.block).querySelector(".pv-top");
+    if (top) body.appendChild(top);
+  }
+  body.scrollTop = keep;
+  if (made) placePop(box);
+}
+/* Over the preview, level with the task it is for and against the right
+   edge, where it covers the least of the task itself. */
+function placePop(box){
+  const frame = document.getElementById("prev");
+  if (!box || !frame || !popOpen) return;
+  const fr = frame.getBoundingClientRect();
+  const W = Math.max(300, Math.min(460, fr.width - 28));
+  box.style.width = W + "px";
+  const at = popOpen.at;
+  let left = fr.right - W - 14;
+  let top = fr.top + 12;
+  if (at){
+    if (popOpen.kind === "page"){
+      left = Math.min(fr.left + at.left, fr.right - W - 14);
+      top = fr.top + at.top + at.height + 8;
+    } else top = fr.top + at.top;
+  }
+  top = Math.max(fr.top + 8, Math.min(top, window.innerHeight - 320));
+  box.style.left = Math.max(8, Math.round(left)) + "px";
+  box.style.top = Math.round(top) + "px";
+  box.style.maxHeight = Math.max(240, Math.round(window.innerHeight - top - 14)) + "px";
+}
+window.addEventListener("resize", () => placePop(document.getElementById("pfPop")));
+
 window.addEventListener("message", (e) => {
   const frame = document.getElementById("prev");
   if (!frame || e.source !== frame.contentWindow) return;
@@ -450,6 +598,7 @@ document.addEventListener("keydown", (e) => {
   if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
   const m = document.getElementById("mBack");
   if (m && !m.hidden) return;
+  if (popOpen){ closePop(); render(); return; }
   unpickTask();
 });
 
