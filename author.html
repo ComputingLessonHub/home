@@ -1438,10 +1438,18 @@ function render(){
   const list = $("list");
   const keepList = list ? list.scrollTop : 0;
   const keepPage = window.scrollY;
+  const pickedBefore = previewFirst() ? openTask() : null;
   renderNow();
   builderRendered();
   const want = scrollToBlock; scrollToBlock = null;
   if (!list) return;
+  if (previewFirst() && !viewAll && openTask() !== pickedBefore){ list.scrollTop = 0; return; }
+  /* Building in the preview, the column holds only the task picked, so its
+     top is where to be: the way back to the page is there. */
+  if (want && previewFirst() && !viewAll){
+    if (want.type !== "page") list.scrollTop = 0;
+    return;
+  }
   if (want){
     /* after the browser has laid the new card out, or it has no position yet */
     requestAnimationFrame(() => {
@@ -1466,6 +1474,7 @@ function renderNow(){
   /* the dot a note was hanging off is about to be thrown away */
   closeHelp();
   wireList();
+  paintPreviewFirst();
   firstPageOpen();
   /* the palette is hidden only while writing feedback sentences */
   const writingTargets = (lesson.assessment || lesson.practical) && assessTab === "targets" && !respEditing;
@@ -1581,8 +1590,87 @@ function renderNow(){
      tasks and they are the list. All pages keeps a card for each page, which
      is what folds there. */
   if (viewAll) lesson.blocks.forEach((b, n) => list.appendChild(card(b, n, lesson.blocks)));
+  else if (previewFirst()) list.appendChild(sidePanel(openPageRef));
   else list.appendChild(pageView(openPageRef));
   saveDraft();
+}
+
+/* ---------- building in the preview ----------
+   Settings > Console layout > Build lessons in the preview, on unless it is
+   turned off. The lesson is built in the preview, which takes the room, and
+   this column holds the settings of whatever is picked there: a task, or
+   with nothing picked, the page itself and the outline of its tasks.
+
+   Only for work made of pages, and only with room for the two side by side.
+   An assessment is a flat list of questions and its feedback tabs are not in
+   the preview at all, and a narrow screen has one column, so those are built
+   the way they always were. */
+function previewFirst(){
+  if (!window.hubUI || !window.hubUI.pref("previewFirst")) return false;
+  if (typeof bankOpen !== "undefined" && bankOpen) return false;
+  /* asked of the window directly: the builder's own test for a narrow screen
+     is declared at the foot of the file, after the first render has run */
+  if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1100px)").matches) return false;
+  if (lesson.assessment && !lesson.practical) return false;
+  if ((lesson.assessment || lesson.practical) && (assessTab === "targets" || assessTab === "responses" || respEditing)) return false;
+  return true;
+}
+var previewFirstShown = null;    // whether the preview last drawn has the edit layer
+function paintPreviewFirst(){
+  const on = previewFirst();
+  document.documentElement.dataset.pf = on ? "on" : "off";
+  const head = document.querySelector(".build-preview .prev-head b");
+  if (head) head.textContent = on ? "Your lesson" : "Live preview";
+  /* switched over: the preview has to be drawn again, with or without the
+     buttons on its tasks */
+  if (previewFirstShown !== null && previewFirstShown !== on) schedulePreview();
+}
+/* The column beside the preview. A task picked there gets its settings, with
+   the way back to the page above them; nothing picked, and it is the page. */
+function sidePanel(page){
+  const sel = openTask();
+  if (!sel){
+    const box = el("div","pf-side");
+    box.appendChild(el("p","pf-tip",
+      "Click a task in the preview to change it. Hover over one for moving, copying and deleting, "
+      + "and use the + above or below it to add a task right there."));
+    box.appendChild(pageView(page));
+    return box;
+  }
+  const w = whereIs(sel);
+  const box = el("div","pf-side pf-picked");
+  const crumbs = el("div","pf-crumbs");
+  const pages = pageList();
+  const back = el("button","btn-ghost bmini2 pf-back",
+    "\u2190 Page " + (pages.indexOf(page) + 1) + (page.title ? ": " + page.title : ""));
+  back.type = "button";
+  back.title = "Back to this page's settings (Esc)";
+  /* Everything on the way down is put away, so the page comes back rather
+     than the group the task was in. */
+  back.addEventListener("click", () => {
+    sel.folded = true;
+    if (w) w.chain.forEach(c => { if (c.type !== "page") c.folded = true; });
+    followed = null;
+    render();
+  });
+  crumbs.appendChild(back);
+  /* A task inside a group, extension tasks or a choice: the holder is one
+     step up, and picking it shows the holder's settings. */
+  if (w) w.chain.filter(c => c.type !== "page").forEach((c, n, all) => {
+    crumbs.appendChild(el("span","pf-sep","\u203A"));
+    const up = el("button","btn-ghost bmini2 pf-up", LABEL[c.type] || c.type);
+    up.type = "button";
+    up.addEventListener("click", () => {
+      sel.folded = true;
+      all.slice(n + 1).forEach(x => { x.folded = true; });
+      render();
+    });
+    crumbs.appendChild(up);
+  });
+  box.appendChild(crumbs);
+  box.appendChild(card(sel, w ? w.i : 0, w ? w.arr : page.blocks));
+  box.appendChild(el("p","pf-tip","Changes show in the preview as you make them."));
+  return box;
 }
 
 /* The page chips, without the two buttons on the end of the strip: those are
@@ -5694,9 +5782,12 @@ function schedulePreview(){
      Compiling on every keystroke there would be work nobody can see. */
   if (bankOpen) return;
   clearTimeout(prevTimer);
+  previewDirty = true;
   $("prevMsg").textContent = "updating\u2026";
   prevTimer = setTimeout(refreshPreview, 900);
 }
+/* Something has changed that the preview has not been drawn with yet. */
+var previewDirty = false;
 /* The preview in its own tab, at the size a student would really see it. It
    reads the compiled lesson out of localStorage exactly as the panel does, so
    the only thing to be careful about is writing that first: opening the tab
@@ -5748,7 +5839,11 @@ function refreshPreview(){
        every change, so without this a teacher editing the foot of a long page
        was thrown back to the top of it after each keystroke. */
     const keep = previewScroll(frame);
-    frame.src = "lesson.html?id=__preview&builder=1&t=" + Date.now();
+    previewDirty = false;
+    clearTimeout(prevTimer);
+    previewFirstShown = previewFirst();
+    frame.src = "lesson.html?id=__preview&builder=1" + (previewFirstShown ? "&edit=1" : "")
+              + "&t=" + Date.now();
     frame.addEventListener("load", function once(){
       frame.removeEventListener("load", once);
       /* The lesson draws itself after load, so the place to scroll to does not
@@ -7058,6 +7153,13 @@ try{
   roomyQ().addListener(fitPreview);
 }
 window.addEventListener("resize", fitPreview);
+/* Build lessons in the preview, switched in Settings or by the window
+   narrowing past the point where the two columns fit. */
+window.addEventListener("hubui", (e) => {
+  if (e.detail && e.detail.name === "previewFirst" && !bankOpen) render();
+});
+mq("(max-width: 1100px)").addEventListener &&
+  mq("(max-width: 1100px)").addEventListener("change", () => { if (!bankOpen) render(); });
 
 
 /* ---------------- go ---------------- */

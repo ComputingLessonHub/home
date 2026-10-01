@@ -238,6 +238,7 @@ function builderRendered(){
   }
   paintSaveState();
   followInPreview();
+  sendPick();
 }
 
 /* ---------------- keyboard ---------------- */
@@ -275,19 +276,20 @@ function resetCompiledIds(){ compiledIds = new WeakMap(); compiledBlocks = new M
 
 let followed = null;           // the task the preview was last pointed at
 let followPending = null;
+/* The task being worked on: the deepest open one on the page on screen, so a
+   task opened inside a group is the one meant rather than the group. */
 function openTask(){
   const page = openPageRef;
   if (!page || typeof viewAll === "undefined" || viewAll) return null;
-  let found = null;
-  (function walk(arr){
-    (arr || []).forEach(b => {
-      if (found || !b) return;
-      if (b.folded === false){ found = b; }
-      if (b.blocks) walk(b.blocks);
-      if (b.options) b.options.forEach(o => walk(o.blocks));
-    });
-  })(page.blocks);
-  return found;
+  const deepest = (arr) => {
+    for (const b of (arr || [])){
+      if (!b || b.folded !== false) continue;
+      const kids = [].concat(b.blocks || [], ...(b.options || []).map(o => o.blocks || []));
+      return deepest(kids) || b;
+    }
+    return null;
+  };
+  return deepest(page.blocks);
 }
 function followInPreview(){
   const b = openTask();
@@ -311,7 +313,7 @@ function sendFollow(){
   const hook = () => {
     const frame = document.getElementById("prev");
     if (!frame){ setTimeout(hook, 300); return; }
-    frame.addEventListener("load", () => setTimeout(sendFollow, 150));
+    frame.addEventListener("load", () => setTimeout(() => { sendFollow(); sendPick(true); }, 150));
   };
   hook();
 })();
@@ -325,19 +327,29 @@ window.addEventListener("message", (e) => {
   if (!b) return;
   revealTask(b, true);
 });
-/* Open a task wherever it is: its page on screen, whatever holds it opened,
-   and the rest of its list folded. */
-function revealTask(target, fromPreview){
+/* Where a task is: the list holding it, its place in that list, its page,
+   and everything it sits inside on the way down from the page. */
+function whereIs(target){
   let hit = null;
   (function walk(arr, page, chain){
-    (arr || []).forEach(b => {
+    (arr || []).forEach((b, i) => {
       if (hit || !b) return;
       const here = b.type === "page" ? b : page;
-      if (b === target){ hit = { arr, page: here, chain }; return; }
+      if (b === target){ hit = { arr, i, page: here, chain }; return; }
       if (b.blocks) walk(b.blocks, here, chain.concat(b));
       if (b.options) b.options.forEach(o => walk(o.blocks, here, chain.concat(b)));
     });
   })(lesson.blocks, null, []);
+  if (!hit) return null;
+  /* What the list is inside, for the kinds of task that may be added to it. */
+  const holder = hit.chain[hit.chain.length - 1];
+  hit.inside = holder && holder.type !== "page" ? holder.type : undefined;
+  return hit;
+}
+/* Open a task wherever it is: its page on screen, whatever holds it opened,
+   and the rest of its list folded. */
+function revealTask(target, fromPreview){
+  const hit = whereIs(target);
   if (!hit) return;
   viewAll = false;
   if (hit.page) openPageRef = hit.page;
@@ -347,6 +359,99 @@ function revealTask(target, fromPreview){
   scrollToBlock = target;
   render();
 }
+
+/* ---------------- building in the preview ----------------
+   With "Build lessons in the preview" on, the preview is where a lesson is
+   put together and the column beside it holds the settings of the task
+   picked there. The preview says what was pressed; everything is changed
+   here, the same way the buttons on a task's card change it, and the
+   preview is drawn again from the result. */
+let pickSent = "";
+function sendPick(force){
+  const frame = document.getElementById("prev");
+  if (!frame || !frame.contentWindow) return;
+  if (typeof previewFirst !== "function" || !previewFirst()) return;
+  /* Until the preview has been drawn again its ids are the old ones, and a
+     task moved up would light up whichever one has taken its old place. */
+  if (!force && typeof previewDirty !== "undefined" && previewDirty) return;
+  const sel = openTask();
+  const id = (sel && compiledIds.get(sel)) || null;
+  if (!force && (id || "") === pickSent) return;
+  pickSent = id || "";
+  const labels = {};
+  compiledBlocks.forEach((b, key) => { labels[key] = (LABEL && LABEL[b.type]) || b.type; });
+  try{
+    frame.contentWindow.postMessage({ hubEdit: { sel: id, labels } },
+      location.origin === "null" ? "*" : location.origin);
+  }catch(e){}
+}
+/* Put the task down: the page's own settings come back beside the preview.
+   A task inside a group puts down only itself, so the group is picked. */
+function unpickTask(){
+  const sel = openTask();
+  if (!sel) return;
+  sel.folded = true;
+  followed = null;
+  render();
+}
+function previewAct(a){
+  if (a.do === "newPage"){ addPage(); return; }
+  if (a.do === "unpick"){ unpickTask(); return; }
+  if (a.do === "step"){
+    /* The teacher has gone to another page in the preview, so the column
+       follows with that page's settings. Nothing is picked on arrival: a
+       task left open there earlier would otherwise be scrolled to and
+       flashed every time the page was passed through. */
+    const page = a.page ? compiledBlocks.get(a.page) : null;
+    if (!page || page.type !== "page" || page === openPageRef || viewAll) return;
+    openPageRef = page;
+    lastPageAt = Math.max(0, lesson.blocks.indexOf(page));
+    openOnly(page.blocks, null);
+    followed = null;
+    render();
+    return;
+  }
+  if (a.do === "addEnd"){
+    const page = a.page ? compiledBlocks.get(a.page) : null;
+    if (page && page.type === "page"){ openPageRef = page; openTaskPicker(page.blocks); return; }
+    openTaskPicker(pageList().length ? targetPage().blocks : null);
+    return;
+  }
+  const b = compiledBlocks.get(a.id);
+  const w = b ? whereIs(b) : null;
+  if (!w) return;
+  if (a.do === "up" || a.do === "down"){ move(w.arr, w.i, a.do === "up" ? -1 : 1); return; }
+  if (a.do === "dup"){
+    const copy = JSON.parse(JSON.stringify(b));
+    w.arr.splice(w.i + 1, 0, copy);
+    openOnly(w.arr, copy);
+    render(); schedulePreview(); saveDraft();
+    return;
+  }
+  if (a.do === "del"){
+    askDelete(LABEL[b.type] || "Task", () => { w.arr.splice(w.i, 1); render(); schedulePreview(); });
+    return;
+  }
+  if (a.do === "addBefore"){ openTaskPicker(w.arr, w.inside, w.i); return; }
+  if (a.do === "addAfter"){ openTaskPicker(w.arr, w.inside, w.i + 1); return; }
+}
+window.addEventListener("message", (e) => {
+  const frame = document.getElementById("prev");
+  if (!frame || e.source !== frame.contentWindow) return;
+  const a = e.data && e.data.hubAct;
+  if (!a || typeof a !== "object" || typeof a.do !== "string") return;
+  previewAct(a);
+});
+/* Escape puts the picked task down, from anywhere but a box being typed in
+   or a pop-up, both of which have their own use for it. */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || typeof previewFirst !== "function" || !previewFirst()) return;
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  const m = document.getElementById("mBack");
+  if (m && !m.hidden) return;
+  unpickTask();
+});
 
 /* ---------------- problems ----------------
    Only things that would leave a student stuck or looking at something

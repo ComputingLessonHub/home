@@ -5859,3 +5859,59 @@ html[data-bg=night]{--avg:#C39BF0}
 .prof-key-avg{color:var(--avg)}
 .prof-key-tick{width:3px; height:14px; border-radius:1px; background:var(--avg)}
 .prof-key{margin-top:0}
+
+/* =====================================================================
+   BUILDING A LESSON IN THE PREVIEW
+   Settings > Console layout > Build lessons in the preview. The preview
+   takes the room on the left and is where the lesson is put together; the
+   column on the right holds the settings of whatever is picked in it.
+   Only above 1100px wide: below that the builder is one column whatever
+   the setting, and none of this applies.
+   ===================================================================== */
+@media (min-width:1101px){
+  html.builder[data-pf=on], html.builder[data-pf=on] body{height:100%; overflow:hidden}
+  html[data-pf=on] .build{grid-template-columns:minmax(0,1fr) minmax(400px,38%); height:auto}
+  html.builder[data-pf=on] .build{flex:1; min-height:0}
+  html[data-pf=on] .build-preview{order:-1; grid-column:auto; height:auto; min-height:0;
+    border-top:none; border-left:none; border-right:1px solid var(--line)}
+  html.builder[data-pf=on] .build-list{overflow-y:auto; min-height:0; padding:16px 18px;
+    background:var(--panel-2)}
+}
+.pf-tip{font-size:var(--text-sm); color:var(--muted); margin:0 0 14px; line-height:1.5}
+.pf-picked > .pf-tip{margin:10px 0 0}
+.pf-crumbs{display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 12px}
+.pf-back{font-weight:700; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.pf-sep{color:var(--dim)}
+.pf-picked > .bcard{margin-bottom:0; border-color:var(--amber); box-shadow:0 0 0 3px rgba(47,107,174,.10)}
+
+/* ---------- inside the preview's frame ---------- */
+html.pfedit .pg-item, html.pfedit .pf-pick{position:relative; cursor:pointer}
+html.pfedit .pg-item:hover, html.pfedit .pf-pick:hover{outline:2px dashed var(--amber); outline-offset:6px}
+html.pfedit .pg-item .pg-item:hover, html.pfedit .pf-pick .pg-item:hover{outline-offset:3px}
+html.pfedit .pg-item.pf-sel, html.pfedit .pf-pick.pf-sel{cursor:auto; outline:2px solid var(--amber) !important; outline-offset:6px}
+/* The buttons sit on the outline, over the task's top right corner, so the
+   task itself is laid out exactly as a student gets it. */
+.pf-bar{position:absolute; top:-21px; right:-6px; z-index:40; display:flex; align-items:center; gap:1px;
+  padding:2px 3px 2px 9px; border-radius:var(--rad-pill); background:var(--amber); color:var(--amber-ink);
+  box-shadow:0 2px 8px rgba(0,0,0,.18); font-family:var(--body, inherit); line-height:1; cursor:auto}
+.pf-name{font-size:12.5px; font-weight:700; margin-right:5px; white-space:nowrap}
+.pf-b{border:none; background:transparent; color:inherit; font:inherit; font-size:13px; font-weight:700;
+  min-width:26px; height:26px; padding:0 6px; border-radius:var(--rad-pill); cursor:pointer; line-height:1}
+.pf-b:hover, .pf-b:focus-visible{background:rgba(255,255,255,.22); outline:none}
+.pf-bar .pf-edit{background:rgba(255,255,255,.18); padding:0 10px}
+.pf-bar .pf-del:hover{background:#C0392B; color:#fff}
+.pf-add{position:absolute; left:50%; z-index:40; width:28px; height:28px; min-width:0; padding:0;
+  margin-left:-14px; border-radius:50%; background:var(--panel); color:var(--amber);
+  border:2px solid var(--amber); font-size:18px; box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.pf-add:hover{background:var(--amber); color:var(--amber-ink)}
+.pf-above{top:-21px}
+.pf-below{bottom:-21px}
+.pf-foot{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:22px 0 4px;
+  padding-top:16px; border-top:1.5px dashed var(--line-2, var(--line))}
+.pf-foot.pf-first{border-top:none; justify-content:center}
+.pf-emptypage{flex:1 1 100%; margin:0 0 4px; color:var(--muted)}
+.pf-foot .pf-b{height:auto; padding:9px 16px; border-radius:var(--rad-md); border:1.5px dashed var(--amber);
+  color:var(--amber); font-size:var(--text-base)}
+.pf-foot .pf-b:hover{background:var(--amber); color:var(--amber-ink); border-style:solid}
+.pf-foot .pf-addpage{border-color:var(--line-2, var(--line)); color:var(--muted)}
+@media print{ .pf-bar, .pf-add, .pf-foot{display:none !important} }
