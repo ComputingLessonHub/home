@@ -298,6 +298,9 @@
     <div class="prev-head">
       <b>Live preview</b>
       <span class="hint" id="prevMsg"></span>
+      <!-- Building in the preview only: the column on the right folded away,
+           for the lesson at nearly the width a student sees it. -->
+      <button class="btn-ghost bmini2 pfside-btn" id="pfSideBtn" type="button"></button>
       <button class="btn-ghost iconbtn" id="prevBtn" title="Refresh preview">&#8635;</button>
       <button class="btn-ghost iconbtn" id="prevPop" title="Open the preview in a new tab">&#10696;</button>
       <button class="btn-ghost iconbtn" id="prevFull" title="Full screen preview">&#9974;</button>
@@ -1441,6 +1444,7 @@ function render(){
   const pickedBefore = previewFirst() ? openTask() : null;
   renderNow();
   builderRendered();
+  paintPop();                          // settings open over the preview follow along
   const want = scrollToBlock; scrollToBlock = null;
   if (!list) return;
   if (previewFirst() && !viewAll && openTask() !== pickedBefore){ list.scrollTop = 0; return; }
@@ -1615,10 +1619,31 @@ function previewFirst(){
   if ((lesson.assessment || lesson.practical) && (assessTab === "targets" || assessTab === "responses" || respEditing)) return false;
   return true;
 }
+/* Whether the column beside the preview has been folded away. Kept for this
+   browser, like the rest of the layout choices. */
+function sideHidden(){
+  try{ return localStorage.getItem("hub_pf_side") === "hidden"; }catch(e){ return false; }
+}
+function paintSide(){
+  const hidden = sideHidden();
+  document.documentElement.dataset.pfside = hidden ? "hidden" : "shown";
+  const btn = $("pfSideBtn");
+  if (!btn) return;
+  btn.textContent = hidden ? "Show side panel" : "Hide side panel";
+  btn.title = hidden ? "Bring back the column of settings on the right"
+                     : "Fold the column on the right away for a wider preview. Settings stay on each task's bar.";
+}
+on("pfSideBtn", "click", () => {
+  try{ localStorage.setItem("hub_pf_side", sideHidden() ? "shown" : "hidden"); }catch(e){}
+  paintSide();
+  /* the preview has changed width, so whatever is open over it moves too */
+  requestAnimationFrame(() => placePop(document.getElementById("pfPop")));
+});
 var previewFirstShown = null;    // whether the preview last drawn has the edit layer
 function paintPreviewFirst(){
   const on = previewFirst();
   document.documentElement.dataset.pf = on ? "on" : "off";
+  paintSide();
   const head = document.querySelector(".build-preview .prev-head b");
   if (head) head.textContent = on ? "Your lesson" : "Live preview";
   /* switched over: the preview has to be drawn again, with or without the
@@ -1632,8 +1657,9 @@ function sidePanel(page){
   if (!sel){
     const box = el("div","pf-side");
     box.appendChild(el("p","pf-tip",
-      "Click a task in the preview to change it. Hover over one for moving, copying and deleting, "
-      + "and use the + above or below it to add a task right there."));
+      "Click a task in the preview to pick it, then type straight into its words. "
+      + "Its bar has Settings, moving, copying and deleting, and the + above or below it "
+      + "adds a task right there."));
     box.appendChild(pageView(page));
     return box;
   }
@@ -1668,8 +1694,18 @@ function sidePanel(page){
     crumbs.appendChild(up);
   });
   box.appendChild(crumbs);
+  /* Open over the preview already: one place to change it at a time. */
+  if (popOpen && popOpen.kind === "task" && popOpen.block === sel){
+    box.appendChild(el("p","pf-tip","This task's settings are open over the preview."));
+    const here = el("button","btn-ghost bmini2","Show them here instead");
+    here.type = "button";
+    here.addEventListener("click", () => { closePop(); render(); });
+    box.appendChild(here);
+    return box;
+  }
   box.appendChild(card(sel, w ? w.i : 0, w ? w.arr : page.blocks));
-  box.appendChild(el("p","pf-tip","Changes show in the preview as you make them."));
+  box.appendChild(el("p","pf-tip","Changes show in the preview as you make them. "
+    + "Words can also be typed straight into the task in the preview."));
   return box;
 }
 

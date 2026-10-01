@@ -32,7 +32,7 @@
     richCards: ["Detailed lesson cards", "Pages, tasks, when it was changed and which classes have it."],
     classDash: ["Class dashboard", "A class opens on what is live and what needs marking."],
     homeDash: ["Home dashboard", "Home shows today's lessons from your timetable, what is live and what needs doing."],
-    previewFirst: ["Build lessons in the preview", "The lesson builder shows each page as students will see it. Click a task to change its settings, and add tasks where they will appear."]
+    previewFirst: ["Build lessons in the preview", "The lesson builder shows each page as students will see it. Type straight into a task's words, open its settings beside it, and add tasks where they will appear."]
   };
   function prefs(){ try{ return JSON.parse(localStorage.getItem("hub_prefs") || "{}"); }catch(e){ return {}; } }
   function pref(name){
