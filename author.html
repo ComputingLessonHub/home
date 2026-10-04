@@ -12,6 +12,7 @@
 <script>window.richTextBarOnFocus = true;   /* see richtext.js */</script>
 <script src="richtext.js"></script>
 <script src="pyedit.js"></script>
+<script src="scratchhub.js"></script>
 <script src="teacher.js"></script>
 <script src="menus.js"></script>
 <script src="dragline.js"></script>
@@ -216,7 +217,7 @@
       <div class="palgroup" data-group="coding">
         <button class="pal-head" type="button">Coding</button>
         <div class="palbody" hidden>
-          <button class="pal" data-add="code"><b>Coding task</b><span>Python, or HTML + CSS + JS</span></button>
+          <button class="pal" data-add="code"><b>Coding task</b><span>Python, a web page, or blocks</span></button>
         </div>
       </div>
       <div class="palgroup" data-group="cyber">
@@ -563,7 +564,7 @@ const BLANK = {
   picture:  () => ({ type:"picture", title:"", url:"", caption:"", note:"",
                      alt:"", size:"full", width:"", align:"left", beside:"", frame:true }),
   pastelink:() => ({ type:"pastelink", heading:"", task:"", note:"" }),
-  code:     () => ({ type:"code", lang:"" }),        // they pick Python or web next
+  code:     () => ({ type:"code", lang:"" }),        // they pick Python, web or blocks next
   ide:      () => ({ type:"ide", title:"", task:"",
                      starter:'print("Hello World!")', turtle:false, run:true, edit:true,
                      autocomplete:true }),
@@ -572,6 +573,9 @@ const BLANK = {
                      css:'h1 {\n  color: navy;\n}',
                      js:'console.log("Ready");',
                      run:true, edit:true, help:true, tooltips:true, autocomplete:true, expect:"" }),
+  /* Block coding in the Scratch editor. No project means the new-project
+     cat; project and own are put in by the starter project editor. */
+  scratch:  () => ({ type:"scratch", title:"", task:"", height:600 }),
   question: () => ({ type:"question", heading:"", context:"", prompt:"", minWords:20, lines:4 }),
   quiz:     () => ({ type:"quiz", title:"", pass:{ mode:"percent", value:70 },
                      questions:[{ q:"", options:["",""], answers:[0], hint:"", why:"" }] }),
@@ -693,7 +697,7 @@ function codeTaskLabel(entry){
 
 const LABEL = { text:"Paragraph", picture:"Image", pastelink:"Paste a link", ide:"Python task", question:"Written answer", quiz:"Quiz", image:"Screenshot",
                 embed:"Video", link:"Link to a site", mc:"Multiple choice", blanks:"Fill the gaps", order:"Put in order",
-                short:"Short answer", page:"Page", extension:"Extension tasks", group:"Group", choice:"Choice", frame:"Embedded page", binary:"Binary conversion", binadd:"Binary addition", notes:"Notes", mindmap:"Mind map", board:"Whiteboard", label:"Label a picture", keywords:"Keyword definitions", code:"Coding task", web:"Web page",
+                short:"Short answer", page:"Page", extension:"Extension tasks", group:"Group", choice:"Choice", frame:"Embedded page", binary:"Binary conversion", binadd:"Binary addition", notes:"Notes", mindmap:"Mind map", board:"Whiteboard", label:"Label a picture", keywords:"Keyword definitions", code:"Coding task", web:"Web page", scratch:"Block coding",
                 password:"Password checker", caesar:"Caesar cipher", exam:"Exam question",
                 table:"Table" };
 
@@ -1089,6 +1093,29 @@ function compileOne(b, id, target){
       }
       push(blk);
     }
+    else if (b.type === "scratch"){
+      const blk = { type:"scratch", id };
+      if (b.title) blk.title = b.title;
+      if (b.task) blk.task = b.task;
+      const h = parseInt(b.height, 10);
+      if (h && h !== 600) blk.height = Math.max(420, Math.min(900, h));
+      if (b.project && typeof b.project === "object"){
+        blk.project = b.project;
+        if (b.own && Object.keys(b.own).length) blk.own = b.own;
+      }
+      if (Array.isArray(b.checks) && b.checks.length){
+        blk.checks = b.checks.filter(c => (c.label || "").trim())
+                             .map(c => Object.assign({}, c,
+                               c.marks === undefined ? {} : { marks: Math.max(0, parseInt(c.marks, 10) || 0) }));
+        /* conditions after the first are about lines of text; a project
+           has none, so none are kept */
+        blk.checks.forEach(c => { delete c.more; });
+      }
+      if (blk.checks && b.checksShowAll === true) blk.checksShowAll = true;
+      if (blk.checks && b.checksLive === false) blk.checksLive = false;
+      blk.required = false;
+      push(blk);
+    }
     else if (b.type === "code"){ /* not chosen yet, nothing to build */ }
     else if (b.type === "keywords"){
       /* A word with nothing in it would be a blank row a student cannot
@@ -1352,7 +1379,7 @@ function taskSummary(b){
     return (b.type === "group" && b.title ? b.title + ", " : "")
            + n + " task" + (n === 1 ? "" : "s");
   }
-  if (b.type === "code") return "Python or a web page, not picked yet";
+  if (b.type === "code") return "Python, a web page or blocks, not picked yet";
   for (let i = 0; i < SUMMARY_FIELDS.length; i++){
     const t = plainWords(b[SUMMARY_FIELDS[i]]);
     if (t) return t;
@@ -1871,7 +1898,7 @@ function shortAnswerNotes(body, b){
    as the Progress tab; this only offers the levels that mean something for
    the kind of task it is. The tasks that can be marked are the ones the
    Progress tab counts. */
-const GATE_TYPES = ["quiz","mc","order","blanks","short","ide","web"];
+const GATE_TYPES = ["quiz","mc","order","blanks","short","ide","web","scratch"];
 const EYE_SHUT = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
   'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>' +
@@ -1900,7 +1927,7 @@ function gateChoices(b){
   if (b.type === "quiz") return [none,
     ["attempted","Attempted","They have answered at least one question, right or wrong."],
     ["pass","Pass mark","They finish the quiz and get enough right. You choose how many below."]];
-  const code = b.type === "ide" || b.type === "web";
+  const code = b.type === "ide" || b.type === "web" || b.type === "scratch";
   const out = [none, ["attempted","Attempted", code
     ? "They have changed the code or run it, whether or not it works yet."
     : "They have had a go, right or wrong."]];
@@ -2503,6 +2530,16 @@ const WEB_CHECKS = [
   ["fileHas",    "A file contains...",     "text"],
   ["runCount",   "Runs the page at least...", "number"]
 ];
+/* Block coding reads the project rather than any text, so it has kinds of
+   its own. Which block is picked from SCRATCH_BLOCKS in scratchhub.js. */
+const SCRATCH_CHECKS = [
+  ["block",      "Uses a block...",          "which"],
+  ["sprites",    "Has this many sprites",    "count"],
+  ["scripts",    "Has this many scripts",    "count"],
+  ["variables",  "Makes this many variables","count"],
+  ["costumes",   "A sprite has this many costumes", "count"],
+  ["runCount",   "Clicks the green flag at least...", "number"]
+];
 const USES_OPTIONS = ["for loop","while loop","if","else","elif","input","print",
                       "list","function","variable","comment","random","turtle"];
 
@@ -2613,7 +2650,29 @@ function checkFields(c, row, kinds, repaint){
     row.appendChild(f);
   };
 
+  /* the blocks, by the names a teacher knows them by */
+  const whichBlock = () => {
+    const f = el("div","bfield checkfield grow");
+    f.appendChild(el("label","","Which block"));
+    const sel = document.createElement("select");
+    (window.SCRATCH_BLOCKS || []).forEach(d => {
+      const o = document.createElement("option");
+      o.value = d[0]; o.textContent = d[1];
+      sel.appendChild(o);
+    });
+    sel.value = c.value || "forever";
+    sel.addEventListener("change", () => { c.value = sel.value; saveDraft(); });
+    f.appendChild(sel);
+    row.appendChild(f);
+  };
+
   const kind = c.kind || kinds[0][0];
+  if (kinds === SCRATCH_CHECKS){
+    if (kind === "block"){ whichBlock(); howMany(); }
+    else if (kind === "runCount") needs("How many times", "count", "1");
+    else howMany();
+    return;
+  }
   if (kind === "uses") whichOne();
   else if (kind === "usesCount"){ whichOne(); howMany(); }
   else if (kind === "codeCount"){
@@ -2659,7 +2718,12 @@ function checkFields(c, row, kinds, repaint){
 /* Filling in whatever a newly chosen kind needs, so a check is never left
    asking for nothing, and a count never reads back as zero and ticks itself
    off whatever the student wrote. */
-function settleKind(c){
+function settleKind(c, scratch){
+  if (scratch){
+    if (c.kind === "block" && !(window.SCRATCH_BLOCKS || []).some(d => d[0] === c.value)) c.value = "forever";
+    if (!String(c.count || "").trim()) c.count = "1";
+    return;
+  }
   if (picksFromList(c.kind) && !c.value) c.value = USES_OPTIONS[0];
   if ((c.kind === "usesCount" || c.kind === "codeCount" ||
        c.kind === "lineCount" || c.kind === "runCount") && !String(c.count || "").trim())
@@ -2697,7 +2761,8 @@ function logicSentence(more){
 }
 
 function checklistPopup(block, isWeb){
-  const kinds = isWeb ? WEB_CHECKS : PY_CHECKS;
+  const isScratch = block.type === "scratch";
+  const kinds = isScratch ? SCRATCH_CHECKS : isWeb ? WEB_CHECKS : PY_CHECKS;
   /* Which cards are open. Held against the checks themselves rather than
      against their positions, so moving one up or down does not open a
      different line than the one that was being edited. Nothing about it is
@@ -2902,7 +2967,7 @@ function checklistPopup(block, isWeb){
         pick.value = c.kind || kinds[0][0];
         pick.addEventListener("change", () => {
           c.kind = pick.value;
-          settleKind(c);
+          settleKind(c, isScratch);
           saveDraft(); paint();
         });
         row.appendChild(pick);
@@ -2959,7 +3024,9 @@ function checklistPopup(block, isWeb){
            is written inside those lines: pick "uses an if" and a condition
            inside the block asks about what the if actually does, rather than
            about the condition on it. */
-        if (!Array.isArray(c.more)) c.more = [];
+        /* A block coding line is about the project, which has no lines of
+           text for a condition to narrow down to, so it has none. */
+        if (!Array.isArray(c.more) || isScratch) c.more = [];
         c.more.forEach((m, mi) => {
           const mr = el("div","morecond" + (m.group ? " grouped" : ""));
           const top = el("div","brow condtop");
@@ -3031,7 +3098,7 @@ function checklistPopup(block, isWeb){
           saveDraft(); paint();
         });
         /* on the same row as the box it adds a condition to, not under it */
-        mainRow.appendChild(addMore);
+        if (!isScratch) mainRow.appendChild(addMore);
         if (c.more.length){
           const sum = el("div","logicline");
           sum.appendChild(el("span","logiclead","Ticked when"));
@@ -3087,6 +3154,7 @@ function checklistPopup(block, isWeb){
       const first = kinds[0][0];
       const made = { label:"", labelHtml:"", kind: first,
                      value: picksFromList(first) ? USES_OPTIONS[0] : "" };
+      if (isScratch) settleKind(made, true);
       block.checks.push(made);
       /* whatever was just added is the thing being written, so it opens */
       open.clear();

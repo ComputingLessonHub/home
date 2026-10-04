@@ -9,6 +9,7 @@
 <script src="pyhub.js"></script>
 <script src="webhub.js"></script>
 <script src="autograder.js"></script>
+<script src="scratchhub.js"></script>
 <script src="shortmatch.js"></script>
 <script src="richtext.js"></script>
 <script src="pyedit.js"></script>
@@ -574,7 +575,7 @@ if (OFFLINE){
    screenshot or a whiteboard therefore keep the PDF instead, and there is
    a length check behind that in case some other task grows unexpectedly.
    ===================================================================== */
-const HEAVY_TASKS = ["image", "board"];
+const HEAVY_TASKS = ["image", "board", "scratch"];
 
 /* Screenshots and whiteboards can sit inside a page, so this looks all the
    way down rather than only at the top level. */
@@ -1887,6 +1888,10 @@ const TASK_ICON = {
                d:'<path d="M8.5 8L4 12l4.5 4M15.5 8l4.5 4-4.5 4M13.6 5.5l-3.2 13"/>' },
   /* the same brackets, in a page of their own, so a lesson carrying both a
      Python task and a web one does not show the same drawing twice */
+  /* a stack of two jigsaw-notched blocks */
+  scratch:   { name:"Block coding",
+               d:'<path d="M4 5h4l1 1.5h2L12 5h8v5h-8l-1 1.5H9L8 10H4z"/>' +
+                 '<path d="M4 14h4l1 1.5h2L12 14h6v5H4z"/>' },
   web:       { name:"Web page",
                d:'<rect x="3" y="4.5" width="18" height="15" rx="2"/>' +
                  '<path d="M9.7 9.8L7.2 12l2.5 2.2M14.3 9.8l2.5 2.2-2.5 2.2"/>' },
@@ -2862,7 +2867,7 @@ function buildBlock(b, i){
   const R = { text:rText, question:rQuestion, python:rPython, embed:rEmbed, link:rLink,
               quiz:rQuiz, password:rPassword, caesar:rCaesar, image:rImage,
               picture:rPicture, pastelink:rPasteLink, frame:rFrame, web:rWeb,
-              binary:rBinary, binadd:rBinAdd,
+              scratch:rScratch, binary:rBinary, binadd:rBinAdd,
               board:rBoardTask, label:rLabelTask, notes:rNotesTask, mindmap:rMindmapTask, web:rWeb,
               keywords:rKeywordsTask,
               mc:rMC, order:rOrder, blanks:rBlanks, short:rShort, ide:rIDE, page:rPage,
@@ -2929,11 +2934,13 @@ function taskGate(b){
     watch: (fn) => { holdWatchers.add(fn); }
   };
 }
+/* The tasks marked by a checklist: Python, a web page, and block coding. */
+function isCodeTask(b){ return !!b && (b.type === "ide" || b.type === "web" || b.type === "scratch"); }
 /* A checklist line a teacher ticks by hand is not the student's to finish,
    so Full on a coding task asks for every line the code can tick itself,
    and counts the teacher's ticks only once they are there. */
 function gateScore(b, v){
-  if ((b.type === "ide" || b.type === "web") && Array.isArray(b.checks) && b.checks.length){
+  if (isCodeTask(b) && Array.isArray(b.checks) && b.checks.length){
     const flags = (v && Array.isArray(v.checks)) ? v.checks : [];
     const manual = (v && v.manual && typeof v.manual === "object") ? v.manual : {};
     let got = 0, own = 0, ownGot = 0;
@@ -2960,6 +2967,7 @@ function gateAttempted(b, v){
     const changed = !v.carried && String(v.code || "").trim() !== String(b.starter || "").trim();
     return changed || !!v.ran;
   }
+  if (b.type === "scratch") return !!(v && (v.changed || v.runs));
   if (b.type === "web"){
     /* The page runs a web task by itself when it opens, so having run says
        nothing about the student. Their own typing does. */
@@ -2970,7 +2978,7 @@ function gateAttempted(b, v){
   return lessonTaskAttempted(b, v);
 }
 function gateWords(b){
-  const code = b.type === "ide" || b.type === "web";
+  const code = isCodeTask(b);
   if (b.gate === "attempted")
     return b.type === "quiz" ? "Answer a question in the quiz above to open it."
                              : "Have a go at the task above to open it.";
@@ -5037,6 +5045,237 @@ function rWeb(b){
            brief:{ eyebrow:"Code", title:b.title || "", text:b.task || "" } };
 }
 /* ======================================================================
+   BLOCK CODING (Scratch)
+   {"type":"scratch", "title":"", "task":"", "height":600,
+    "project":{...project.json...}, "own":{ "md5.svg":"base64", ... },
+    "checks":[...]}
+   The Scratch editor, in a frame of its own (scratch/editor.html). What is
+   saved is project.json and only the pictures and sounds the student made
+   themselves; scratch/editor.js says why, and what the limits are. project
+   and own on the task are the teacher's starter, left out for a new project.
+   ====================================================================== */
+function rScratch(b){
+  const s = el("section","ide scratch");
+  const bar = el("div","ide-bar scratch-bar");
+  bar.appendChild(tel("span","scratch-name","Block coding"));
+  const resetBtn = el("button","ide-small","Start again");
+  resetBtn.title = "Go back to the project you started with";
+  const getBtn = el("button","ide-small","Download");
+  getBtn.title = "Save the project as a .sb3 file, to open in Scratch somewhere else";
+  const fullBtn = el("button","ide-small","Full screen");
+  if (!spectate) bar.appendChild(resetBtn);
+  bar.appendChild(getBtn);
+  bar.appendChild(fullBtn);
+  s.appendChild(bar);
+
+  const box = el("div","scratch-box");
+  box.style.height = Math.max(420, Math.min(900, parseInt(b.height, 10) || 600)) + "px";
+  s.appendChild(box);
+  const warn = el("p","scratch-warn");
+  warn.setAttribute("role", "alert");
+  warn.hidden = true;
+  s.appendChild(warn);
+  s.appendChild(el("p","scratch-foot",
+    'The block editor is <a href="scratch/about.html" target="_blank" rel="noopener">Scratch 3</a>, '
+    + 'from the Scratch Foundation.'));
+
+  const starter = () => (b.project && typeof b.project === "object") ? b.project : null;
+  /* What was put back from their saved work, then whatever last saved
+     successfully. Never anything over the limits, so a project that has
+     grown too big leaves the last one that fitted in place. */
+  let saved = null;
+  let runs = 0;
+  let changed = false;              // anything of theirs, rather than the starter
+  let ed = null;                    // the frame, once there is one
+  let live = null;                  // the editor in it, once it has started
+
+  function projectNow(){
+    if (live){ try{ return live.project(); }catch(e){} }
+    return saved ? saved.project : starter();
+  }
+
+  /* ---------- before the editor is opened ----------
+     A student's opens on its own once the task is on screen. A teacher's
+     view of saved work, and the builder's preview, show a picture of the
+     stage and what is in the project, and only start the editor when asked:
+     it is a large thing to start for every student a teacher pages through. */
+  function paintCard(){
+    if (ed) return;
+    box.innerHTML = "";
+    const card = el("div","scratch-card");
+    if (!spectate){
+      card.appendChild(tel("p","scratch-sum","Loading the block editor…"));
+      box.appendChild(card);
+      return;
+    }
+    const shot = saved && saved.shot;
+    if (shot){
+      const img = el("img","scratch-shot");
+      img.src = shot;
+      img.alt = "What the stage looked like when the work was saved";
+      card.appendChild(img);
+    }
+    card.appendChild(tel("p","scratch-sum",
+      window.scratchHub ? window.scratchHub.describe(saved ? saved.project : starter()) : ""));
+    const open = el("button","btn-primary","Open in the block editor");
+    open.addEventListener("click", () => mountNow());
+    card.appendChild(open);
+    box.appendChild(card);
+  }
+
+  function mountNow(){
+    if (ed || !window.scratchHub) return ed ? ed.ready : Promise.resolve(null);
+    box.innerHTML = "";
+    const mine = saved && saved.project ? saved : null;
+    ed = window.scratchHub.mount(box, {
+      project: mine ? mine.project : starter(),
+      own: mine ? mine.own : null,
+      base: b.own || null,
+      starter: starter(),
+      mode: spectate ? "view" : "student",
+      onChange: () => {
+        changed = true;
+        markDirty();
+        if (checklist) checklist.typed();
+      },
+      onRun: () => {
+        runs++;
+        markDirty();
+        if (checklist){
+          checklist.mark();
+          setTimeout(() => checklist.refresh(box), 700);
+        }
+      }
+    });
+    return ed.ready.then(hs => {
+      live = hs;
+      if (!hs){
+        box.innerHTML = "";
+        box.appendChild(tel("p","scratch-warn",
+          "The block editor could not start. Try refreshing the page, and tell your teacher if it still does not work."));
+        return null;
+      }
+      if (checklist) checklist.refresh();
+      return hs;
+    });
+  }
+
+  /* Started once it is on screen, and stopped once it is not: a project
+     with a forever loop in it would otherwise go on running behind every
+     other page of the lesson. */
+  if ("IntersectionObserver" in window){
+    new IntersectionObserver((seen) => {
+      seen.forEach(entry => {
+        if (entry.isIntersecting){ if (!spectate) mountNow(); }
+        else if (live) live.stop();
+      });
+    }).observe(box);
+  } else if (!spectate) setTimeout(mountNow, 0);
+
+  const checklist = attachChecklist(s, b.checks,
+    () => window.runScratchChecks(b.checks, projectNow(), runs), b.id, b);
+
+  /* ---------- the buttons ---------- */
+  resetBtn.addEventListener("click", () => {
+    if (!live) return;
+    const back = el("div","modal-back");
+    const box2 = el("div","modal");
+    const xBtn = el("button","btn-ghost iconbtn modal-x","✕");
+    xBtn.title = "Close";
+    xBtn.addEventListener("click", () => back.remove());
+    box2.appendChild(xBtn);
+    box2.appendChild(el("h2","","Start this project again?"));
+    box2.appendChild(tel("p","modal-text","Everything you have changed in it will be lost."));
+    const yes = el("button","btn-primary modal-cta","Start again");
+    yes.addEventListener("click", () => {
+      back.remove();
+      live.load(starter(), null).then(() => {
+        saved = null; changed = false; runs = 0;
+        warn.hidden = true;
+        markDirty();
+        if (checklist) checklist.refresh();
+      });
+    });
+    const no = el("button","btn-ghost modal-stay","Keep my project");
+    no.addEventListener("click", () => back.remove());
+    box2.appendChild(yes); box2.appendChild(no);
+    scrollBody(box2);
+    back.appendChild(box2);
+    back.addEventListener("mousedown", (e) => { if (e.target === back) back.remove(); });
+    document.body.appendChild(back);
+  });
+  getBtn.addEventListener("click", () => {
+    const name = [lesson && lesson.title, stripTags(b.title || "")].filter(Boolean).join(" - ") || "My project";
+    Promise.resolve(live || mountNow()).then(hs => {
+      if (!hs) return;
+      hs.download(name).catch(() => {
+        warn.hidden = false;
+        warn.textContent = "The project could not be downloaded. Some of its sprites may not have finished loading: wait a moment and try again.";
+      });
+    });
+  });
+  function setFull(on){
+    s.classList.toggle("scratch-full", on);
+    fullBtn.textContent = on ? "Exit full screen" : "Full screen";
+    document.body.classList.toggle("scratch-fullpage", on);
+  }
+  fullBtn.addEventListener("click", () => setFull(!s.classList.contains("scratch-full")));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && s.classList.contains("scratch-full")) setFull(false);
+  });
+
+  paintCard();
+
+  fields[b.id] = {
+    get: () => {
+      if (live && changed){
+        let snap = null;
+        try{ snap = live.snapshot(); }catch(e){}
+        if (snap && snap.problem){
+          warn.hidden = false;
+          warn.textContent = snap.problem + " Until then, the last version that fitted is the one saved.";
+        } else if (snap){
+          warn.hidden = true;
+          saved = { project: snap.project, own: snap.own, shot: snap.shot || (saved && saved.shot) || "" };
+        }
+      }
+      /* Nothing of theirs yet: the starter is in the lesson already, and a
+         copy of it in every student's work would only take up room. */
+      const v = { runs: runs, changed: !!(changed && saved),
+                  checks: checklist ? checkFlags(checklist) : undefined,
+                  manual: checklist ? checklist.list.getManual() : undefined };
+      if (changed && saved){
+        v.project = saved.project;
+        v.own = saved.own || {};
+        if (saved.shot) v.shot = saved.shot;
+      }
+      return v;
+    },
+    set: (v) => {
+      if (!v || typeof v !== "object") return;
+      runs = Number(v.runs) || 0;
+      if (v.project && typeof v.project === "object"){
+        saved = { project: v.project, own: (v.own && typeof v.own === "object") ? v.own : {},
+                  shot: typeof v.shot === "string" ? v.shot : "" };
+        changed = true;
+      } else { saved = null; changed = false; }
+      if (checklist && v.manual) checklist.list.setManual(v.manual);
+      if (ed){
+        ed.ready.then(hs => {
+          if (!hs) return;
+          hs.load(saved ? saved.project : starter(), saved ? saved.own : null)
+            .then(() => { if (checklist) checklist.refresh(); });
+        });
+      } else paintCard();
+      if (checklist) checklist.refresh();
+    }
+  };
+
+  return { section:s,
+           check:() => ({ ok:true }),
+           brief:{ eyebrow:"Code", title:b.title || "", text:b.task || "" } };
+}
+/* ======================================================================
    BINARY CONVERSION
    {"type":"binary", "mode":"toDenary" | "toBinary" | "either",
     "bits":8, "showPlace":true, "count":4, "numbers":[13,200], "prompt":"..."}
@@ -6029,7 +6268,7 @@ function computeAssessment(){
     /* A coding task is marked by its checklist: each line is worth whatever
        the teacher put against it. Without marks on the lines there is nothing
        to add up, so it is left out of the score entirely. */
-    const codingMarks = (b.type === "ide" || b.type === "web")
+    const codingMarks = isCodeTask(b)
       && Array.isArray(b.checks)
       && b.checks.some(c => (parseInt(c.marks, 10) || 0) > 0);
     if (!codingMarks && !["mc","order","blanks","short","exam"].includes(b.type)) return;
@@ -6058,7 +6297,7 @@ function computeAssessment(){
         if (ok) pts++;
         return { given: given || "(blank)", ok, expected: set[0] };
       });
-    } else if (b.type === "ide" || b.type === "web"){
+    } else if (isCodeTask(b)){
       const flags = (v && Array.isArray(v.checks)) ? v.checks : [];
       review.items = (b.checks || []).map((c, i) => {
         const worth = Math.max(0, parseInt(c.marks, 10) || 0);
@@ -6967,6 +7206,7 @@ function lessonTaskAttempted(b, v){
   if (b.type === "blanks") return Array.isArray(v) && v.some(x => x !== null && x !== undefined && x !== "");
   if (b.type === "short") return typeof v === "string" && v.trim() !== "";
   if (b.type === "ide" || b.type === "web") return !!(v && v.ran);
+  if (b.type === "scratch") return !!(v && (v.changed || v.runs));
   return true;
 }
 function lessonTaskScore(b, v){
@@ -6995,7 +7235,7 @@ function lessonTaskScore(b, v){
   }
   if (b.type === "short")
     return { got: (window.shortAnswer && window.shortAnswer.mark(b, v).ok) ? 1 : 0, max: 1 };
-  if ((b.type === "ide" || b.type === "web") && Array.isArray(b.checks) && b.checks.length){
+  if (isCodeTask(b) && Array.isArray(b.checks) && b.checks.length){
     const flags = (v && Array.isArray(v.checks)) ? v.checks : [];
     const manual = (v && v.manual && typeof v.manual === "object") ? v.manual : {};
     let got = 0;
@@ -7781,6 +8021,20 @@ function buildPdf(){
         out.push({ t: "box", face: "code", text: pair[1], fill: PDF.PANEL2 });
       });
       if (!any) out.push(answerBox("", "Nothing written"));
+      return out;
+    }
+    if (b.type === "scratch"){
+      out.push({ t: "text", face: "task", text: pdfText(b.title) || "Block coding" });
+      const proj = v && v.project;
+      if (!proj){
+        out.push(answerBox("", "Nothing changed from the starting project"));
+        return out;
+      }
+      if (v.shot) out.push({ t: "img", data: v.shot, fmt: "JPEG", w: 80, h: 60 });
+      out.push({ t: "text", face: "small",
+                 text: (window.scratchHub ? window.scratchHub.describe(proj) : "")
+                   + ". The project itself is saved with the lesson"
+                   + (OFFLINE ? ": press Download on the task to keep a copy of it as a .sb3 file." : ".") });
       return out;
     }
     if (b.type === "password"){

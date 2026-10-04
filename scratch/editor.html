@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Block coding</title>
+<!--
+  The block editor a Scratch task opens, in a frame of its own.
+
+  gui/ is the Scratch Foundation's editor as they publish it (see
+  gui/VERSION, and vendor.sh for how it is fetched). It is licensed under the
+  GNU Affero General Public License v3: gui/LICENSE. Its source code is at
+  https://github.com/scratchfoundation/scratch-editor and on npm as
+  @scratch/scratch-gui. The one change made to gui/ is described in vendor.sh.
+
+  editor.js is the hub's own: it starts the editor, hands it a project and
+  takes the project back for saving. The lesson page only ever talks to it
+  through window.hubScratch, across this frame, so the two stay separate
+  programs.
+-->
+<style>
+  html, body { margin:0; height:100%; overflow:hidden; background:#fff; }
+  #app { position:absolute; inset:0; }
+  .hub-loading { position:absolute; inset:0; display:flex; align-items:center;
+                 justify-content:center; font:16px/1.4 system-ui, sans-serif;
+                 color:#575e75; background:#e9f1fc; }
+
+  /* What a student cannot do in a lesson: bring in files of their own,
+     record sound, or change a sound (every change to a sound stores a whole
+     new copy of it). Hidden rather than taken out of the editor, so the
+     editor itself stays exactly as published. editor.js stops the same
+     things happening by any other route. */
+  body.locked [aria-label^="Upload"],
+  body.locked li:has(> [aria-label^="Upload"]),
+  body.locked [aria-label="Record"],
+  body.locked li:has(> [aria-label="Record"]),
+  body.locked [class*="sound-editor_effect-button_"],
+  body.locked [class*="sound-editor_tool-button_"] { display:none !important; }
+
+  /* Hidden for everyone by editor.js: extensions that need the camera,
+     which this frame is never given. */
+  .hub-hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div id="app"><div class="hub-loading">Loading the block editor&hellip;</div></div>
+<script>
+  /* Where gui/ is, for the editor to fetch the rest of its own files from. */
+  window.__hubScratchBase = new URL("gui/", location.href).href;
+</script>
+<script src="gui/scratch-gui-standalone.js"></script>
+<script src="editor.js"></script>
+</body>
+</html>

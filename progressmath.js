@@ -7,7 +7,7 @@
 (function(){
   const TASK_LABEL = { quiz:"Quiz", mc:"Multiple choice", order:"Put in order",
                        blanks:"Fill the gaps", short:"Short answer",
-                       ide:"Coding task", web:"Coding task" };
+                       ide:"Coding task", web:"Coding task", scratch:"Coding task" };
   function plainText(html){ return String(html || "").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim(); }
   function normAns(x){ return String(x || "").toLowerCase().trim().replace(/\s+/g," ").replace(/[.,!?;:'"]+$/g,""); }
 
@@ -15,7 +15,7 @@
     const label = TASK_LABEL[b.type];
     if (!label) return null;
     if (b.type === "quiz" && !(b.questions || []).length) return null;
-    if ((b.type === "ide" || b.type === "web") && !(Array.isArray(b.checks) && b.checks.length)) return null;
+    if ((b.type === "ide" || b.type === "web" || b.type === "scratch") && !(Array.isArray(b.checks) && b.checks.length)) return null;
     if (b.type === "blanks" && !/\[\[.*?\]\]/.test(String(b.text || ""))) return null;
     return { id: b.id, type: b.type, label: label,
              title: plainText(b.prompt || b.title) || label, block: b };

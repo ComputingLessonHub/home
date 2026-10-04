@@ -31,6 +31,15 @@
      cssHas       selector,property,value  a rule sets that property
      fileHas      file,value          a named file contains this
 
+   Block coding (Scratch), read from the project's project.json:
+     block        value,count,compare  how many of a block: 2 forevers
+                  (value is a key from SCRATCH_BLOCKS in scratchhub.js)
+     sprites      count,compare        how many sprites
+     scripts      count,compare        how many scripts (stacks with a top)
+     variables    count,compare        how many variables
+     costumes     count,compare        the most costumes any one sprite has
+     runCount     count                presses of the green flag
+
    A check can carry further conditions after the first, and those are run
    through the very same list: an extra condition is a whole check in its own
    right, joined on with and/or.
@@ -721,6 +730,58 @@
         });
         return ownWords(c, joined, runs);
       }
+      catch(e){ return broken(c.label || "Check", "This check could not run."); }
+    });
+  };
+
+  /* ---------- block coding (Scratch) ----------
+     Read from project.json, the same file that is saved, so what ticks a
+     line off is exactly what the teacher later opens. No conditions after
+     the first: those are about lines of text, and a Scratch project has
+     none. */
+  function checkScratchOne(check, project, runs){
+    const label = check.label || "Check";
+    const hub = window.scratchHub;
+    if (!hub) return broken(label, "The block coding helper did not load.");
+    const s = hub.summary(project);
+    switch (check.kind){
+      case "runCount": {
+        const want = Math.max(1, parseInt(check.count, 10) || 1);
+        const got = Math.max(0, parseInt(runs, 10) || 0);
+        if (got >= want) return pass(label);
+        return fail(label, got === 0 ? "Click the green flag to run your project."
+                                     : "Run it again: " + got + " of " + want + " so far.");
+      }
+      case "block": {
+        const def = (hub.blocks || []).find(d => d[0] === check.value);
+        if (!def) return broken(label, "This check does not say which block.");
+        const got = hub.count(project, def[2]);
+        return countsUp(label, got, check,
+          got === 0 ? "There is no \u201c" + def[1] + "\u201d block yet."
+                    : "There " + (got === 1 ? "is 1" : "are " + got) + " \u201c" + def[1] + "\u201d block" + (got === 1 ? "" : "s") + ".");
+      }
+      case "sprites":
+        return countsUp(label, s.sprites, check, "There " + (s.sprites === 1 ? "is 1 sprite" : "are " + s.sprites + " sprites") + ".");
+      case "scripts":
+        return countsUp(label, s.scripts, check, "There " + (s.scripts === 1 ? "is 1 script" : "are " + s.scripts + " scripts") + ".");
+      case "variables":
+        return countsUp(label, s.variables, check, "There " + (s.variables === 1 ? "is 1 variable" : "are " + s.variables + " variables") + ".");
+      case "costumes": {
+        let most = 0;
+        ((project && project.targets) || []).forEach(t => {
+          if (t && !t.isStage) most = Math.max(most, (t.costumes || []).length);
+        });
+        return countsUp(label, most, check, "The most costumes any sprite has is " + most + ".");
+      }
+      default:
+        return broken(label, "Unknown kind of check: " + check.kind);
+    }
+  }
+
+  window.runScratchChecks = function(checks, project, runs){
+    return (checks || []).map(c => {
+      if (c && c.manual === true) return { ok:false, manual:true, label:c.label || "Check" };
+      try{ return ownWords(c, checkScratchOne(c, project, runs), runs); }
       catch(e){ return broken(c.label || "Check", "This check could not run."); }
     });
   };

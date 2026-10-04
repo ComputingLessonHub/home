@@ -28,7 +28,15 @@ window.HUB = {
   // end. Ignored entirely when OFFLINE is true, so it can be left as it is.
   // Until the Function App exists this points nowhere, and every page says
   // it cannot reach the server, which is the truth.
-  API: "https://computinglessonhub-api.azurewebsites.net".replace(/\/+$/, "")
+  API: "https://computinglessonhub-api.azurewebsites.net".replace(/\/+$/, ""),
+
+  // Where block coding (Scratch) tasks fetch library sprites, backdrops and
+  // sounds from. Leave it "" for Scratch's own library server,
+  // cdn.assets.scratch.mit.edu, which the school's filter has to allow. If it
+  // cannot, copy the files the lessons use onto this site and put their
+  // address here with {md5ext} where the file name goes, for example
+  // "scratch/library/{md5ext}".
+  SCRATCH_ASSETS: ""
 };
 
 /* Everything below works out what that means, so no page has to. */
