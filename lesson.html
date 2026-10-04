@@ -1476,7 +1476,10 @@ function showStep(i){
   $("briefTitle").hidden = !bt;
   $("briefText").innerHTML = bx;
   $("briefText").hidden = !bx;
-  $("brief").hidden = !bt && !bx;
+  /* A task that takes the whole page shows the title in its own bar. */
+  $("brief").hidden = (!bt && !bx) || !!steps[step].fullTask;
+  /* and meets the bar above it and the dock below it, edge to edge */
+  $("stage").classList.toggle("fullpage", !!steps[step].fullTask);
 
   $("backBtn").disabled = step === 0;
   /* A practical is marked by hand, later, so it must not promise a score
@@ -3000,6 +3003,7 @@ function rPage(b){
   const items = [];      // each task on this page, so we can move on to the next
   const extras = [];     // extension containers, held back until the rest is done
   const slots = pageSlot(s);
+  let fullTask = false;  // holds a task that takes the whole page
   (b.blocks || []).forEach((child, j) => {
     if (!child.id) child.id = b.id + "_" + j;
     const built = buildBlock(child, j);
@@ -3031,7 +3035,13 @@ function rPage(b){
     const item = el("div","pg-item");
     item.dataset.blockId = child.id;
     const bb = (typeof built.brief === "function") ? built.brief() : (built.brief || {});
-    if (child.type !== "picture"){
+    /* A block coding task takes the whole page and carries the page's title
+       and its own heading in its bar, rather than under a heading here. */
+    if (built.fullTask){
+      fullTask = true;
+      if (built.setPage) built.setPage(b.title || "", b.task || "");
+    }
+    else if (child.type !== "picture"){
       if (bb.title) item.appendChild(el("h3","pg-h", bb.title));
       if (bb.text) item.appendChild(el("p","pg-t", bb.text));
     }
@@ -3170,7 +3180,9 @@ function rPage(b){
        is one test for it rather than a flag to carry about as well. On unless
        it was turned off, which is what keeps it on every lesson written before
        the setting existed. */
-    railItems: b.taskbar === false ? null : railItems
+    /* A task taking the whole page covers where the bar would be. */
+    railItems: (b.taskbar === false || fullTask) ? null : railItems,
+    fullTask: fullTask
   };
 }
 
@@ -5053,31 +5065,48 @@ function rWeb(b){
    saved is project.json and only the pictures and sounds the student made
    themselves; scratch/editor.js says why, and what the limits are. project
    and own on the task are the teacher's starter, left out for a new project.
+
+   It takes the whole of the page it is on: the full width of the lesson,
+   and the height down to the bottom bar. The page's title moves into the
+   task's own bar, so the editor gets the room the title card had.
    ====================================================================== */
 function rScratch(b){
   const s = el("section","ide scratch");
   const bar = el("div","ide-bar scratch-bar");
-  bar.appendChild(tel("span","scratch-name","Block coding"));
-  const resetBtn = el("button","ide-small","Start again");
-  resetBtn.title = "Go back to the project you started with";
+  /* The page's title and subtitle, then this task's own heading if it has
+     one. setPage() fills them in once the page holding the task is known;
+     a task that is a page of its own keeps its own heading. */
+  const named = el("div","scratch-named");
+  const nameEl = el("span","scratch-name");
+  const subEl = el("span","scratch-sub");
+  named.appendChild(nameEl); named.appendChild(subEl);
+  bar.appendChild(named);
+  function setNames(title, text){
+    nameEl.innerHTML = title || "Block coding";
+    subEl.innerHTML = text || "";
+    subEl.hidden = !text;
+  }
+  const ownHeading = [b.title, b.task].filter(Boolean);
+  setNames(b.title || "", b.task || "");
   const getBtn = el("button","ide-small","Download");
   getBtn.title = "Save the project as a .sb3 file, to open in Scratch somewhere else";
   const fullBtn = el("button","ide-small","Full screen");
-  if (!spectate) bar.appendChild(resetBtn);
   bar.appendChild(getBtn);
   bar.appendChild(fullBtn);
+  const about = el("a","scratch-about","About");
+  about.href = "scratch/about.html";
+  about.target = "_blank";
+  about.rel = "noopener";
+  about.title = "The block editor is Scratch 3, from the Scratch Foundation";
+  bar.appendChild(about);
   s.appendChild(bar);
 
-  const box = el("div","scratch-box");
-  box.style.height = Math.max(420, Math.min(900, parseInt(b.height, 10) || 600)) + "px";
-  s.appendChild(box);
   const warn = el("p","scratch-warn");
   warn.setAttribute("role", "alert");
   warn.hidden = true;
   s.appendChild(warn);
-  s.appendChild(el("p","scratch-foot",
-    'The block editor is <a href="scratch/about.html" target="_blank" rel="noopener">Scratch 3</a>, '
-    + 'from the Scratch Foundation.'));
+  const box = el("div","scratch-box");
+  s.appendChild(box);
 
   const starter = () => (b.project && typeof b.project === "object") ? b.project : null;
   /* What was put back from their saved work, then whatever last saved
@@ -5174,36 +5203,53 @@ function rScratch(b){
 
   const checklist = attachChecklist(s, b.checks,
     () => window.runScratchChecks(b.checks, projectNow(), runs), b.id, b);
+  /* attachChecklist puts the list first in the task; the bar, which now
+     carries the page's title, goes above it. */
+  s.insertBefore(bar, s.firstChild);
+
+  /* ---------- filling the page ----------
+     The width is the lesson's whole width, measured from the scrolling area
+     the task sits in, so it reaches both edges whatever is around it. The
+     height is what is left of that area below the editor's top edge, or,
+     when other work above leaves too little, the area's whole height less
+     the bar and checklist, so scrolling down to the task shows all of it. */
+  const MIN_H = 420;
+  function fit(){
+    if (s.classList.contains("scratch-full")) return;
+    const stage = s.closest(".stage");
+    if (!stage || !s.getClientRects().length) return;      // not on screen
+    const sr = stage.getBoundingClientRect();
+    const cs = getComputedStyle(stage);
+    const was = parseFloat(s.style.marginLeft) || 0;
+    const natural = s.getBoundingClientRect().left - was;
+    const left = sr.left + stage.clientLeft;
+    const ml = Math.round(left - natural) + "px";
+    const w = stage.clientWidth + "px";
+    if (s.style.marginLeft !== ml) s.style.marginLeft = ml;
+    if (s.style.width !== w) s.style.width = w;
+    const padB = parseFloat(cs.paddingBottom) || 0;
+    const boxTop = box.getBoundingClientRect().top - sr.top + stage.scrollTop;
+    const secTop = s.getBoundingClientRect().top - sr.top + stage.scrollTop;
+    let h = stage.clientHeight - boxTop - padB;
+    if (h < MIN_H) h = stage.clientHeight - (boxTop - secTop) - padB;
+    const hh = Math.max(MIN_H, Math.floor(h)) + "px";
+    if (box.style.height !== hh) box.style.height = hh;
+  }
+  let fitQueued = false;
+  function fitSoon(){
+    if (fitQueued) return;
+    fitQueued = true;
+    requestAnimationFrame(() => { fitQueued = false; fit(); });
+  }
+  window.addEventListener("resize", fitSoon);
+  if ("ResizeObserver" in window){
+    const ro = new ResizeObserver(fitSoon);
+    ro.observe(s);
+    /* the area itself grows when the title card above it is hidden */
+    requestAnimationFrame(() => { const st = s.closest(".stage"); if (st) ro.observe(st); });
+  }
 
   /* ---------- the buttons ---------- */
-  resetBtn.addEventListener("click", () => {
-    if (!live) return;
-    const back = el("div","modal-back");
-    const box2 = el("div","modal");
-    const xBtn = el("button","btn-ghost iconbtn modal-x","✕");
-    xBtn.title = "Close";
-    xBtn.addEventListener("click", () => back.remove());
-    box2.appendChild(xBtn);
-    box2.appendChild(el("h2","","Start this project again?"));
-    box2.appendChild(tel("p","modal-text","Everything you have changed in it will be lost."));
-    const yes = el("button","btn-primary modal-cta","Start again");
-    yes.addEventListener("click", () => {
-      back.remove();
-      live.load(starter(), null).then(() => {
-        saved = null; changed = false; runs = 0;
-        warn.hidden = true;
-        markDirty();
-        if (checklist) checklist.refresh();
-      });
-    });
-    const no = el("button","btn-ghost modal-stay","Keep my project");
-    no.addEventListener("click", () => back.remove());
-    box2.appendChild(yes); box2.appendChild(no);
-    scrollBody(box2);
-    back.appendChild(box2);
-    back.addEventListener("mousedown", (e) => { if (e.target === back) back.remove(); });
-    document.body.appendChild(back);
-  });
   getBtn.addEventListener("click", () => {
     const name = [lesson && lesson.title, stripTags(b.title || "")].filter(Boolean).join(" - ") || "My project";
     Promise.resolve(live || mountNow()).then(hs => {
@@ -5218,6 +5264,7 @@ function rScratch(b){
     s.classList.toggle("scratch-full", on);
     fullBtn.textContent = on ? "Exit full screen" : "Full screen";
     document.body.classList.toggle("scratch-fullpage", on);
+    if (!on) fitSoon();
   }
   fullBtn.addEventListener("click", () => setFull(!s.classList.contains("scratch-full")));
   document.addEventListener("keydown", (e) => {
@@ -5273,6 +5320,17 @@ function rScratch(b){
 
   return { section:s,
            check:() => ({ ok:true }),
+           /* The bar carries the title, so the card above the page says
+              nothing and is hidden while this task is on screen. */
+           fullTask: true,
+           onShow: fitSoon,
+           /* Called by the page holding this task: its title leads the bar,
+              and this task's own heading follows it. */
+           setPage: (title, text) => {
+             const t = String(title || "").trim();
+             if (!t){ setNames(b.title || "", b.task || ""); return; }
+             setNames(t, [text].concat(ownHeading).filter(Boolean).join(" \u00b7 "));
+           },
            brief:{ eyebrow:"Code", title:b.title || "", text:b.task || "" } };
 }
 /* ======================================================================
