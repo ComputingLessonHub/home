@@ -575,7 +575,7 @@ const BLANK = {
                      run:true, edit:true, help:true, tooltips:true, autocomplete:true, expect:"" }),
   /* Block coding in the Scratch editor. No project means the new-project
      cat; project and own are put in by the starter project editor. */
-  scratch:  () => ({ type:"scratch", title:"", task:"", height:600 }),
+  scratch:  () => ({ type:"scratch", title:"", task:"" }),
   question: () => ({ type:"question", heading:"", context:"", prompt:"", minWords:20, lines:4 }),
   quiz:     () => ({ type:"quiz", title:"", pass:{ mode:"percent", value:70 },
                      questions:[{ q:"", options:["",""], answers:[0], hint:"", why:"" }] }),
@@ -1097,8 +1097,6 @@ function compileOne(b, id, target){
       const blk = { type:"scratch", id };
       if (b.title) blk.title = b.title;
       if (b.task) blk.task = b.task;
-      const h = parseInt(b.height, 10);
-      if (h && h !== 600) blk.height = Math.max(420, Math.min(900, h));
       if (b.project && typeof b.project === "object"){
         blk.project = b.project;
         if (b.own && Object.keys(b.own).length) blk.own = b.own;

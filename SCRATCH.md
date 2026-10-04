@@ -67,10 +67,19 @@ never given the camera.
 
 ## How it behaves
 
+- **Layout:** the task takes the whole page.
+  - It spans the lesson's full width, and the editor fills the height down
+    to the bottom bar. If other work sits above it on the page, the editor
+    fills the screen once you scroll down to it.
+  - The page's title, subtitle and the task's own heading sit in the task's
+    dark bar, so the title card above the page is hidden.
+  - The task rail down the left is hidden on that page, because the editor
+    covers where it would be.
 - **Student:** the editor starts when the task scrolls into view and stops
-  any running scripts when it leaves the screen. The task has **Start
-  again**, **Download** (a `.sb3` file, which is also how work is handed in
-  when the site runs with `OFFLINE: true`) and **Full screen**.
+  any running scripts when it leaves the screen. The bar has **Download** (a
+  `.sb3` file, which is also how work is handed in when the site runs with
+  `OFFLINE: true`), **Full screen** and **About**. There is no Start again:
+  a student cannot throw their project away.
 - **Teacher viewing work, and the builder preview:** the task shows the
   stage picture and "2 sprites, 5 scripts, 23 blocks". **Open in the block
   editor** loads the project itself.

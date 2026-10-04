@@ -912,7 +912,7 @@ EDITORS.web = function(b, k){
 /* Block coding: the Scratch editor, starting from a project the teacher
    builds in the same editor, or from the new-project cat. */
 EDITORS.scratch = function(b, k){
-  const { F, R, add, redraw, settings } = k;
+  const { F, R, add, redraw } = k;
   F("Heading (optional)", "title");
   R("Subheading (optional)", "task", { rows:2 });
   const w = el("div","bfield");
@@ -944,10 +944,6 @@ EDITORS.scratch = function(b, k){
     + "sounds from the Scratch library take up no room at all."]));
   w.appendChild(row);
   add(w);
-  settings(() => {
-    F("Height of the editor, in pixels", "height", { num:true,
-      help:"600 unless you change it, and between 420 and 900. Students can also make it full screen." });
-  });
   checklistField(b, k);
 };
 
