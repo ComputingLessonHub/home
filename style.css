@@ -5904,13 +5904,13 @@ html[data-bg=night]{--avg:#C39BF0}
 .scratch-about{font-size:var(--text-xs); color:var(--ed-gut); padding:0 4px}
 .scratch-about:hover{color:var(--ed-fg)}
 .scratch > .checklist-wrap{margin:0; padding:8px 18px 0}
-.scratch-box{position:relative; border-bottom:1px solid var(--ed-line); overflow:hidden; background:#E9F1FC}
+.scratch-box{position:relative; border-bottom:1px solid var(--ed-line); overflow:hidden; background:var(--panel-2)}
 .scratch-frame{display:block; width:100%; height:100%; border:0}
 .scratch-card{height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:12px; padding:16px; text-align:center}
 .scratch-shot{width:240px; max-width:100%; height:auto; aspect-ratio:4/3; border:1px solid var(--line-2);
   border-radius:var(--rad-sm); background:#fff}
-.scratch-sum{margin:0; font-size:var(--text-md); color:#575E75; font-weight:700}
+.scratch-sum{margin:0; font-size:var(--text-md); color:var(--muted); font-weight:700}
 .scratch-warn{margin:0; padding:8px 18px; color:var(--red); font-size:var(--text-md); font-weight:700}
 /* Full screen: the task fills the window, the bar stays on top, and the
    editor takes the rest. Escape or the button puts it back. The width and
@@ -5927,4 +5927,4 @@ body.scratch-fullpage{overflow:hidden}
 .scratch-starter-note{flex:1; min-width:200px; font-size:var(--text-sm); color:var(--muted)}
 .scratch-starter-err{margin:0; color:var(--red); font-weight:700; font-size:var(--text-md)}
 .scratch-starter-box{flex:1; min-height:0; border:1.5px solid var(--line-2); border-radius:var(--rad-md);
-  overflow:hidden; background:#E9F1FC}
+  overflow:hidden; background:var(--panel-2)}
