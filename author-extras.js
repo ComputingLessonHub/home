@@ -407,7 +407,7 @@ function taskProblems(b){
       if (!plainText(b.prompt)) out.push("No question written");
       break;
     case "code":
-      out.push("Python or web page not picked yet");
+      out.push("Python, web page or blocks not picked yet");
       break;
     case "ide": case "web":
       (b.checks || []).forEach((c, i) => {
@@ -419,6 +419,12 @@ function taskProblems(b){
         if (!String(c.label || "").trim()) out.push("Checklist line " + (i + 1) + " has no wording");
         else if (needsValue && !String(c.value || "").trim()) out.push("Checklist line " + (i + 1) + " has nothing to look for");
         else if (needsSel && !String(c.selector || "").trim()) out.push("Checklist line " + (i + 1) + " has nothing to look for");
+      });
+      break;
+    case "scratch":
+      (b.checks || []).forEach((c, i) => {
+        if (!c || c.manual) return;
+        if (!String(c.label || "").trim()) out.push("Checklist line " + (i + 1) + " has no wording");
       });
       break;
     case "choice": {

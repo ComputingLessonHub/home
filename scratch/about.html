@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About the block editor</title>
+<style>
+  :root { --bg:#ffffff; --text:#1d1d1b; --muted:#5e5e5c; --link:#2f6bae; --line:#e0e0e0; }
+  @media (prefers-color-scheme: dark){
+    :root { --bg:#16181d; --text:#e8e8e6; --muted:#a9aaa6; --link:#8bb8ec; --line:#33363d; }
+  }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:680px; margin:0 auto; padding:32px 16px 48px; }
+  h1 { font-size:26px; margin:0 0 16px; }
+  h2 { font-size:18px; margin:28px 0 8px; }
+  p, li { color:var(--text); }
+  .small { color:var(--muted); font-size:14px; }
+  a { color:var(--link); }
+  code { font-size:14px; }
+  hr { border:0; border-top:1px solid var(--line); margin:28px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>About the block editor</h1>
+  <p>The block coding tasks in these lessons use the Scratch 3 editor, made by the
+     <a href="https://www.scratchfoundation.org/" rel="noopener">Scratch Foundation</a>.
+     It runs entirely in your browser. You do not need a Scratch account.</p>
+
+  <h2>What is saved</h2>
+  <p>Your scripts, sprites and variables are saved with your lesson work, along with any
+     costumes you draw yourself. Sprites, backdrops and sounds from the Scratch library are not
+     copied: the editor fetches them again from Scratch's library when you open your project.</p>
+  <p>In a lesson you cannot upload your own pictures or sounds or record sounds, so that every
+     project stays small enough to save. Press <b>Download</b> on the task to take a copy of your
+     project home as a <code>.sb3</code> file, which opens in Scratch.</p>
+
+  <h2>Licence and source code</h2>
+  <p>The Scratch editor is free software, licensed under the
+     <a href="gui/LICENSE">GNU Affero General Public License, version 3</a>.
+     The version used here is the Scratch Foundation's published build, listed in
+     <a href="gui/VERSION">gui/VERSION</a>.</p>
+  <ul>
+    <li>Source code of the editor:
+      <a href="https://github.com/scratchfoundation/scratch-editor" rel="noopener">github.com/scratchfoundation/scratch-editor</a>,
+      published on npm as <code>@scratch/scratch-gui</code>.</li>
+    <li>How it is fetched for this site, and the one change made to it (the address it loads its
+      own files from): <a href="vendor.sh">vendor.sh</a>.</li>
+    <li>The code that connects it to the lessons:
+      <a href="editor.html">editor.html</a> and <a href="editor.js">editor.js</a>.</li>
+  </ul>
+  <hr>
+  <p class="small">Scratch is a project of the Scratch Foundation. The Scratch name, logo and
+     the Scratch Cat are trademarks of the Scratch Foundation. This site is not made, endorsed
+     or supported by the Scratch Foundation.</p>
+</main>
+</body>
+</html>

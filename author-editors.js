@@ -379,6 +379,7 @@ const TASK_ICONS = {
   code:      '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>',
   ide:       '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>',
   web:       '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M10 13l-2 2 2 2M14 13l2 2-2 2"/>',
+  scratch:   '<path d="M4 5h4l1 1.5h2L12 5h8v5h-8l-1 1.5H9L8 10H4z"/><path d="M4 14h4l1 1.5h2L12 14h6v5H4z"/>',
   password:  '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3M12 15v2"/>',
   caesar:    '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3v4.5M12 16.5V21M3 12h4.5M16.5 12H21"/>',
   binary:    '<rect x="4" y="5" width="5" height="14" rx="2.5"/><path d="M15 7l2-2v14M14 19h6"/>',
@@ -853,7 +854,14 @@ EDITORS.code = function(b, k){
     Object.assign(b, made);
     redraw(); schedulePreview();
   });
-  row.appendChild(py); row.appendChild(web);
+  const blocks = el("button","btn-primary bmini2","Blocks (Scratch)");
+  blocks.addEventListener("click", () => {
+    const made = BLANK.scratch();
+    Object.keys(b).forEach(k => delete b[k]);
+    Object.assign(b, made);
+    redraw(); schedulePreview();
+  });
+  row.appendChild(py); row.appendChild(web); row.appendChild(blocks);
   row.appendChild(helpDot("Pick one and the right options appear. You can delete the task and start again if you change your mind."));
   w.appendChild(row);
   add(w);
@@ -900,6 +908,118 @@ EDITORS.web = function(b, k){
   checklistField(b, k);
   modelField(b, k);
 };
+
+/* Block coding: the Scratch editor, starting from a project the teacher
+   builds in the same editor, or from the new-project cat. */
+EDITORS.scratch = function(b, k){
+  const { F, R, add, redraw, settings } = k;
+  F("Heading (optional)", "title");
+  R("Subheading (optional)", "task", { rows:2 });
+  const w = el("div","bfield");
+  w.appendChild(el("label","","Starter project"));
+  const has = !!(b.project && typeof b.project === "object");
+  const own = has && b.own ? Object.keys(b.own).reduce((n, key) => n + String(b.own[key]).length, 0) : 0;
+  w.appendChild(el("p","bhelp", has
+    ? window.scratchHub.describe(b.project)
+      + (own ? ", with " + Math.max(1, Math.round(own * 3 / 4 / 1024)) + "KB of your own pictures and sounds" : "")
+    : "None yet: they start with the cat on a blank stage, as a new Scratch project does."));
+  const row = el("div","brow");
+  const edit = el("button","btn-primary bmini2", has ? "Edit the starter project" : "Build a starter project");
+  edit.type = "button";
+  edit.addEventListener("click", () => openScratchStarter(b, redraw));
+  row.appendChild(edit);
+  if (has){
+    const drop = el("button","btn-ghost bmini2","Remove it");
+    drop.type = "button";
+    drop.addEventListener("click", () => {
+      delete b.project; delete b.own;
+      saveDraft(); redraw(); schedulePreview();
+    });
+    row.appendChild(drop);
+  }
+  row.appendChild(helpDot(["Opens the block editor. Build what every student starts from: sprites, "
+    + "backdrops, scripts to finish off. You can also open a .sb3 file saved from Scratch.",
+    "Your own pictures and sounds can go in here, up to about 300KB of them, because the starter is "
+    + "kept inside the lesson. Students cannot upload or record their own. Sprites, backdrops and "
+    + "sounds from the Scratch library take up no room at all."]));
+  w.appendChild(row);
+  add(w);
+  settings(() => {
+    F("Height of the editor, in pixels", "height", { num:true,
+      help:"600 unless you change it, and between 420 and 900. Students can also make it full screen." });
+  });
+  checklistField(b, k);
+};
+
+/* The starter project's own editor, over the whole builder: the block
+   editor needs the room, and a pop-up the size of the others would leave
+   it unusable. Nothing changes on the task until Use this is pressed. */
+function openScratchStarter(b, done){
+  const back = el("div","scratch-starter");
+  back.setAttribute("role", "dialog");
+  back.setAttribute("aria-label", "Starter project");
+  const bar = el("div","scratch-starter-bar");
+  bar.appendChild(el("b","","Starter project"));
+  bar.appendChild(el("span","scratch-starter-note",
+    "What every student starts from. You can upload and record here; they cannot."));
+  const file = document.createElement("input");
+  file.type = "file"; file.accept = ".sb3"; file.hidden = true;
+  const loadBtn = el("button","btn-ghost bmini2","Open a .sb3 file\u2026");
+  const newBtn = el("button","btn-ghost bmini2","Start again from new");
+  const useBtn = el("button","btn-primary bmini2","Use this as the starter");
+  const cancelBtn = el("button","btn-ghost bmini2","Cancel");
+  [loadBtn, newBtn, useBtn, cancelBtn].forEach(x => { x.type = "button"; x.disabled = true; bar.appendChild(x); });
+  cancelBtn.disabled = false;
+  bar.appendChild(file);
+  const err = el("p","scratch-starter-err");
+  err.setAttribute("role", "alert");
+  err.hidden = true;
+  const holder = el("div","scratch-starter-box");
+  back.appendChild(bar); back.appendChild(err); back.appendChild(holder);
+  document.body.appendChild(back);
+  document.body.classList.add("scratch-fullpage");
+
+  const close = () => { back.remove(); document.body.classList.remove("scratch-fullpage"); };
+  const say = (text) => { err.textContent = text; err.hidden = !text; };
+  const ed = window.scratchHub.mount(holder, {
+    project: (b.project && typeof b.project === "object") ? b.project : null,
+    own: b.own || null,
+    mode: "teacher",
+    limits: { project: 300000, own: 300000 }
+  });
+  let hs = null;
+  ed.ready.then(got => {
+    hs = got;
+    if (!hs){ say("The block editor could not start here. Try refreshing the page."); return; }
+    [loadBtn, newBtn, useBtn].forEach(x => { x.disabled = false; });
+  });
+  cancelBtn.addEventListener("click", close);
+  loadBtn.addEventListener("click", () => file.click());
+  file.addEventListener("change", () => {
+    const f = file.files && file.files[0];
+    file.value = "";
+    if (!f || !hs) return;
+    say("");
+    f.arrayBuffer()
+      .then(buf => hs.loadFile(buf))
+      .catch(() => say("That file could not be opened. It needs to be a project saved from Scratch 3 (.sb3)."));
+  });
+  newBtn.addEventListener("click", () => { if (hs){ say(""); hs.load(null, null); } });
+  useBtn.addEventListener("click", () => {
+    if (!hs) return;
+    const snap = hs.snapshot();
+    if (!snap || snap.problem){
+      say((snap && snap.problem ? snap.problem.replace(/\bsave\b/, "use as a starter") : "")
+        || "The project could not be read.");
+      return;
+    }
+    b.project = snap.project;
+    if (Object.keys(snap.own || {}).length) b.own = snap.own; else delete b.own;
+    saveDraft(); schedulePreview();
+    close();
+    if (done) done();
+  });
+}
 
 EDITORS.ide = function(b, k){
   const { F, R, PY, toggleRow, add, redraw, settings } = k;
