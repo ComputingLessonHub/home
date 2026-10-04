@@ -71,9 +71,8 @@ a song in it breaks the 2 MB limit. A small project would still fill
   See Project Page and the account menu. It should keep everything else.
 - **The sprite, sound and backdrop libraries** load from
   `cdn.assets.scratch.mit.edu` unless they are copied into the build. Check
-  that the school filter allows it. Otherwise, add the library to the build:
-  it is a few hundred MB, which is too much for GitHub Pages, so put it in
-  Blob storage (see below).
+  that the school filter allows it. Otherwise, copy a curated set into the
+  build (see "The one dependency" below).
 
 ### C. Make a block editor of our own on Blockly
 
@@ -81,85 +80,92 @@ This avoids the licence question, but it is not Scratch: there is no stage,
 no sprites and no sounds. It is a different project, so it is not considered
 further here.
 
-## Saving: split the project, keep the scripts in Cosmos, put the assets in Blob storage
+## Saving: everything in the existing work item, no new Azure resources
 
-This is the same design scratch.mit.edu uses (a projects server and a
-separate assets server). It fits the limits above:
+Recorded sounds and uploaded pictures are not needed. Without them, a
+project's size comes from three things, and each has a cheap place to live.
+
+| Part of the project | Typical size | Where it is kept |
+|---|---|---|
+| `project.json` (scripts, sprites, variables) | 5-200 KB | The work item, as an ordinary task answer |
+| Library sprites, backdrops and sounds | Can be MBs, but already stored | Nowhere new. The project only stores each file's hash, and the editor fetches the file from the Scratch library server (`cdn.assets.scratch.mit.edu`) |
+| Costumes the child paints or edits | 1-20 KB each as vector (SVG) | Inline in the work item, as base64, within a budget |
 
 ```
-work item (Cosmos, as now)                 Azure Blob Storage (new, UK South)
---------------------------------           ----------------------------------
-{ ..., scratch_1: {                        assets/<md5>.<ext>   <- shared by everyone,
-    project: { ...project.json... },                               written once
-    assets: ["bcf4...svg", "83a9...wav"],
-    bytes: 1843200, savedAt: "..." } }
+work item (Cosmos, as now)
+{ ..., scratch_1: {
+    project: { ...project.json... },
+    own: { "9f2c...svg": "<base64>", ... },   <- only assets not in the Scratch library
+    savedAt: "..." } }
 ```
 
-1. **`project.json` stays in the work item**, as an ordinary task answer.
-   That keeps it in the existing save, restore, marking, backup and offline
-   code without changes. Cap it at around 500 KB. Real KS3 projects are far
-   below that, and it leaves room inside the 2 MB item for the lesson's other
-   tasks.
-2. **Assets go to Blob storage, named by their hash.** Before uploading, the
-   browser asks which hashes are already stored and sends only the new ones.
-   The cat, the starter project's sprites and every library sprite get
-   uploaded **once for the whole school**. A class of 30 remixing the same
-   starter adds almost nothing. An unchanged project re-saves for the cost of
-   the JSON alone.
-3. **Uploads go straight from the browser to Blob storage**, using a
-   short-lived SAS URL that the Function hands out. The large bytes never pass
-   through the Function or Cosmos, so they cost no RU and do not hold up a
-   class's hand-in. A single PUT can take far more than any project needs.
-   The storage account needs a CORS rule for the site's origin.
-4. **Reads** use the same route: a read SAS for the student who owns the work
-   or for their teachers. The container stays **private**, because children's
-   recorded voices are personal data. Hashes are hard to guess, but that is not
-   access control.
+On save, the page goes through the project's assets. Any asset whose hash is
+in the editor's bundled library index (or in the lesson's starter project) is
+left out, because the editor can fetch it again. What remains is what the child
+made, and it goes in `own`. On load, `own` is handed to the VM's storage
+before the project is loaded, so those assets never get requested from the
+network.
 
-### The Function changes this needs
+This needs **no new Function routes**. `/api/submit`, restore, marking, backup
+and offline mode already carry task answers, and this is just a bigger one.
 
-The backend is not in this repo (`_store.js`, the Function App). `practice.js`
-says the Function count is fixed ("there are eight and eight are allowed"),
-so add **routes to the existing submit and teacher functions** rather than
-new functions:
+### Removing the editor features that would make files large
 
-- `POST /api/assets/check` `{ hashes: [...] }` returns the hashes not yet
-  stored, plus a write SAS for each (upload only, about 10 minutes, the exact
-  blob name only).
-- `GET /api/assets/read?lesson=...&task=...` returns read SASs (or one
-  container-level read SAS lasting a few minutes) once it has checked that the
-  caller owns the work or teaches the class.
-- `/api/submit`: refuse a scratch answer whose `project` is over the cap, and
-  check that every hash it lists is in storage. If one is missing, the save
-  should say so instead of storing a project that cannot be opened.
-- Backup and restore: add the asset hashes the work items refer to. Purge:
-  remove assets nobody refers to any more. Run this as an occasional sweep
-  rather than on every delete, since assets are shared.
+The hosted fork turns off:
 
-### Limits to apply in the browser
+- the **Record** sound button, and **Upload** for sprites, costumes, backdrops
+  and sounds
+- **Convert to Bitmap** in the paint editor. Vector costumes are a few KB;
+  bitmap costumes can be hundreds. Library bitmap costumes still work, because
+  they come from the library server.
+- the **sound editor's effects** (Louder, Reverse, Robot and so on). Each one
+  creates a new WAV file of the whole sound. Library sounds are still
+  available to play.
+- File > Load/Save, Share and the account menu, as before.
 
-- Refuse a single sound or costume over about **2 MB**, and a project whose
-  total size is over about **10 MB**. Tell the child plainly what to cut
-  ("This sound is 4 MB. Try a shorter clip.").
-- Bitmap costumes can go through the same scaling as `shrinkImage`, since the
-  Scratch stage is only 480x360 anyway.
-- Don't save on every block drag. Save on the existing Save Work button, on
-  Finish, and on a timer (for example every 60 seconds while
-  `PROJECT_CHANGED` keeps firing). A JSON-only save is small, but a class of
-  30 saving every few seconds would still use up the write budget.
-- **Local copy:** keep it in **IndexedDB**, not `localStorage`. IndexedDB has
-  room for hundreds of MB. `localStorage` is where it would fail first.
-- **Leaving the tab:** a keepalive save is limited to 64 KB, so send only
-  `project.json` (and only if it fits). Assets will already have been
-  uploaded by the time they appear in a save.
+### Limits checked in the browser and on the server
+
+- `project.json` at most about **500 KB**, and `own` at most about **500 KB**
+  of base64. Together that is 1 MB, leaving room in the 2 MB item for the
+  lesson's other tasks. A child who hits the limit is told plainly, for
+  example: "Your drawings are taking up too much room. Try deleting costumes
+  you are not using."
+- `/api/submit` should check the same caps, so a hand-edited request cannot
+  push a work item over 2 MB.
+- Save on Save Work, on Finish, and on a timer (for example every 60 seconds
+  while `PROJECT_CHANGED` keeps firing), not on every block dragged.
+- The local copy fits in `localStorage` under these caps. Moving it to
+  IndexedDB is still safer if a lesson has several Scratch tasks.
+- A keepalive save (sent as the tab closes) is limited to 64 KB, so send it
+  only when the answer fits. Otherwise rely on the timer save.
+
+### Teacher starter projects
+
+A teacher uploads a starter `.sb3` in the lesson builder. The builder strips
+out library assets the same way, and refuses recorded sounds. Any other
+custom assets are stored in the lesson itself, under the same 500 KB limit.
+For offline lessons, that is the JSON file in `lessons/`. Teachers can upload
+bitmap pictures here: the cap holds them in check, and only one copy exists
+per lesson, not one per child.
+
+### The one dependency: the Scratch library server
+
+Library sprites, sounds and thumbnails come from
+`cdn.assets.scratch.mit.edu`. Before building anything, **check from a
+student PC that the school filter allows that address**. If it doesn't:
+
+- Copy just the library items the lessons use into the site, for example
+  `/scratch/assets/<md5>.<ext>`, and point the editor's asset loader there.
+  GitHub Pages allows a 1 GB site, so a curated set of a few hundred items
+  fits easily.
+- Do not copy the whole library, which is far bigger than a curated set needs.
 
 ### Costs
 
-Blob storage (Hot, LRS, UK South) costs a couple of pence per GB a month, and
-transactions cost fractions of a penny per 10,000. Even 20 GB of projects
-would cost well under £1 a month. It keeps the 25 GB of Cosmos free for what
-it is already used for. The Blob storage account is **a new Azure resource**,
-so it will need the same IT approval the Function App and Cosmos needed.
+Nothing new. The work items grow a little: a Scratch answer is typically
+20-300 KB, against screenshots at 100-150 KB. That is well within the free
+25 GB. A JSON save costs about the same in RU as a lesson with a screenshot
+does now.
 
 ## Offline mode (`HUB.OFFLINE = true`)
 
@@ -170,8 +176,8 @@ the file in the hub's editor (or in TurboWarp). This needs no server at all.
 ## Marking and autograding
 
 - The marking view opens the project in the same editor iframe, read-only.
-  It fetches `project.json` from the work item and the assets through a read
-  SAS.
+  Everything it needs is in the work item (`project` and `own`), which the
+  marking screen already fetches.
 - `project.json` is plain data, so `autograder.js` could tick checklist lines
   without running anything: "uses a forever loop" (`control_forever`), "makes
   a variable", "has a when-key-pressed hat", "has at least 3 sprites". This
@@ -196,16 +202,11 @@ the file in the hub's editor (or in TurboWarp). This needs no server at all.
 
 ## Suggested order
 
-1. Build the TurboWarp fork (or scratch-gui) with the menus trimmed, put it in
-   `/scratch/`, and add an `rScratch` task in `lesson.html`. It saves
-   `project.json` into the work item. Library assets need not be saved, since
-   they load from the Scratch CDN by hash. Assets the child makes, including
-   any costume edited in the paint editor (which becomes a new asset), are
-   kept inline as base64 within a **budget of about 1 MB**. That budget is
-   room for many painted SVGs, which are a few KB each, but not for recorded
-   sounds. Over the budget, the child is told what to remove. This needs no
-   new Azure resources and covers most KS3 Scratch lessons. Test whether the
-   school filter allows the CDN.
-2. Add the Blob storage account, the asset routes and IndexedDB caching, so
-   uploaded and recorded costumes and sounds work.
-3. Add marking, the autograder checks, and the `.sb3` hand-in for offline mode.
+1. Check from a student PC that `cdn.assets.scratch.mit.edu` is reachable.
+2. Build the TurboWarp fork (or scratch-gui) with the features listed above
+   turned off, and put it in `/scratch/`.
+3. Add an `rScratch` task to `lesson.html` and the lesson builder, saving
+   `project.json` plus `own` within the caps. Add the matching cap check to
+   `/api/submit`.
+4. Add marking, the autograder checks, and the `.sb3` hand-in for offline
+   mode.
