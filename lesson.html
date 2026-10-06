@@ -5223,6 +5223,53 @@ function rWeb(b){
    and the height down to the bottom bar. The page's title moves into the
    task's own bar, so the editor gets the room the title card had.
    ====================================================================== */
+/* What the block editor is and where its source is, in a pop-up rather than
+   a new tab: a new tab in the middle of a lesson is one a child then has to
+   find their way back from. The words stay in scratch/about.html, which is
+   the licence notice the editor needs and has to stand on its own, and are
+   read out of it so there is one copy. If it cannot be read, the page opens
+   in a tab the way the link always did. */
+function showScratchAbout(){
+  const page = "scratch/about.html";
+  fetch(page, { cache:"no-cache" }).then(r => {
+    if (!r.ok) throw new Error(String(r.status));
+    return r.text();
+  }).then(html => {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const main = doc.querySelector("main");
+    if (!main) throw new Error("no main");
+    const back = el("div","modal-back no-print");
+    const box = el("div","modal scratch-aboutbox");
+    const close = () => { back.remove(); document.removeEventListener("keydown", esc); };
+    const esc = (e) => { if (e.key === "Escape") close(); };
+    const x = el("button","btn-ghost iconbtn modal-x","✕");
+    x.title = "Close";
+    x.addEventListener("click", close);
+    box.appendChild(x);
+    const h1 = main.querySelector("h1");
+    box.appendChild(el("h2","", h1 ? h1.textContent : "About the block editor"));
+    if (h1) h1.remove();
+    const body = el("div","scratch-abouttext");
+    Array.from(main.childNodes).forEach(n => body.appendChild(document.importNode(n, true)));
+    /* the links were written relative to scratch/, and belong in a tab of
+       their own rather than in place of the lesson */
+    body.querySelectorAll("a[href]").forEach(a => {
+      a.href = new URL(a.getAttribute("href"), new URL(page, location.href)).href;
+      a.target = "_blank";
+      a.rel = "noopener";
+    });
+    box.appendChild(body);
+    const ok = el("button","btn-primary modal-cta","Close");
+    ok.addEventListener("click", close);
+    box.appendChild(ok);
+    scrollBody(box);
+    back.appendChild(box);
+    back.addEventListener("mousedown", (e) => { if (e.target === back) close(); });
+    document.addEventListener("keydown", esc);
+    document.body.appendChild(back);
+    ok.focus();
+  }).catch(() => { window.open(page, "_blank", "noopener"); });
+}
 function rScratch(b){
   const s = el("section","ide scratch");
   const bar = el("div","ide-bar scratch-bar");
@@ -5251,6 +5298,11 @@ function rScratch(b){
   about.target = "_blank";
   about.rel = "noopener";
   about.title = "The block editor is Scratch 3, from the Scratch Foundation";
+  about.addEventListener("click", (e) => {
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;   // asked for a tab on purpose
+    e.preventDefault();
+    showScratchAbout();
+  });
   bar.appendChild(about);
   s.appendChild(bar);
 
@@ -5277,15 +5329,18 @@ function rScratch(b){
   }
 
   /* ---------- before the editor is opened ----------
-     A student's opens on its own once the task is on screen. A teacher's
-     view of saved work, and the builder's preview, show a picture of the
-     stage and what is in the project, and only start the editor when asked:
-     it is a large thing to start for every student a teacher pages through. */
+     A student's opens on its own once the task is on screen, and so does a
+     teacher's while marking: reading the blocks is the marking, and a button
+     to press for every student paged through was one press per child for
+     nothing. The builder's preview and the PDF still show a picture of the
+     stage and what is in the project, and only start the editor when asked. */
+  const marking = viewParam !== null && pdfParam === null;
+  const opensItself = !spectate || marking;
   function paintCard(){
     if (ed) return;
     box.innerHTML = "";
     const card = el("div","scratch-card");
-    if (!spectate){
+    if (opensItself){
       card.appendChild(tel("p","scratch-sum","Loading the block editor…"));
       box.appendChild(card);
       return;
@@ -5348,11 +5403,11 @@ function rScratch(b){
   if ("IntersectionObserver" in window){
     new IntersectionObserver((seen) => {
       seen.forEach(entry => {
-        if (entry.isIntersecting){ if (!spectate) mountNow(); }
+        if (entry.isIntersecting){ if (opensItself) mountNow(); }
         else if (live) live.stop();
       });
     }).observe(box);
-  } else if (!spectate) setTimeout(mountNow, 0);
+  } else if (opensItself) setTimeout(mountNow, 0);
 
   const checklist = attachChecklist(s, b.checks,
     () => window.runScratchChecks(b.checks, projectNow(), runs), b.id, b);

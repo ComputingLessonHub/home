@@ -6,7 +6,8 @@
                                 optional button such as Undo
      hubUI.icon(name, size)     a fine-line icon as an <svg> string
      hubUI.iconEl(name, size)   the same, as an element
-     hubUI.pref(name)           one of the layout choices in Settings
+     hubUI.pref(name)           how the console is laid out; only the side
+                                menu can be changed, by Switch to old view
      hubUI.skeleton(shape, n)   grey shapes to show while something loads
 
    Classic script with no dependencies, so it can be loaded anywhere.
@@ -15,41 +16,42 @@
   "use strict";
 
   /* ---------- layout choices ----------
-     Kept with the display settings in hub_prefs, under "ui", so they belong
-     to this browser the same way the theme does. Each one is a way of trying
-     a new layout out, which is why they start on. */
-  const DEFAULTS = {
-    sidebar: true,          // the menu down the left of the console
+     These began as switches in Settings, each a way of trying a new layout
+     out. The trial is over: the placeholder shapes, the detailed lesson
+     cards and the Home dashboard are simply how the console looks now, and
+     the class dashboard is off until it is worth opening onto. The side menu
+     is the one choice left, as "Switch to old view", for anybody who wants
+     the console the way it was.
+
+     Kept under a new name, oldView, rather than the trial's sidebar switch,
+     so everybody starts on the new view whatever they had set while trying
+     it out. */
+  const FIXED = {
     skeletons: true,        // grey shapes while a screen loads
     richCards: true,        // lesson cards in the hub with more on them
-    classDash: true,        // a class opens onto its dashboard
+    classDash: false,       // a class opens onto its dashboard
     homeDash: true          // Home as a dashboard: today's lessons and what needs doing
   };
-  const LABELS = {
-    sidebar: ["Side menu", "Lessons, classes and the rest down the left of the console."],
-    skeletons: ["Placeholder shapes while loading", "Grey shapes where the screen is about to be, rather than dots."],
-    richCards: ["Detailed lesson cards", "Pages, tasks, when it was changed and which classes have it."],
-    classDash: ["Class dashboard", "A class opens on what is live and what needs marking."],
-    homeDash: ["Home dashboard", "Home shows today's lessons from your timetable, what is live and what needs doing."]
-  };
+  const NAMES = ["sidebar"].concat(Object.keys(FIXED));
   function prefs(){ try{ return JSON.parse(localStorage.getItem("hub_prefs") || "{}"); }catch(e){ return {}; } }
+  function oldView(){ return !!(prefs().ui || {}).oldView; }
   function pref(name){
-    const ui = prefs().ui || {};
-    return ui[name] === undefined ? !!DEFAULTS[name] : !!ui[name];
+    if (name === "sidebar") return !oldView();
+    return !!FIXED[name];
   }
-  function setPref(name, on){
+  function setOldView(on){
     const p = prefs();
     p.ui = p.ui || {};
-    p.ui[name] = !!on;
+    p.ui.oldView = !!on;
     try{ localStorage.setItem("hub_prefs", JSON.stringify(p)); }catch(e){}
     paintHtml();
-    try{ window.dispatchEvent(new CustomEvent("hubui", { detail:{ name, on: !!on } })); }catch(e){}
+    try{ window.dispatchEvent(new CustomEvent("hubui", { detail:{ name:"sidebar", on: !on } })); }catch(e){}
   }
   /* The ones that are only a matter of styling are put on <html>, so the
      stylesheet can follow them without anybody redrawing anything. */
   function paintHtml(){
     const d = document.documentElement;
-    Object.keys(DEFAULTS).forEach(k => { d.dataset["ui" + k[0].toUpperCase() + k.slice(1)] = pref(k) ? "on" : "off"; });
+    NAMES.forEach(k => { d.dataset["ui" + k[0].toUpperCase() + k.slice(1)] = pref(k) ? "on" : "off"; });
   }
   paintHtml();
 
@@ -242,6 +244,6 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watchEmoji, { once:true });
   else watchEmoji();
 
-  window.hubUI = { toast, icon, iconEl, pref, setPref, prefLabels: LABELS, prefNames: Object.keys(DEFAULTS),
+  window.hubUI = { toast, icon, iconEl, pref, oldView, setOldView,
                    skeleton, ICONS, swapEmoji };
 })();

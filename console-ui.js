@@ -392,19 +392,19 @@
         meta.textContent = bits.join("  ·  ");
       }));
 
-      /* which classes have it, versions included */
+      /* How many classes have it, versions included. A count rather than
+         the names: a row of class chips grew the card for every class given
+         it and pushed the buttons down unevenly across the grid. */
       if (OFFLINE){
-        card.appendChild(el("p","rc-classes", l.code ? "Code " + l.code : "No code yet"));
+        card.appendChild(el("p","lp-note", l.code ? "Code " + l.code : "No code yet"));
       } else {
-        const doing = new Map();
+        const doing = new Set();
         familyOf(id).forEach(v => classChoices(v.lesson_id).forEach(c => {
-          if (c.given) doing.set(String(c.name).toLowerCase(), c.name);
+          if (c.given) doing.add(String(c.name).toLowerCase());
         }));
-        const row = el("div","rc-classes");
-        if (!doing.size) row.appendChild(el("span","rc-dim","Not given to any class yet"));
-        Array.from(doing.values()).slice(0, 6).forEach(n => row.appendChild(el("span","rc-class", n)));
-        if (doing.size > 6) row.appendChild(el("span","rc-dim","+" + (doing.size - 6) + " more"));
-        card.appendChild(row);
+        card.appendChild(el("p","lp-note", doing.size
+          ? doing.size + " class" + (doing.size === 1 ? "" : "es")
+          : "Not given to any class yet"));
       }
 
       const acts = el("div","lp-acts");

@@ -252,7 +252,7 @@ async function boot(){
     /* admin.html's unit-wide progress screen sends a teacher here already
        wanting the markbook, not the student's work, when they have drilled
        down from a specific lesson in the trend. */
-    tab(qs.get("tab") === "progress" ? "progress" : "work");
+    tab(wantedTab);
   }catch(e){
     workStopped(e.message);
   }
@@ -406,18 +406,25 @@ async function refreshWork(){
 on("refreshWork", "click", refreshWork);
 
 /* ---------------- which half of the page is showing ---------------- */
+/* The tab can be picked while the class is still loading. It is only
+   remembered then, and the markbook or the work comes up once there is
+   something to put in it: a teacher who knows they want the markbook should
+   not have to wait for the work to arrive before they can say so. */
+let wantedTab = qs.get("tab") === "progress" ? "progress" : "work";
 function tab(which){
-  if (!$("loadPane").hidden) return;      // nothing to show yet
   const progress = which === "progress";
-  $("progressPane").hidden = !progress;
-  $("workPane").hidden = progress;
+  wantedTab = progress ? "progress" : "work";
   $("tabProgress").classList.toggle("on", progress);
   $("tabWork").classList.toggle("on", !progress);
+  if (!$("loadPane").hidden) return;      // nothing to show yet
+  $("progressPane").hidden = !progress;
+  $("workPane").hidden = progress;
   if (progress) syncProgressHeaderOffset();
   if (!progress && !framedYet) showStudent(idx);
 }
 on("tabProgress", "click", () => tab("progress"));
 on("tabWork", "click", () => tab("work"));
+tab(wantedTab);
 
 /* ---------------- the progress markbook ----------------
    A student's saved work already holds everything a quantifiable task needs
