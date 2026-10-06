@@ -98,6 +98,81 @@
       .filter(l => /#/.test(l.replace(/"[^"]*"|'[^']*'/g, "")));
   }
 
+  /* ---------- variables ----------
+     A variable is used wherever its name is, not only on the line that sets
+     it. "variable" used to mean a line of the form x = ..., so "uses a print,
+     and three variables on that line" could never pass on
+     print(name, age, colour): the print line sets nothing. These are the
+     names a line reads or sets.
+
+     A name is left out when it is a keyword or something Python already
+     has, when it is being called (print, a def of their own), when it comes
+     after a dot (a module's or an object's own thing), when it names an
+     argument (sep=, end=), and when the program imports it or defines it as
+     a function. That last one needs the whole program, which a condition
+     looking at one line is passed as `whole`. Quoted text is not code, except
+     what is inside the braces of an f-string. Nothing is run: a name nobody
+     set is still the student meaning a variable, and Run is what tells them
+     it is missing. */
+  const NOT_VARIABLES = new Set((
+    "False None True and as assert async await break class continue def del elif else " +
+    "except finally for from global if import in is lambda nonlocal not or pass raise " +
+    "return try while with yield match case self " +
+    "print input int str float bool len range list dict set tuple abs round min max sum " +
+    "sorted reversed enumerate zip map filter type open ord chr any all isinstance"
+  ).split(" "));
+  function notVariablesIn(whole){
+    const out = new Set();
+    String(whole || "").split("\n").forEach(l => {
+      const line = bareLine(l);
+      let m = /^\s*(?:def|class)\s+(\w+)/.exec(line);
+      if (m) out.add(m[1]);
+      m = /^\s*import\s+(.+)$/.exec(line);
+      if (m) m[1].split(",").forEach(part => {
+        const bits = part.trim().split(/\s+as\s+/);
+        out.add((bits[1] || bits[0]).split(".")[0].trim());
+      });
+      m = /^\s*from\s+\S+\s+import\s+\(?([^)]*)/.exec(line);
+      if (m) m[1].split(",").forEach(part => {
+        const bits = part.trim().split(/\s+as\s+/);
+        if (bits[0]) out.add((bits[1] || bits[0]).trim());
+      });
+    });
+    return out;
+  }
+  /* Quoted text taken out, an f-string's {braces} kept, comments off. */
+  function codeOnly(text){
+    return String(text || "")
+      .replace(/([rRbBuUfF]{0,2})("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')/g,
+        (all, prefix, body) => /f/i.test(prefix)
+          ? " " + (body.match(/\{[^{}]*\}/g) || []).map(b => b.slice(1, -1)).join(" ") + " "
+          : " \"\" ")
+      .split("\n").map(l => l.replace(/#.*$/, "")).join("\n");
+  }
+  function variableNames(text, whole){
+    const skip = notVariablesIn(whole == null ? text : whole);
+    const found = new Set();
+    codeOnly(text).split("\n").forEach(line => {
+      if (/^\s*(import|from)\b/.test(line)) return;
+      let depth = 0;
+      const re = /[A-Za-z_]\w*|[()\[\]{}]/g;
+      let m;
+      while ((m = re.exec(line))){
+        const t = m[0];
+        if (t === "(" || t === "[" || t === "{"){ depth++; continue; }
+        if (t === ")" || t === "]" || t === "}"){ depth = Math.max(0, depth - 1); continue; }
+        if (/\d/.test(line.charAt(m.index - 1))) continue;          // 1e5, 0x1f
+        if (/\.\s*$/.test(line.slice(0, m.index))) continue;        // thing.name
+        const after = line.slice(m.index + t.length);
+        if (/^\s*\(/.test(after)) continue;                          // called
+        if (depth > 0 && /^\s*=(?!=)/.test(after)) continue;         // sep="", end=""
+        if (NOT_VARIABLES.has(t) || skip.has(t)) continue;
+        found.add(t);
+      }
+    });
+    return found;
+  }
+
   const PY_PATTERNS = {
     "for loop":    /\bfor\s+\w+\s+in\b.*:/,
     "while loop":  (code) => soundLine(code, "while"),
@@ -108,7 +183,7 @@
     "print":       /\bprint\s*\(/,
     "list":        /=\s*\[|\.append\s*\(/,
     "function":    /\bdef\s+\w+\s*\(/,
-    "variable":    /^\s*\w+\s*=[^=]/m,
+    "variable":    (code, raw, whole) => variableNames(raw, whole).size > 0,
     "comment":     (code, raw) => commentLines(raw).length > 0,
     "random":      /\brandom\b/,
     "turtle":      /\bturtle\b|\bforward\s*\(|\bpenup\s*\(/
@@ -150,7 +225,9 @@
     "print":       (code) => countAll(code, /\bprint\s*\(/g),
     "list":        (code) => countAll(code, /=\s*\[|\.append\s*\(/g),
     "function":    (code) => countAll(code, /\bdef\s+\w+\s*\(/g),
-    "variable":    (code) => countLines(code, /^[^\S\n]*\w+\s*=[^=]/),
+    /* different variables, not lines that set one: x set three times is
+       still one variable */
+    "variable":    (code, raw, whole) => variableNames(raw, whole).size,
     "comment":     (code, raw) => commentLines(raw).length,
     "random":      (code) => countAll(code, /\brandom\b/g),
     "turtle":      (code) => countAll(code, /\bturtle\b|\bforward\s*\(|\bpenup\s*\(/g)
@@ -257,10 +334,11 @@
   const PY_LINE = {
     "while loop": (l) => soundOne(l, "while"),
     "if":         (l) => soundOne(l, "if"),
-    "elif":       (l) => soundOne(l, "elif")
+    "elif":       (l) => soundOne(l, "elif"),
+    "variable":   (l, whole) => variableNames(l, whole).size > 0
   };
-  function usesLine(line, which){
-    if (PY_LINE[which]) return PY_LINE[which](line);
+  function usesLine(line, which, whole){
+    if (PY_LINE[which]) return PY_LINE[which](line, whole);
     const test = PY_PATTERNS[which];
     if (!test || typeof test === "function") return false;
     return test.test(line);
@@ -283,7 +361,8 @@
       /* the one thing that is only ever found in a comment */
       if (which === "comment")
         return pick(l => /#/.test(String(l).replace(/"[^"]*"|'[^']*'/g, "")));
-      return pick(l => usesLine(readable(l), which));
+      const whole = web ? null : lines.join("\n");
+      return pick(l => usesLine(readable(l), which, whole));
     }
     if (kind === "defines" || kind === "calls"){
       const name = value.replace(/[^\w]/g, "");
@@ -393,7 +472,7 @@
       const files = narrowed ? { html: where, css: where, js: where } : opts.files;
       return checkWebOne(c, files, opts.runs);
     }
-    return checkPythonOne(c, where, opts.output, opts.runs);
+    return checkPythonOne(c, where, opts.output, opts.runs, opts.code);
   }
 
   /* Walks the chain and folds the answers together with the first one.
@@ -419,8 +498,24 @@
                : null;
       const where = (at === null) ? opts.code : textAt(lines, at);
       let r;
-      try{ r = runCond(m, check, opts, where, at !== null); }
-      catch(e){ r = broken(label, "One of the other conditions could not run."); }
+      /* "Three variables on this line" means on one line. Run over every
+         matched line at once, a print with two in it and another print with
+         one added up to three. So a count pointed at the line is asked of
+         each line in turn, and any one meeting it is enough; those are the
+         lines a condition after it then looks at. */
+      let perLine = null;
+      if (m.scope === "match" && (m.kind === "usesCount" || m.kind === "codeCount") && at.length > 1){
+        try{
+          const each = at.map(i => ({ i, r: runCond(m, check, opts, lines[i], true) }));
+          const good = each.filter(x => x.r.ok);
+          r = good.length ? good[0].r
+            : (each.find(x => x.r.broken) || each[0]).r;
+          if (good.length) perLine = good.map(x => x.i);
+        }catch(e){ r = broken(label, "One of the other conditions could not run."); }
+      } else {
+        try{ r = runCond(m, check, opts, where, at !== null); }
+        catch(e){ r = broken(label, "One of the other conditions could not run."); }
+      }
       if (r.broken){
         if (!why) why = "one of the other conditions is not set up properly";
         return false;
@@ -432,7 +527,8 @@
       }
       /* what this condition matched becomes the place the next one can look,
          inside wherever it was looking rather than anywhere in the program */
-      if (NARROWS[m.kind]){
+      if (perLine) found = perLine;
+      else if (NARROWS[m.kind]){
         let hit = matchedLines(m, lines, cased, soft, opts.web);
         if (at !== null) hit = hit.filter(i => at.indexOf(i) >= 0);
         if (hit.length) found = hit;
@@ -466,7 +562,10 @@
       : first.note);
   }
 
-  function checkPythonOne(check, code, output, runs){
+  /* `whole` is the entire program when `code` is only the lines a condition
+     was pointed at, so a name there can still be told apart from an import. */
+  function checkPythonOne(check, code, output, runs, whole){
+    const all = whole == null ? code : whole;
     const label = check.label || "Check";
     const bare = realCode(code);
     const value = String(check.value || "");
@@ -513,7 +612,7 @@
         const which = String(value || "for loop").toLowerCase();
         const test = PY_PATTERNS[which];
         if (!test) return broken(label, "Unknown thing to look for: " + which);
-        const found = typeof test === "function" ? test(bare, code) : test.test(bare);
+        const found = typeof test === "function" ? test(bare, code, all) : test.test(bare);
         if (found) return pass(label);
         /* say so when the right word is there but written wrongly */
         const nearly = new RegExp("\\b" + which.split(" ")[0] + "\\b").test(bare);
@@ -527,7 +626,7 @@
         const which = String(value || "for loop").toLowerCase();
         const counter = PY_COUNTS[which];
         if (!counter) return broken(label, "Unknown thing to count: " + which);
-        const got = counter(bare, code);
+        const got = counter(bare, code, all);
         return countsUp(label, got, check, "You have " + amount(got, which) + ".");
       }
 

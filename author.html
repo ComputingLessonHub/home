@@ -8,6 +8,7 @@
 <script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
 <script src="config.js"></script>
 <script src="lessonfile.js"></script>
+<script src="lessoncompat.js"></script>
 <script src="shortmatch.js"></script>
 <script>window.richTextBarOnFocus = true;   /* see richtext.js */</script>
 <script src="richtext.js"></script>
@@ -855,17 +856,27 @@ function compile(){
   }
   if (lesson.perfectTarget) out.perfectTarget = lesson.perfectTarget;
   if (lesson.zeroStrength) out.zeroStrength = lesson.zeroStrength;
+  /* A practice assessment is a practical that is handed out as a lesson:
+     written feedback, no grade. It is saved without practical or assessment
+     on it, because those two words are what make the lesson page, the hub
+     and the marking screen treat it as a test, and every one of them should
+     see an ordinary lesson. Its own word is what brings it back into the
+     builder as a practical. */
+  const practiceRun = !!(lesson.practical && lesson.practice);
   if (lesson.practical){
+    /* Kept on a practice one too, so switching back to graded finds the
+       rubric where it was left rather than empty. */
     out.marking = lesson.marking || "rubric";
     if (out.marking === "score") out.outOf = lesson.outOf || 20;
     else out.rubric = (lesson.rubric || []).filter(g => g.name);
   }
-  if (lesson.practical){
+  if (practiceRun) out.practiceAssessment = true;
+  else if (lesson.practical){
     out.practical = true;
     out.assessment = true;      // students and teachers treat it as an assessment
   }
   if (lesson.assessment || lesson.practical){
-    out.assessment = true;
+    if (!practiceRun) out.assessment = true;
     const topics = {};
     Object.keys(lesson.topics || {}).forEach(k => {
       const t = lesson.topics[k];
@@ -972,7 +983,8 @@ function compileOne(b, id, target){
     (b.blocks || []).forEach((child, k) => compileOne(child, id + "_" + (k + 1), kids));
     if (!kids.length) return;                 // an empty one is not worth saving
     push({ type:"extension", id, title: b.title || "Extension tasks",
-           task: b.task || "", blocks: kids });
+           task: b.task || "",
+           waitForPage: b.waitForPage === true ? true : undefined, blocks: kids });
     return;
   }
   if (b.type === "group"){
@@ -2396,6 +2408,18 @@ function setMode(assess, practical){
      hand against a rubric, so there would be nothing to mark these with. */
   $("palExtensionBtn").hidden = !!assess || !!practical;
   $("palAssess").hidden = !assess;
+  /* Response tasks are handed out from the screen a graded assessment ends
+     on. A practice one ends like a lesson, so nothing would ever give them
+     out, and a tab for writing them would be a promise nobody keeps. */
+  const practiceRun = !!practical && !!lesson.practice;
+  $("tabResponses").hidden = practiceRun;
+  if (practiceRun && assessTab === "responses"){ assessTab = "targets"; respEditing = null; }
+  ["tabQuestions","tabTargets","tabResponses"].forEach(id => {
+    const e = $(id);
+    if (e) e.classList.toggle("on", (id === "tabQuestions" && assessTab === "questions") ||
+                                    (id === "tabTargets" && assessTab === "targets") ||
+                                    (id === "tabResponses" && assessTab === "responses"));
+  });
 
   saveDraft(); render(); schedulePreview();
   if (typeof paintBuildBar === "function") paintBuildBar();
@@ -3184,15 +3208,31 @@ function markingSetup(into){
   card.appendChild(head);
   const body = el("div","bbody");
 
+  /* Practice sits beside the two ways of grading rather than as a switch of
+     its own, because it is the third answer to the same question. Choosing
+     it leaves lesson.marking alone, so going back to graded finds the rubric
+     or the total as it was. */
   const row = el("div","brow");
-  [["rubric","A grade from a rubric"],["score","A mark out of a total"]].forEach(pair => {
-    const b = el("button","btn-ghost bmini2" + (lesson.marking === pair[0] ? " right" : ""), pair[1]);
-    b.addEventListener("click", () => { lesson.marking = pair[0]; saveDraft(); render(); schedulePreview(); });
+  [["rubric","A grade from a rubric"],["score","A mark out of a total"],["practice","Practice, no grade"]].forEach(pair => {
+    const chosen = pair[0] === "practice" ? !!lesson.practice
+                                          : !lesson.practice && lesson.marking === pair[0];
+    const b = el("button","btn-ghost bmini2" + (chosen ? " right" : ""), pair[1]);
+    b.addEventListener("click", () => {
+      if (pair[0] === "practice") lesson.practice = true;
+      else { lesson.practice = false; lesson.marking = pair[0]; }
+      $("tabResponses").hidden = !!lesson.practice;
+      paintBuildBar();
+      saveDraft(); render(); schedulePreview();
+    });
     row.appendChild(b);
   });
   body.appendChild(row);
 
-  if (lesson.marking === "score"){
+  if (lesson.practice){
+    body.appendChild(el("p","bhelp",
+      "Students get this as an ordinary lesson, not an assessment. You still write them a " +
+      "Strength and a Target, but nothing is graded."));
+  } else if (lesson.marking === "score"){
     const w = el("div","bfield");
     w.appendChild(el("label","","Total mark"));
     const st = el("div","stepper");
@@ -3246,6 +3286,7 @@ function paintTargets(into){
     into.appendChild(el("p","hint", lesson.practical
       ? "No topics yet, press \u201c+ New topic\u201d."
       : "No topics yet, press \u201c+ New topic\u201d, or tag some questions."));
+    if (lesson.practical) checklistSentences(into);
     extremeSentences(into);       // these two stand on their own
     return;
   }
@@ -3278,7 +3319,67 @@ function paintTargets(into){
     card2.appendChild(body);
     into.appendChild(card2);
   });
+  if (lesson.practical) checklistSentences(into);
   extremeSentences(into);
+}
+
+/* A practical is mostly a program, and the checklist beside it already says
+   what a good one does, so each line of it can carry a Strength and a Target
+   of its own for the marking bank. They are written onto the checklist line
+   itself rather than into a list kept beside the lesson: a line that is
+   reworded, moved or deleted takes its sentences with it, and a coding task
+   copied into another lesson brings them along. Compiling copies a check
+   whole, so nothing else has to know they are there. */
+function checklistSentences(into){
+  const tasks = [];
+  const walk = (blocks) => (blocks || []).forEach(b => {
+    if (!b) return;
+    if ((b.type === "ide" || b.type === "web") && Array.isArray(b.checks)
+        && b.checks.some(c => String(c.label || "").trim())) tasks.push(b);
+    if (Array.isArray(b.blocks)) walk(b.blocks);
+    if (b.type === "choice") (b.options || []).forEach(o => walk(o.blocks));
+  });
+  walk(lesson.blocks);
+
+  const head = el("div","brow checkst-head");
+  head.appendChild(el("b","", "From the checklists"));
+  head.appendChild(helpDot("Write what to say when a student has done this line, and what to say when they have not. " +
+                           "Both turn up in the bank when you are marking, with the lines each student got done listed first."));
+  into.appendChild(head);
+  if (!tasks.length){
+    into.appendChild(el("p","hint","Add a checklist to a coding task and its lines will appear here."));
+    return;
+  }
+  tasks.forEach((b, n) => {
+    const card2 = el("div","bcard");
+    const top = el("div","bhead");
+    const name = plainWords(b.title || b.task || "") || ("Coding task " + (n + 1));
+    top.appendChild(el("b","btype", name));
+    card2.appendChild(top);
+    const body = el("div","bbody");
+    b.checks.forEach(c => {
+      const label = String(c.label || "").trim();
+      if (!label) return;
+      const line = el("div","qsub checkst");
+      line.appendChild(el("p","checkst-line", label));
+      const pair = el("div","checkst-pair");
+      [["strength","Strength, when it is done"],["target","Target, when it is not"]].forEach(f => {
+        const w = el("div","bfield");
+        w.appendChild(el("label","", f[1]));
+        const inp = el("textarea"); inp.rows = 2; inp.value = c[f[0]] || "";
+        inp.addEventListener("input", () => {
+          if (inp.value.trim()) c[f[0]] = inp.value; else delete c[f[0]];
+          saveDraft();
+        });
+        w.appendChild(inp);
+        pair.appendChild(w);
+      });
+      line.appendChild(pair);
+      body.appendChild(line);
+    });
+    card2.appendChild(body);
+    into.appendChild(card2);
+  });
 }
 
 /* The two sentences that belong to the whole assessment rather than to any
@@ -5539,6 +5640,7 @@ function bankPreviewLesson(){
   page.startLocked = false;
   return { title: bankTask.title || "Task preview", blocks: [page] };
 }
+let bankPreviewOf = null;     // the task the panel was last showing
 function refreshBankPreview(){
   const frame = $("bankPrev");
   if (!frame) return;
@@ -5548,9 +5650,13 @@ function refreshBankPreview(){
     return;
   }
   try{
-    localStorage.setItem("hub_preview", JSON.stringify(bankPreviewLesson()));
-    try{ sessionStorage.removeItem("hub_preview_step"); }catch(e){}
-    frame.src = "lesson.html?id=__preview&builder=1&t=" + Date.now();
+    /* Another task is a fresh start; the same one being edited keeps what
+       has been typed into it, as the lesson's preview does. */
+    const fresh = bankPreviewOf !== bankTask;
+    bankPreviewOf = bankTask;
+    writePreview(bankPreviewLesson(), bankTask, fresh);
+    if (fresh){ try{ sessionStorage.removeItem("hub_preview_step"); }catch(e){} }
+    reloadPreview(frame, fresh, false);
     $("bankPrevMsg").textContent = "up to date";
   }catch(e){ $("bankPrevMsg").textContent = e.message; }
 }
@@ -5786,8 +5892,11 @@ function popOutPreview(make, msgId){
     /* Which page the preview is on is deliberately left alone. It lives in
        this tab's sessionStorage, which the panel's frame shares and the new
        tab does not, so clearing it here would only throw the panel back to
-       page one. */
-    window.open("lesson.html?id=__preview&builder=1&t=" + Date.now(), "_blank", "noopener");
+       page one.
+
+       preview.html, not the lesson page: it is what keeps up with the builder
+       without starting the page again each time. */
+    window.open("preview.html?t=" + Date.now(), "_blank", "noopener");
   }catch(e){ const m = $(msgId); if (m) m.textContent = e.message; }
 }
 /* The pop-up is given the address, not the panel's own frame, so shutting it
@@ -5812,50 +5921,44 @@ function openFullPreview(src){
   document.body.appendChild(back);
 }
 
-function refreshPreview(){
+/* `force` is the Refresh button: load it again even if nothing has changed. */
+function refreshPreview(force){
   try{
+    const fresh = previewReset;
     if (previewReset){ try{ sessionStorage.removeItem("hub_preview_step"); }catch(e){} previewReset = false; }
-    localStorage.setItem("hub_preview", JSON.stringify(compile()));
-    const frame = $("prev");
-    /* Where the preview had been scrolled to. It is reloaded from scratch on
-       every change, so without this a teacher editing the foot of a long page
-       was thrown back to the top of it after each keystroke. */
-    const keep = previewScroll(frame);
-    frame.src = "lesson.html?id=__preview&builder=1&t=" + Date.now();
-    frame.addEventListener("load", function once(){
-      frame.removeEventListener("load", once);
-      /* The lesson draws itself after load, so the place to scroll to does not
-         exist yet on the first go. Trying again shortly after catches it. */
-      putPreviewScroll(frame, keep);
-      setTimeout(() => putPreviewScroll(frame, keep), 120);
-      setTimeout(() => putPreviewScroll(frame, keep), 400);
-    });
+    writePreview(compile(), "lesson", fresh);
+    reloadPreview($("prev"), fresh, force === true);
     $("prevMsg").textContent = "up to date";
   }catch(e){ $("prevMsg").textContent = e.message; }
 }
 
-/* The lesson scrolls inside .stage on a wide screen and scrolls the page
-   itself on a narrow one, so both are worth remembering. */
-function previewScroll(frame){
-  try{
-    const d = frame.contentDocument;
-    if (!d) return null;
-    const stage = d.querySelector(".stage");
-    return { stage: stage ? stage.scrollTop : 0,
-             page: frame.contentWindow ? frame.contentWindow.scrollY : 0 };
-  }catch(e){ return null; }         // a preview from another origin cannot be read
+/* A preview in its own tab only hears that hub_preview changed, so the note
+   that this is a different lesson or task from last time, and should start
+   again rather than carry the last one's answers over, goes beside it and is
+   written first. */
+let previewSource = null;
+function writePreview(json, source, fresh){
+  if (fresh || source !== previewSource){
+    previewSource = source;
+    localStorage.setItem("hub_preview_fresh", String(Date.now()));
+  }
+  localStorage.setItem("hub_preview", JSON.stringify(json));
 }
-function putPreviewScroll(frame, keep){
-  if (!keep || (!keep.stage && !keep.page)) return;
-  try{
-    const d = frame.contentDocument;
-    if (!d) return;
-    const stage = d.querySelector(".stage");
-    if (stage && keep.stage) stage.scrollTop = keep.stage;
-    if (keep.page && frame.contentWindow) frame.contentWindow.scrollTo(0, keep.page);
-  }catch(e){}
+/* The panel holds preview.html, which reloads the lesson inside it out of
+   sight and carries the work on the page across (see there). It is loaded
+   once and asked to refresh after that; setting the frame's address on every
+   change, as this used to, is exactly the blank flash and the lost answers
+   it exists to avoid. */
+function reloadPreview(frame, fresh, force){
+  if (!frame) return;
+  if (!/^preview\.html/.test(frame.getAttribute("src") || "")){
+    frame.src = "preview.html";
+    return;
+  }
+  try{ frame.contentWindow.postMessage({ hubPreviewRefresh: true, fresh: !!fresh, force: !!force }, location.origin); }
+  catch(e){ frame.src = "preview.html?t=" + Date.now(); }
 }
-on("prevBtn", "click", refreshPreview);
+on("prevBtn", "click", () => refreshPreview(true));
 /* the same preview, with the room to see it properly */
 on("prevFull", "click", () => openFullPreview($("prev").src));
 on("moreBtn", "click", (e) => {
@@ -6145,6 +6248,7 @@ function importPopup(opts){
       msg.textContent = "Reading…";
       try{
         const data = await readJsonFile(file.files[0]);
+        readOriginal(data);
         await opts.take(data, msg);
       }catch(e){ msg.textContent = e.message; }
       file.value = "";
@@ -6166,6 +6270,7 @@ function importPopup(opts){
       let data;
       try{ data = JSON.parse(text); }
       catch(e){ msg.textContent = "That is not valid JSON. It may have been cut off, or be missing a bracket."; return; }
+      readOriginal(data);
       msg.textContent = "Reading…";
       try{ await opts.take(data, msg); }
       catch(e){ msg.textContent = e.message; }
@@ -6174,6 +6279,12 @@ function importPopup(opts){
     box.appendChild(msg);
     scrollBody(box);
   });
+}
+
+/* A file from the original site names a few settings differently. Only one
+   that plainly is from there is converted, in place: see lessoncompat.js. */
+function readOriginal(data){
+  if (window.lessonCompat && window.lessonCompat.looksOriginal(data)) window.lessonCompat.fromOriginal(data);
 }
 
 /* Whatever shape it arrived in, as a list of blocks the builder can edit.
@@ -6228,6 +6339,7 @@ function importLessonFile(){
       const made = fromCompiled(data, {});
       made.blocks = check.blocks;
       lesson = made;
+      previewReset = true;      // another lesson's answers mean nothing here
       /* lesson.savedAs is what Save writes over. Cleared, so an imported
          lesson is saved as a new one rather than on top of whatever was
          open when it came in. */
@@ -6491,7 +6603,8 @@ async function downloadForFolder(){
      others. */
   const entry = Object.assign(
     { id: id, title: lesson.title, description: lesson.intro || "" },
-    (lesson.assessment || lesson.practical) ? { assessment: true } : {},
+    /* a practice one is listed as the lesson it is to a student */
+    (lesson.assessment || (lesson.practical && !lesson.practice)) ? { assessment: true } : {},
     lesson.homework ? { homework: true } : {},
     lesson.versionOf ? { versionOf: lesson.versionOf, versionName: lesson.versionName || "",
                          versionNote: lesson.versionNote || "", versionCode: lesson.versionCode || "" } : {},
@@ -6638,6 +6751,7 @@ on("delLesson", "click", () => {
             if (!r.ok) throw new Error((await r.json()).error || "Could not delete it.");
             closeModal();
             lesson = { title:"", intro:"", unit:"", assessment:false, topics:{}, blocks:[] };
+            previewReset = true;
             dirty = false;
             showTitle(); paintPickers();
             $("delLesson").hidden = true;
@@ -6793,8 +6907,14 @@ function fromCompiled(data, meta){
                    the plain palette and the task builder stopped knowing what
                    the lesson was about. */
                 point: data.point || "",
-                assessment: !!data.assessment && !data.practical, practical: !!data.practical,
+                assessment: !!data.assessment && !data.practical,
+                practical: !!data.practical || !!data.practiceAssessment,
+                practice: !!data.practiceAssessment,
                 homework: !!data.homework,
+                /* The two sentences for everything wrong and everything right
+                   were saved but never read back, so reopening an assessment
+                   emptied both boxes and the next save threw them away. */
+                perfectTarget: data.perfectTarget || "", zeroStrength: data.zeroStrength || "",
                 linger: data.linger !== false,
                 versionOf: data.versionOf || "", versionName: data.versionName || "",
                 versionNote: data.versionNote || "", versionCode: data.versionCode || "",
@@ -6832,6 +6952,7 @@ function fromCompiled(data, meta){
                                     blocks:(b.blocks || []).map(back) };
     if (b.type === "extension") return { type:"extension", title:b.title || "",
                                          task:b.task || "",
+                                         waitForPage: b.waitForPage === true,
                                          blocks:(b.blocks || []).map(back) };
     if (b.type === "group") return { type:"group", title:b.title || "",
                                      task:b.task || "",
@@ -7007,7 +7128,8 @@ function paintBuildBar(){
      kind: it is not part of the lesson at all. */
   const chip = $("modeChip");
   if (chip) chip.hidden = bankOpen;
-  $("modeChipName").textContent = practical ? "Practical assessment"
+  $("modeChipName").textContent = practical && lesson.practice ? "Practice assessment"
+    : practical ? "Practical assessment"
     : assess ? "Assessment"
     : lesson.homework ? "Home learning" : "Lesson";
 }

@@ -1209,7 +1209,33 @@ function bankFor(which){
     out.push({ topic: "Full marks", line: lessonJson.perfectTarget });
   if (which === "Strength" && lessonJson && lessonJson.zeroStrength)
     out.push({ topic: "Made a start", line: lessonJson.zeroStrength });
-  return out;
+  return out.concat(checklistBank(which));
+}
+/* The sentences a practical's checklist lines carry, each one saying whether
+   the student in front of the teacher got that line done. Done is read the
+   way every checklist total on this site is, through checkDone, so the bank
+   never disagrees with the tick on the work beside it. The ones that fit
+   come first, a done line for a Strength and an undone one for a Target,
+   but none is hidden: a run can tick a line the teacher does not think was
+   really earned, and the teacher is the one who decides. */
+function checklistBank(which){
+  if (PRACTICE || !lessonJson) return [];
+  const st = roster[idx];
+  const row = st ? rows.find(r => r.username === st.username) : null;
+  const data = (row && row.data) || {};
+  const key = which === "Strength" ? "strength" : "target";
+  const fits = [], rest = [];
+  quantifiableTasks().forEach(t => {
+    if (t.type !== "ide" && t.type !== "web") return;
+    t.block.checks.forEach((c, i) => {
+      const line = String((c && c[key]) || "").trim();
+      if (!line) return;
+      const met = window.progressMath.checkDone(c, i, data[t.id]);
+      const item = { topic: String(c.label || "Checklist").trim(), line: line, met: met };
+      ((which === "Strength") === met ? fits : rest).push(item);
+    });
+  });
+  return fits.concat(rest);
 }
 function paintBank(which){
   const holder = $("bank" + which);
@@ -1289,7 +1315,11 @@ function bankPopup(which){
         });
         row.appendChild(cb);
         const words = el("span","bankwords");
-        words.appendChild(el("b","", it.topic));
+        const name = el("b","", it.topic);
+        /* only a checklist line has a done or not done to say */
+        if (it.met !== undefined)
+          name.appendChild(el("i","bankmet" + (it.met ? " done" : ""), it.met ? "Done" : "Not done"));
+        words.appendChild(name);
         words.appendChild(el("span","", it.line));
         row.appendChild(words);
         list.appendChild(row);

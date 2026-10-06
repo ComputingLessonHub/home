@@ -456,6 +456,15 @@ function inlineHtml(s){
     .replace(/<\/?(p|div|h[1-6]|ul|ol|li|br|blockquote)[^>]*>/gi, " ")
     .replace(/\s+/g, " ").trim();
 }
+/* A question can carry a code box, and a heading cannot: inlineHtml folds
+   every line of the code into one. So the words before the first box are the
+   question, and the box onwards is drawn underneath it, where its lines and
+   indents survive. */
+function splitAtCode(html){
+  const s = String(html || "");
+  const at = s.search(/<pre[\s>]/i);
+  return at < 0 ? { ask: s, code: "" } : { ask: s.slice(0, at), code: s.slice(at) };
+}
 
 /* ---------- autosave into this browser ----------
    No network, so we can save immediately on every change. A short debounce
@@ -1011,37 +1020,21 @@ const handedOver = handedLesson();
             }
           }
         }catch(e){}
-        /* A preview opened in its own tab keeps up with the builder on its own.
-           Writing to localStorage raises a storage event in every other tab of
-           the same site, and never in the tab that did the writing, so this
-           follows the builder without the panel inside it reacting to itself.
-
-           The place on the page is carried across the reload the same way the
-           page number is, or every keystroke would throw the teacher back to
-           the top of what they were looking at. */
-        window.addEventListener("storage", (e) => {
-          if (e.key !== "hub_preview") return;
-          try{
-            const st = $("stage");
-            sessionStorage.setItem("hub_preview_scroll", String(st ? st.scrollTop : 0));
-          }catch(err){}
-          location.reload();
-        });
-        try{
-          const y = parseInt(sessionStorage.getItem("hub_preview_scroll") || "", 10);
-          if (!isNaN(y) && y > 0){
-            /* after the page has been drawn, or there is nothing to scroll yet */
-            const put = () => { const st = $("stage"); if (st) st.scrollTop = y; };
-            setTimeout(put, 80); setTimeout(put, 300);
-          }
-        }catch(e){}
+        /* preview.html around this reloads it on every change in the builder,
+           and hands over what the last copy had in it. */
+        window.hubPreviewState = previewState;
+        notePreviewPristine();
+        const carried = previewCarried();
+        if (carried) putPreviewWork(carried);
         if (!steps.length){
           $("briefTitle").textContent = "Nothing to preview yet";
           $("briefText").textContent = "Add a task on the left and it appears here.";
           $("dock").classList.add("gone");
+          previewReady(null);
           return;
         }
         showStep(Math.min(Math.max(stepParam !== null ? parseInt(stepParam, 10) : step, 0), steps.length - 1));
+        previewReady(carried);
         return;
       }
       if (document.body.classList) document.body.classList.add("spectating");
@@ -1211,7 +1204,117 @@ const handedOver = handedLesson();
     $("blocks").innerHTML = "";
     $("blocks").appendChild(box);
     $("dock").classList.add("gone");
+    if (builderParam !== null) previewReady(null);
   });
+
+/* ---------- carrying the builder's preview across a change ----------
+   Every change in the builder reloads this page, and a teacher testing a
+   page should not have to answer it all again each time. So the work on it
+   is handed to the next copy by preview.html, the same way a student's saved
+   work comes back to them: through each task's own set().
+
+   Ids are where a task is, unless it came from the bank, so a task put in
+   above another moves the ids of everything after it, and matching on the id
+   alone handed the work to whichever task had slid into its place, or more
+   often to nothing. So each task is known by what it is as well: its type
+   and its heading. A value only ever goes to a task of the same type, since
+   a quiz's answers put into a written answer would be nonsense and some
+   tasks throw. In order of how sure the match is:
+     the same id and the same heading;
+     the same heading somewhere else, which is a task that has moved;
+     the same id with a new heading, which is a task being retitled. */
+function previewTasks(){
+  const tasks = {};
+  const walk = (list) => (list || []).forEach(b => {
+    if (!b) return;
+    if (b.id) tasks[b.id] = { type: b.type,
+      sig: b.type + "|" + stripTags(b.title || "") + "|" + stripTags(b.task || b.prompt || "") };
+    walk(b.blocks);
+    (b.options || []).forEach(o => walk(o && o.blocks));
+  });
+  walk(lesson && lesson.blocks);
+  return tasks;
+}
+/* What every task held the moment it was drawn, before anything was carried
+   in. Only what has moved on from this is worth carrying: a code box nobody
+   typed in still holds the starter, and carrying that kept the old starter on
+   screen after the teacher had changed it in the builder. */
+let previewPristine = null;
+function notePreviewPristine(){
+  previewPristine = {};
+  Object.entries(fields).forEach(([id, f]) => {
+    try{ previewPristine[id] = JSON.stringify(f.get()); }catch(e){}
+  });
+}
+function previewState(){
+  const data = {};
+  Object.entries(fields).forEach(([id, f]) => {
+    try{
+      const v = f.get();
+      if (previewPristine && previewPristine[id] === JSON.stringify(v)) return;
+      data[id] = v;
+    }catch(e){}
+  });
+  const st = $("stage");
+  return { step, tasks: previewTasks(), data,
+           stage: st ? st.scrollTop : 0, page: window.scrollY || 0 };
+}
+function previewCarried(){
+  try{
+    if (window.parent === window || typeof window.parent.hubPreviewTake !== "function") return null;
+    return window.parent.hubPreviewTake(window) || null;
+  }catch(e){ return null; }
+}
+function putPreviewWork(carried){
+  const now = previewTasks(), was = carried.tasks || {}, data = carried.data || {};
+  const oldIds = Object.keys(data).filter(id => was[id]);
+  const newIds = Object.keys(fields).filter(id => now[id]);
+  const used = new Set(), given = new Set();
+  const give = (to, from) => {
+    used.add(from); given.add(to);
+    try{ fields[to].set(data[from]); }catch(e){}
+  };
+  newIds.forEach(id => {
+    if (was[id] && was[id].sig === now[id].sig && id in data) give(id, id);
+  });
+  newIds.forEach(id => {
+    if (given.has(id)) return;
+    const from = oldIds.find(o => !used.has(o) && was[o].sig === now[id].sig);
+    if (from) give(id, from);
+  });
+  newIds.forEach(id => {
+    if (given.has(id) || used.has(id) || !(id in data) || !was[id] || was[id].type !== now[id].type) return;
+    give(id, id);
+  });
+}
+/* Tells preview.html this copy can be swapped in. Not until it is scrolled
+   to where the last one was, and the pictures on the page have arrived to
+   give it its height: swapped in any sooner, the teacher sees it jump. Only
+   scrolled back if it is still the same page; a page picked in the builder
+   starts at its top. */
+function previewReady(carried){
+  const want = carried && carried.step === step ? carried : null;
+  const put = () => {
+    if (!want) return;
+    const st = $("stage");
+    if (st && want.stage) st.scrollTo({ top: want.stage, behavior: "instant" });
+    if (want.page) window.scrollTo({ top: want.page, behavior: "instant" });
+  };
+  const tell = () => {
+    try{ window.parent.postMessage({ hubPreviewReady: true }, location.origin); }catch(e){}
+  };
+  if (window.parent === window) return;
+  put();
+  const sec = steps[step] && steps[step].section;
+  const waiting = sec ? Array.from(sec.querySelectorAll("img")).filter(i => !i.complete) : [];
+  const arrived = Promise.all(waiting.map(i => new Promise(done => {
+    i.addEventListener("load", done, { once:true });
+    i.addEventListener("error", done, { once:true });
+  })));
+  /* Timers, not animation frames: a frame out of sight may be given none. */
+  Promise.race([arrived, new Promise(done => setTimeout(done, 800))])
+    .then(() => setTimeout(() => { put(); tell(); }, 50));
+}
 
 async function loadSaved(){
   if (spectate){
@@ -1400,8 +1503,10 @@ function highlightBlock(id){
 }
 /* Inside the builder's preview the two sides follow each other: a task
    opened in the builder is shown and flashed here, and clicking a task here
-   opens it in the builder. Only ever talks to the page it is framed by. */
-if (builderParam !== null && window.parent && window.parent !== window){
+   opens it in the builder. Only ever talks to the page it is framed by,
+   which is preview.html, passing both ways. preview.html on its own in a tab
+   is not in the builder, so that one is left out the way the tab always was. */
+if (builderParam !== null && window.parent && window.parent !== window && window.top !== window.parent){
   document.documentElement.classList.add("inbuilder");
   window.addEventListener("message", (e) => {
     if (e.source !== window.parent) return;
@@ -3002,6 +3107,8 @@ function rPage(b){
   const kids = [];
   const items = [];      // each task on this page, so we can move on to the next
   const extras = [];     // extension containers, held back until the rest is done
+  const waiting = [];    // the ones a teacher asked to wait for the page
+  const finishers = [];  // what each of those is waiting on, one per task
   const slots = pageSlot(s);
   let fullTask = false;  // holds a task that takes the whole page
   (b.blocks || []).forEach((child, j) => {
@@ -3016,6 +3123,7 @@ function rPage(b){
       /* not hidden any more: the "Finished early?" question has to be reachable
          whether or not the rest of the page is finished */
       extras.push(built);
+      if (child.waitForPage === true && built.waitFor) waiting.push(built);
       return;
     }
     if (child.required === false){
@@ -3050,7 +3158,23 @@ function rPage(b){
     slots.place(item, child);
     kids.push(built);
     items.push({ item, built, type: child.type, name: bb.title || "" });
+    /* What finished means for an extension waiting on the page. A choice is
+       left out: it offers a level to pick, and the one picked is the
+       student's, so no single task in it is theirs to have done. A quiz the
+       teacher gave a pass mark is done at that mark, the way it already
+       opens the page below it; anything else has to be got completely right,
+       whatever level it holds the page at, because "attempted" is how far
+       down the page somebody may read, not whether they have finished. */
+    if (child.type !== "choice"){
+      const done = (child.type === "quiz" && built.hold && built.hold.on())
+        ? built.hold : taskGate(Object.assign({}, child, { gate:"full" }));
+      if (done) finishers.push(done);
+    }
   });
+  /* A teacher reading the work, or printing it, needs every extension open to
+     them, the same reason holds are lifted for them further down. */
+  const marking = viewParam !== null || pdfParam !== null || allParam !== null;
+  waiting.forEach(x => x.waitFor(() => marking ? 0 : finishers.filter(f => !f.passed()).length));
 
   /* When a task is definitely finished, and there is another below it on the
      same page, bring that one into view.
@@ -3085,6 +3209,10 @@ function rPage(b){
   const holdNote = el("p","pg-hold");
   holdNote.hidden = true;
   function refreshHold(){
+    /* A quiz finishing does not go through markDirty, so the count an
+       extension is waiting on is taken again here as well, on the same click
+       that opens the page below a quiz. */
+    waiting.forEach(x => x.recount());
     let shut = -1;
     /* A teacher reading a student's work, or printing it, needs all of it.
        Hiding what came after an unfinished quiz hid the very answers they
@@ -3277,6 +3405,12 @@ function rExtension(b){
   gate.appendChild(cb);
   gate.appendChild(el("span","ext-gate-text","Finished early?"));
   s.appendChild(gate);
+  /* Only when a teacher has asked for these to wait for the rest of the page.
+     The box stays in sight, so a student can see there is more to come, and
+     this says how much is left before it can be ticked. */
+  const waitNote = el("p","ext-wait");
+  waitNote.hidden = true;
+  s.appendChild(waitNote);
 
   const inner = el("div","ext-body");
   const kids = [];
@@ -3324,10 +3458,28 @@ function rExtension(b){
     markDirty();
   });
   /* remembered, so ticking it and coming back later does not shut it again */
-  fields[b.id] = { get:() => cb.checked, set:(v) => { cb.checked = !!v; paint(); } };
+  fields[b.id] = { get:() => cb.checked, set:(v) => { cb.checked = !!v; paint(); paintWait(); } };
   paint();
 
+  /* What is still to do on the page, as a number. Only the page can see the
+     tasks beside this one, so it hands the count in through waitFor(). A box
+     already ticked stays ticked: somebody who opened these on an earlier
+     visit has not stopped being finished because a teacher changed the
+     setting since. */
+  let tasksLeft = null;
+  function paintWait(){
+    const left = tasksLeft && !cb.checked ? tasksLeft() : 0;
+    cb.disabled = left > 0;
+    gate.classList.toggle("waiting", left > 0);
+    waitNote.hidden = left === 0;
+    if (left > 0) waitNote.textContent = left === 1
+      ? "There is 1 task above still to finish before you can open this."
+      : "There are " + left + " tasks above still to finish before you can open this.";
+  }
+
   return { section:s,
+           waitFor: (count) => { tasksLeft = count; holdWatchers.add(paintWait); paintWait(); },
+           recount: paintWait,
            onShow: () => kids.forEach(k => { if (k.onShow) k.onShow(); }),
            check:() => ({ ok:true }),
            brief:{ eyebrow:"Extension", title:b.title || "Extension tasks", text:b.task || "" } };
@@ -4177,7 +4329,8 @@ function teacherHere(){
   if (!spectate) return false;
   try{ if (window.teacherAuth && window.teacherAuth.have()) return true; }catch(e){}
   if (!OFFLINE || builderParam === null) return false;
-  try{ return window.parent !== window && /author\.html$/i.test(window.parent.location.pathname); }
+  /* the top, not the parent: preview.html sits between the two */
+  try{ return window.top !== window && /author\.html$/i.test(window.top.location.pathname); }
   catch(e){ return false; }
 }
 function readOnlyTag(){
@@ -6265,6 +6418,8 @@ function rShort(b){
      question, and drop onto two when the screen is too narrow for both. */
   const row = el("div","short-row");
   row.appendChild(ans);
+  const asked = splitAtCode(b.prompt);
+  if (asked.code) s.appendChild(el("div","short-code", asked.code));
   s.appendChild(row);
 
   /* In an assessment everything is marked at the end. In a lesson the student
@@ -6315,7 +6470,8 @@ function rShort(b){
   fields[b.id] = { get:() => ans.value, set:(v) => { ans.value = v || ""; } };
   return { section:s,
            check:() => ans.value.trim() ? { ok:true } : { ok:false, message:"Write an answer" },
-           brief:{ eyebrow:"Short answer", title:inlineHtml(b.prompt) || "", text:b.note || "" } };
+           brief:{ eyebrow:"Short answer", text:b.note || "",
+                   title:inlineHtml(asked.ask) || (asked.code ? "Look at the code below." : "") } };
 }
 
 /* ---------- marking ---------- */
@@ -6905,7 +7061,9 @@ function renderResponses(container, targetTopic, statusEl){
       const built = R(b);
       const bb = (typeof built.brief === "function") ? built.brief() : built.brief;
       const task = el("div","resp-task");
-      task.appendChild(el("p","resp-q", stripTags(b.prompt || b.title || bb.title)));
+      /* a short answer draws its own code box, so only its words go up here */
+      task.appendChild(el("p","resp-q", stripTags(b.type === "short" ? bb.title
+                                                   : (b.prompt || b.title || bb.title))));
       if (b.note) task.appendChild(el("p","resp-note", stripTags(b.note)));
       built.section.hidden = false;
       task.appendChild(built.section);
@@ -7983,7 +8141,10 @@ function buildPdf(){
       return out;
     }
     if (b.type === "short"){
-      out.push({ t: "ask", text: pdfText(b.prompt) || "Short answer" });
+      /* the code printed as code, the way the lesson page draws it */
+      const asked = splitAtCode(b.prompt);
+      out.push({ t: "ask", text: pdfText(asked.ask) || "Short answer" });
+      if (asked.code) proseParts(asked.code).forEach(part => out.push(part));
       out.push(label("Their answer"));
       out.push(answerBox(String(v || "").trim(), "Not answered"));
       if (b.model) out.push({ t: "text", face: "small", text: "A good answer mentions: " + b.model });

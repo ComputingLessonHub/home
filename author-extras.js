@@ -103,6 +103,8 @@ function offerDraft(){
       lesson = back;
       seenLesson = lesson;
       openPageRef = null;
+      /* the kept draft can be another lesson; its preview starts afresh */
+      if (typeof previewReset !== "undefined") previewReset = true;
       if (typeof startFolded === "function") startFolded();
       render(); schedulePreview();
       if (typeof showTitle === "function") showTitle();
@@ -319,6 +321,11 @@ function sendFollow(){
 window.addEventListener("message", (e) => {
   const frame = document.getElementById("prev");
   if (!frame || e.source !== frame.contentWindow) return;
+  /* preview.html loads once and swaps a new copy of the lesson in on every
+     change, so its own load event only ever comes once. It says when a new
+     copy is on screen instead, which is when that copy can be pointed at
+     the task being edited. */
+  if (e.data && e.data.hubPreviewShown){ setTimeout(sendFollow, 50); return; }
   const id = e.data && e.data.hubPick;
   if (!id) return;
   const b = compiledBlocks.get(id);

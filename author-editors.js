@@ -1270,13 +1270,21 @@ EDITORS.page = function(b, k){
 };
 
 EDITORS.extension = function(b, k){
-  const { F, R, add } = k;
+  const { F, R, add, toggleRow, settings } = k;
   F("Heading (optional)", "title");
   R("Subtitle (optional)", "task", { rows:2, help:[
-    "The lesson shows “Finished early?” with a box to tick. These open "
-    + "when it is ticked, or on their own once everything else on the page is "
-    + "finished. They never hold anybody up, so nobody is asked to complete them.",
+    "The lesson shows “Finished early?” with a box to tick, and these open "
+    + "when it is ticked. They never hold anybody up, so nobody is asked to "
+    + "complete them.",
     "The subtitle is shown under “Finished early?” once they open it."] });
+  /* Off unless asked for, so every extension made before this keeps the
+     box a student can tick whenever they like. */
+  settings(() => toggleRow([["waitForPage","Wait for the page", false]], "Opening",
+    ["When this is on, the box cannot be ticked until every other task on the "
+     + "page is finished, and the student is told how many are left. A quiz with "
+     + "a pass mark counts once it is passed; everything else has to be right, "
+     + "with every checklist line ticked. A Choose your challenge is left out, "
+     + "because which level a student picks is up to them."]));
   if (!b.blocks) b.blocks = [];
   childList(() => b.blocks, { inside:"extension" }).forEach(add);
 };

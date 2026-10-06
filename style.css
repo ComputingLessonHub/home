@@ -1285,6 +1285,13 @@ html.builder .loadscreen{z-index:90}
 .pagekids.empty{min-height:28px}
 .qsub{border:1px solid var(--line); border-radius:var(--rad-md); padding:12px 14px; margin:0 0 10px; background:var(--panel-2)}
 .qsub-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:9px}
+/* A checklist line in a practical with its two sentences side by side, and
+   one above the other once there is no room for two boxes to be written in. */
+.checkst-head{margin-top:18px; align-items:center}
+.checkst-line{margin:0 0 8px; font-weight:700; font-size:var(--text-base); line-height:1.4}
+.checkst-pair{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.checkst-pair .bfield{margin:0}
+@media (max-width:640px){ .checkst-pair{grid-template-columns:1fr} }
 .bhelp.warn{color:var(--amber-dark); font-weight:700}
 
 /* a page of tasks on the student side */
@@ -2814,6 +2821,10 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 .bankwords{display:flex; flex-direction:column; gap:2px; min-width:0}
 .bankwords b{font-size:var(--text-xs); letter-spacing:.06em; text-transform:uppercase; color:var(--amber-dark)}
 .bankwords span{font-size:var(--text-md); line-height:1.45; color:var(--text)}
+/* whether the student in front of the teacher got a checklist line done */
+.bankmet{font-style:normal; margin-left:8px; padding:1px 7px; border-radius:var(--rad-pill); font-size:var(--text-2xs);
+  letter-spacing:.04em; background:var(--panel-2); border:1px solid var(--line); color:var(--dim)}
+.bankmet.done{color:var(--mint); background:var(--mint-dim); border-color:var(--mint)}
 .bankpreview{padding:11px 13px; margin:0 0 6px; background:var(--panel-2);
   border:1px solid var(--line); border-radius:var(--rad-md); font-size:var(--text-md); line-height:1.5}
 
@@ -3919,6 +3930,11 @@ html[data-bg=dark] kbd{background:#2A303B; border-color:#4A515F}
 /* the heading sits above the way in, and is on the page whether it is open or not */
 .extension .ext-title{display:block; font-size:var(--text-md); color:var(--amber); margin-bottom:6px}
 .ext-gate{margin-top:0}
+/* waiting for the rest of the page: still in sight, plainly not ready */
+.ext-gate.waiting{cursor:default; color:var(--muted)}
+.ext-gate.waiting input{cursor:default}
+.ext-wait{margin:6px 0 0; color:var(--muted); font-size:var(--text-base)}
+.ext-wait[hidden]{display:none}
 
 /* the teacher code box: the letters are hidden as they are typed, so a code
    read out at the front of the room is not also displayed to the back of it */
@@ -5024,7 +5040,10 @@ html[data-build=compact] .homebar .title{flex:1 1 0; min-width:0}
 
 /* inserting one, in the formatting bar */
 .rt-tablewrap{position:relative; display:inline-block}
-.rt-tablemenu{padding:12px; min-width:220px}
+/* No wider than half a phone's screen as a floor: 220px on its own was more
+   than half of a 320px one. The two size boxes still hold it open wide
+   enough to use. */
+.rt-tablemenu{padding:12px; min-width:min(220px, 50vw)}
 .rt-tablesize{display:flex; gap:10px; margin:0 0 10px}
 .rt-tablesize label{display:flex; flex-direction:column; gap:4px; font-size:var(--text-sm); color:var(--muted)}
 .rt-tablesize input{width:74px; padding:7px 9px; font-size:var(--text-base)}

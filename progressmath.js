@@ -76,11 +76,17 @@
       return { got: (window.shortAnswer && window.shortAnswer.mark(b, v).ok) ? 1 : 0, max: 1 };
     /* a checklist: every line counts once, whether a run ticked it or a
        teacher did, the same as the checklist's own "done of counted" score */
+    let got = 0;
+    b.checks.forEach((c, i) => { if (checkDone(c, i, v)) got++; });
+    return { got: got, max: b.checks.length };
+  }
+  /* One checklist line: a teacher's tick for a line only a teacher can
+     judge, a run's tick for the rest. On its own as well as inside the
+     total, because the marking bank asks it line by line. */
+  function checkDone(c, i, v){
     const flags = (v && Array.isArray(v.checks)) ? v.checks : [];
     const manual = (v && v.manual && typeof v.manual === "object") ? v.manual : {};
-    let got = 0;
-    b.checks.forEach((c, i) => { if (c && c.manual ? manual[i] === true : !!flags[i]) got++; });
-    return { got: got, max: b.checks.length };
+    return !!(c && c.manual ? manual[i] === true : flags[i]);
   }
   function attempted(data, id){
     if (!data) return false;
@@ -159,6 +165,6 @@
   }
 
   window.progressMath = { TASK_LABEL, plainText, normAns, taskInfo,
-                          quantifiableTasks, scoreTask, attempted,
+                          quantifiableTasks, scoreTask, checkDone, attempted,
                           defaultLocks, fetchLockedPages, markRoster };
 })();
