@@ -1046,6 +1046,10 @@ const handedOver = handedLesson();
       refreshChecklistMode();
       /* before drawing: the drawing below returns early in three places, and
          the putting back waits until it has finished anyway */
+      /* Embedded, there is no "Viewing their work" strip across the top, so
+         no room is kept for one: it was an empty band above every student's
+         work in the marking screen, one page at a time or all on one. */
+      if (embedParam !== null) document.body.classList.add("embedded");
       if (embedParam !== null) keepPlaceForParent();
       if (allParam !== null){ showEverything(); return; }
       if (keepStep !== null && keepStep >= 0 && keepStep < steps.length) step = keepStep;

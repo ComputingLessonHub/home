@@ -1,9 +1,9 @@
 /* =====================================================================
    work-ui.js, the marking page's shortcuts and helpers.
 
-     Keyboard       ← and → move between students, M goes to the mark,
-                    Ctrl+Enter (or Enter in the mark box) saves and moves on,
-                    ? lists the keys
+     Keyboard       Ctrl with ← and → moves between students, even from
+                    inside the work, Ctrl+M steps through the feedback boxes,
+                    Ctrl+Enter saves and moves on, ? lists the keys
      Who is left    the student list says who is marked, who is not and who
                     has handed in nothing, with "Unmarked only" to skip the
                     ones already done
@@ -70,28 +70,49 @@
   function wireBar(){
     const bar = document.querySelector(".workbar");
     if (!bar || $("unmarkedOnly")) return;
-    const lab = el("label","onlyunmarked");
-    const box = document.createElement("input");
-    box.type = "checkbox"; box.id = "unmarkedOnly"; box.checked = unmarkedOnly;
-    box.addEventListener("change", () => {
-      unmarkedOnly = box.checked;
+    /* The same switch as Open / Locked in Manage, so the two screens that
+       filter a class do it with one control rather than two. */
+    const sw = el("button","pace-switch onlyunmarked");
+    sw.type = "button"; sw.id = "unmarkedOnly";
+    sw.setAttribute("role", "switch");
+    sw.appendChild(el("span","pace-switch-words","Unmarked only"));
+    sw.appendChild(el("span","pace-knob"));
+    const paintSwitch = () => {
+      sw.classList.toggle("on", unmarkedOnly);
+      sw.setAttribute("aria-checked", unmarkedOnly ? "true" : "false");
+    };
+    paintSwitch();
+    sw.addEventListener("click", () => {
+      unmarkedOnly = !unmarkedOnly;
+      paintSwitch();
       try{ sessionStorage.setItem("hub_unmarked_only", unmarkedOnly ? "1" : "0"); }catch(e){}
       paintPicker();
       if (unmarkedOnly && isMarked(roster[idx])) step(1);
     });
-    lab.appendChild(box);
-    lab.appendChild(document.createTextNode(" Unmarked only"));
-    bar.appendChild(lab);
-    bar.appendChild(el("span","markcount")).id = "markCount";
-    const keys = el("button","btn-ghost bmini2 keyhelp","Keys");
-    keys.title = "Keyboard shortcuts (?)";
-    keys.addEventListener("click", showKeys);
-    bar.appendChild(keys);
+    /* The switch, the count and "Up to date as of" are one thing: where the
+       marking has got to. Kept together so the bar wraps around them rather
+       than between them, and "Up to date" moved out from beside Refresh,
+       which only happens to be what sets it. */
+    const where = el("span","markwhere");
+    where.appendChild(sw);
+    where.appendChild(el("span","markcount")).id = "markCount";
+    const fresh = $("workFresh");
+    if (fresh) where.appendChild(fresh);
+    bar.appendChild(where);
     /* the arrows either side of the list skip the marked ones too */
     ["prevStu","nextStu"].forEach((id, k) => {
       const b = $(id);
       if (b) b.addEventListener("click", (e) => { e.stopImmediatePropagation(); step(k ? 1 : -1); }, true);
     });
+    /* Keys sits in the corner, out of the bar, and only where there is a
+       keyboard to use it with: the stylesheet hides it on a tablet or phone. */
+    const keys = el("button","keyfab");
+    keys.type = "button";
+    keys.title = "Keyboard shortcuts (?)";
+    keys.setAttribute("aria-label", "Keyboard shortcuts");
+    if (UI) keys.innerHTML = UI.icon("keyboard", 20); else keys.textContent = "Keys";
+    keys.addEventListener("click", showKeys);
+    document.body.appendChild(keys);
   }
 
   /* ================= keyboard ================= */
@@ -111,16 +132,25 @@
     };
     setTimeout(look, 150);
   }
+  /* Strength, then Target, then the general comment, and round again.
+     Anywhere else starts at Strength. */
+  const BOX_ORDER = ["fbStrength","fbTarget","fbComment"];
+  function nextBox(){
+    const boxes = BOX_ORDER.map(id => $(id)).filter(b => b && !b.disabled && b.offsetParent);
+    if (!boxes.length) return;
+    const at = boxes.indexOf(document.activeElement);
+    const go = boxes[at < 0 ? 0 : (at + 1) % boxes.length];
+    go.focus();
+    if (go.setSelectionRange) go.setSelectionRange(go.value.length, go.value.length);
+  }
   function showKeys(){
     openModal(box => {
       box.classList.add("narrow");
       box.appendChild(el("h2","","Keyboard shortcuts"));
       const list = el("div","keylist");
-      [["←  →", "Previous and next student"],
-       ["M", "Go to the mark (or the first feedback box)"],
+      [["Ctrl + ←  →", "Previous and next student, from anywhere on the page"],
+       ["Ctrl + M", "Next feedback box: Strength, Target, then General comment"],
        ["Ctrl + Enter", "Save feedback and go to the next student"],
-       ["Enter", "In the mark box: the same"],
-       ["U", "Only unmarked students, on and off"],
        ["?", "This list"]].forEach(k => {
         const r = el("div","keyrow");
         r.appendChild(el("kbd","", k[0]));
@@ -133,22 +163,57 @@
       box.appendChild(ok);
     });
   }
-  document.addEventListener("keydown", (e) => {
+  /* inFrame: the key was pressed inside the student's work. Ctrl and an
+     arrow move between students there whatever has the focus, because that
+     work is only being read. In the feedback boxes Ctrl and an arrow are
+     left to jump a word, which is what a teacher typing expects. */
+  function onKey(e, inFrame){
     if (!$("mBack").hidden) return;
     if ($("workPane") && $("workPane").hidden) return;
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); saveThenNext(); return; }
-    if (e.key === "Enter" && e.target && e.target.id === "fbScore"){ e.preventDefault(); saveThenNext(); return; }
-    if (typing(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === "ArrowRight"){ e.preventDefault(); step(1); }
-    else if (e.key === "ArrowLeft"){ e.preventDefault(); step(-1); }
-    else if (e.key === "m" || e.key === "M"){
-      e.preventDefault();
-      const target = !$("markWrap").hidden ? ($("fbGrade").hidden ? $("fbScore") : $("fbGrade")) : $("fbStrength");
-      if (target) target.focus();
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && !e.altKey && !e.shiftKey && (e.key === "ArrowRight" || e.key === "ArrowLeft")){
+      if (!inFrame && typing(e.target)) return;
+      e.preventDefault(); e.stopPropagation();
+      step(e.key === "ArrowRight" ? 1 : -1);
+      return;
     }
-    else if (e.key === "u" || e.key === "U"){ const b = $("unmarkedOnly"); if (b){ b.click(); } }
-    else if (e.key === "?"){ e.preventDefault(); showKeys(); }
-  });
+    if (ctrl && !e.altKey && (e.key === "m" || e.key === "M")){
+      e.preventDefault(); e.stopPropagation();
+      if (inFrame) window.focus();
+      nextBox();
+      return;
+    }
+    if (ctrl && e.key === "Enter"){ e.preventDefault(); saveThenNext(); return; }
+    if (inFrame || typing(e.target) || ctrl || e.altKey) return;
+    if (e.key === "?"){ e.preventDefault(); showKeys(); }
+  }
+  document.addEventListener("keydown", (e) => onKey(e, false));
+  /* A key pressed in the frame never reaches this page, so the frame is
+     listened to as well, and every frame inside it (the block editor is one),
+     each time a new student is loaded into it. Capturing, so a code editor
+     in the work cannot keep the key to itself. */
+  function hookFrame(win){
+    try{
+      if (!win || win.__hubKeys) return;
+      const doc = win.document;
+      win.__hubKeys = true;
+      win.addEventListener("keydown", (e) => onKey(e, true), true);
+      const hookKids = () => doc.querySelectorAll("iframe").forEach(f => {
+        try{ hookFrame(f.contentWindow); }catch(e){}
+        if (!f.__hubKeysLoad){
+          f.__hubKeysLoad = true;
+          f.addEventListener("load", () => { try{ hookFrame(f.contentWindow); }catch(e){} });
+        }
+      });
+      hookKids();
+      new win.MutationObserver(hookKids).observe(doc.documentElement, { childList:true, subtree:true });
+    }catch(e){}       // another site's page in an embed: nothing to listen to
+  }
+  const frame = $("workFrame");
+  if (frame){
+    frame.addEventListener("load", () => hookFrame(frame.contentWindow));
+    hookFrame(frame.contentWindow);
+  }
 
   /* Saving a mark changes who is ticked off in the student list. */
   const baseSave = saveFeedback;

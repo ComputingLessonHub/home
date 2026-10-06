@@ -18,8 +18,8 @@
   /* ---------- layout choices ----------
      These began as switches in Settings, each a way of trying a new layout
      out. The trial is over: the placeholder shapes, the detailed lesson
-     cards and the Home dashboard are simply how the console looks now, and
-     the class dashboard is off until it is worth opening onto. The side menu
+     cards and the Home dashboard are simply how the console looks now. The
+     class dashboard was tried and taken out. The side menu
      is the one choice left, as "Switch to old view", for anybody who wants
      the console the way it was.
 
@@ -29,7 +29,6 @@
   const FIXED = {
     skeletons: true,        // grey shapes while a screen loads
     richCards: true,        // lesson cards in the hub with more on them
-    classDash: false,       // a class opens onto its dashboard
     homeDash: true          // Home as a dashboard: today's lessons and what needs doing
   };
   const NAMES = ["sidebar"].concat(Object.keys(FIXED));
@@ -64,6 +63,7 @@
     home:     '<path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
     lock:     '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     unlock:   '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.6-1.7"/>',
+    keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M9.5 10h.01M12.5 10h.01M15.5 10h.01M17.5 10h.01M6.5 14h.01M17.5 14h.01M9.5 14h5"/>',
     key:      '<circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2.5 2.5M14 9l2 2"/>',
     backup:   '<ellipse cx="12" cy="6" rx="7" ry="2.6"/><path d="M5 6v6c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6"/><path d="M5 12v6c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6v-6"/>',
     log:      '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 11h7M9 14.5h7M9 18h4"/>',
