@@ -2422,9 +2422,14 @@ async function submitWork(){
       markingLocked = true;
       unsavedTyping = false;
       setTimeout(enterMarkingLock, 0);
+      return "locked";
+    }
+    if (!r.ok){
+      /* Said in the console, so a refusal can be told apart from a dropped
+         connection without guessing: the button can only say Try again. */
+      try{ console.warn("Saving was refused (" + r.status + "):", (await r.json()).error || ""); }catch(e){}
       return "failed";
     }
-    if (!r.ok) return "failed";
     lastSubmittedPayload = payload;
     if (typedAt === mark) unsavedTyping = false;   // it has reached the teacher
     sendExamMarks();
@@ -2792,7 +2797,8 @@ async function manualSave(){
   finally{ savingNow = false; }
   if (state === "done"){ noteSaved(false); paintSaveButtons("saved"); return; }
   paintSaveButtons("idle");
-  btn.textContent = state === "offline" ? "Sign in to save" : "Try again";
+  btn.textContent = state === "offline" ? "Sign in to save"
+                  : state === "locked" ? "Locked for marking" : "Try again";
   btn.classList.add("flash-bad");
   flashTimer = setTimeout(() => {
     btn.classList.remove("flash-bad");
@@ -7512,6 +7518,17 @@ function markEditor(res){
 }
 
 function renderResponses(container, targetTopic, statusEl){
+  /* Locked for marking: nothing a student does here can be saved, so the
+     tasks are not drawn to be done. Drawn anyway, every change was refused
+     and the Save button could only say "Try again". They open once the
+     teacher unlocks it, which is when they are meant to be done anyway. */
+  if (markingLocked && !spectate){
+    const bank = (lesson && lesson.responses) || {};
+    const any = Object.keys(bank).some(k => (bank[k] || []).length) || ((lesson && lesson.extensions) || []).length;
+    if (any) container.appendChild(el("p","resp-waiting",
+      "Your response tasks will open here once your teacher has finished marking."));
+    return;
+  }
   /* the summary listens for this so its button can say the practice is done */
   const announceDone = () => {
     container.dataset.allDone = "yes";
@@ -7893,6 +7910,7 @@ function paintStatus(elm, state){
   elm.textContent = state === "done" ? "\u2713 Sent to your teacher"
                   : state === "offline" ? "Sign in so your work can be sent to your teacher"
                   : state === "busy" ? "The server is very busy just now. Your work is safe on this computer."
+                  : state === "locked" ? "Your teacher has locked this while they mark it"
                   : "Could not reach the server, press Save Work to try again";
   /* Busy clears in a minute or so, when a few classes have finished handing
      in at once. The button is right beside the words that explain it, so
