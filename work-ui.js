@@ -3,107 +3,73 @@
 
      Keyboard       Ctrl with ← and → moves between students, even from
                     inside the work, Ctrl+M steps through the feedback boxes,
-                    Ctrl+Enter saves and moves on, ? lists the keys
-     Who is left    the student list says who is marked, who is not and who
-                    has handed in nothing, with "Unmarked only" to skip the
-                    ones already done
+                    Ctrl+Enter is Save and next, ? lists the keys
+     Who is left    "Unmarked only" as a switch in the bar, and a count of how
+                    many in the class are marked
 
    Built on work.html's own functions and values, read by name when used.
-   Nothing here is saved to the server beyond what Save feedback already
-   sends.
+   The marking itself, who counts as marked, skipping the marked ones and
+   Save and next, all belong to work.html: this only gives them keys and a
+   place in the bar, so there is one of each rather than two that disagree.
+   Nothing here is saved to the server.
    ===================================================================== */
 (function(){
   "use strict";
   if (typeof PRACTICE === "undefined" || PRACTICE) return;
   const UI = window.hubUI;
-  const toast = (w, o) => UI ? UI.toast(w, o) : null;
 
   /* ================= who is marked ================= */
-  function isMarked(st){
-    if (!st) return false;
-    const row = rows.find(r => r.username === st.username);
-    if (row && row.feedback){
-      try{
-        const f = JSON.parse(row.feedback);
-        if (String(f.strength || f.target || f.comment || "").trim()) return true;
-      }catch(e){ if (String(row.feedback).trim()) return true; }
-    }
-    const mk = (typeof marks !== "undefined") ? marks[st.username] : null;
-    return !!(mk && (mk.grade || typeof mk.score === "number"));
+  function paintCount(){
+    const c = $("markCount");
+    if (!c) return;
+    const n = roster.filter(st => isMarked(st)).length;
+    c.textContent = n + " of " + roster.length + " marked";
   }
-  const hasWork = (st) => !!rows.find(r => r.username === st.username);
-  let unmarkedOnly = false;
-  try{ unmarkedOnly = sessionStorage.getItem("hub_unmarked_only") === "1"; }catch(e){}
-
   const basePaintPicker = paintPicker;
   window.paintPicker = function(){
-    basePaintPicker.apply(this, arguments);
-    const sel = $("stuPick");
-    if (!sel) return;
-    Array.from(sel.options).forEach(o => {
-      const st = roster[Number(o.value)];
-      if (!st) return;
-      const mark = isMarked(st) ? "✓ " : hasWork(st) ? "● " : "– ";
-      o.textContent = mark + o.textContent;
-      /* marked ones stay in the list so the one on screen can always be shown,
-         but are greyed while only the unmarked are wanted */
-      o.disabled = unmarkedOnly && isMarked(st) && Number(o.value) !== idx;
-    });
+    const out = basePaintPicker.apply(this, arguments);
+    paintSwitch();
     paintCount();
+    return out;
   };
-  function paintCount(){
-    const n = roster.filter(isMarked).length;
-    const c = $("markCount");
-    if (c) c.textContent = n + " of " + roster.length + " marked";
-  }
-  /* The next one along, skipping the marked ones when asked to. */
-  function step(d){
-    let i = idx + d;
-    while (i >= 0 && i < roster.length && unmarkedOnly && isMarked(roster[i])) i += d;
-    if (i < 0 || i >= roster.length){
-      toast(unmarkedOnly ? "Nobody left to mark that way" : (d > 0 ? "That was the last student" : "That was the first student"));
-      return false;
-    }
-    showStudent(i);
-    return true;
+
+  /* work.html's Unmarked only, drawn as the same switch as Open / Locked in
+     Manage, so the two screens that filter a class do it with one kind of
+     control. The setting, and what it does to the list and to Next, is
+     work.html's own. */
+  let sw = null;
+  function paintSwitch(){
+    if (!sw) return;
+    const on = unmarkedOnly();
+    sw.classList.toggle("on", on);
+    sw.setAttribute("aria-checked", on ? "true" : "false");
   }
   function wireBar(){
     const bar = document.querySelector(".workbar");
     if (!bar || $("unmarkedOnly")) return;
-    /* The same switch as Open / Locked in Manage, so the two screens that
-       filter a class do it with one control rather than two. */
-    const sw = el("button","pace-switch onlyunmarked");
+    sw = el("button","pace-switch onlyunmarked");
     sw.type = "button"; sw.id = "unmarkedOnly";
     sw.setAttribute("role", "switch");
+    sw.title = "List and go to only the students with no saved feedback";
     sw.appendChild(el("span","pace-switch-words","Unmarked only"));
     sw.appendChild(el("span","pace-knob"));
-    const paintSwitch = () => {
-      sw.classList.toggle("on", unmarkedOnly);
-      sw.setAttribute("aria-checked", unmarkedOnly ? "true" : "false");
-    };
-    paintSwitch();
     sw.addEventListener("click", () => {
-      unmarkedOnly = !unmarkedOnly;
+      const btn = $("onlyUnmarked");
+      if (btn) btn.click();
+      else { try{ localStorage.setItem(UNMARKED_KEY, unmarkedOnly() ? "0" : "1"); }catch(e){} paintPicker(); }
       paintSwitch();
-      try{ sessionStorage.setItem("hub_unmarked_only", unmarkedOnly ? "1" : "0"); }catch(e){}
-      paintPicker();
-      if (unmarkedOnly && isMarked(roster[idx])) step(1);
     });
     /* The switch, the count and "Up to date as of" are one thing: where the
        marking has got to. Kept together so the bar wraps around them rather
-       than between them, and "Up to date" moved out from beside Refresh,
-       which only happens to be what sets it. */
+       than between them. */
     const where = el("span","markwhere");
     where.appendChild(sw);
     where.appendChild(el("span","markcount")).id = "markCount";
     const fresh = $("workFresh");
     if (fresh) where.appendChild(fresh);
     bar.appendChild(where);
-    /* the arrows either side of the list skip the marked ones too */
-    ["prevStu","nextStu"].forEach((id, k) => {
-      const b = $(id);
-      if (b) b.addEventListener("click", (e) => { e.stopImmediatePropagation(); step(k ? 1 : -1); }, true);
-    });
+    const old = $("onlyUnmarked");
+    if (old) old.classList.add("replaced");
     /* Keys sits in the corner, out of the bar, and only where there is a
        keyboard to use it with: the stylesheet hides it on a tablet or phone. */
     const keys = el("button","keyfab");
@@ -113,27 +79,14 @@
     if (UI) keys.innerHTML = UI.icon("keyboard", 20); else keys.textContent = "Keys";
     keys.addEventListener("click", showKeys);
     document.body.appendChild(keys);
+    paintSwitch();
+    paintCount();
   }
 
   /* ================= keyboard ================= */
   function typing(t){ return t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)); }
-  function saveThenNext(){
-    const btn = $("saveFb");
-    if (!btn || btn.disabled && btn.dataset.saved !== "yes") return;
-    if (btn.dataset.saved === "yes"){ step(1); return; }
-    btn.click();
-    /* wait for Save to say it is done, then move on; if a question came up
-       instead (one of the two boxes empty), leave it with the teacher */
-    const started = Date.now();
-    const look = () => {
-      if (btn.dataset.saved === "yes"){ step(1); return; }
-      if (!$("mBack").hidden || Date.now() - started > 10000) return;
-      setTimeout(look, 150);
-    };
-    setTimeout(look, 150);
-  }
-  /* Strength, then Target, then the general comment, and round again.
-     Anywhere else starts at Strength. */
+  /* Strength, then Target, then the comment, and round again, whichever of
+     them the Feedback column is showing. Anywhere else starts at the first. */
   const BOX_ORDER = ["fbStrength","fbTarget","fbComment"];
   function nextBox(){
     const boxes = BOX_ORDER.map(id => $(id)).filter(b => b && !b.disabled && b.offsetParent);
@@ -149,8 +102,8 @@
       box.appendChild(el("h2","","Keyboard shortcuts"));
       const list = el("div","keylist");
       [["Ctrl + ←  →", "Previous and next student, from anywhere on the page"],
-       ["Ctrl + M", "Next feedback box: Strength, Target, then General comment"],
-       ["Ctrl + Enter", "Save feedback and go to the next student"],
+       ["Ctrl + M", "Next feedback box: Strength, Target, then the comment"],
+       ["Ctrl + Enter", "Save and next"],
        ["?", "This list"]].forEach(k => {
         const r = el("div","keyrow");
         r.appendChild(el("kbd","", k[0]));
@@ -163,46 +116,53 @@
       box.appendChild(ok);
     });
   }
-  /* inFrame: the key was pressed inside the student's work. Ctrl and an
-     arrow move between students there whatever has the focus, because that
-     work is only being read. In the feedback boxes Ctrl and an arrow are
-     left to jump a word, which is what a teacher typing expects. */
-  function onKey(e, inFrame){
+  /* depth: 0 for this page, 1 for the student's work, 2 and more for a frame
+     inside the work (the block editor is one). Ctrl and an arrow move between
+     students inside the work whatever has the focus, because that work is
+     only being read. In the feedback boxes Ctrl and an arrow are left to jump
+     a word, which is what a teacher typing expects. */
+  function onKey(e, depth){
     if (!$("mBack").hidden) return;
     if ($("workPane") && $("workPane").hidden) return;
     const ctrl = e.ctrlKey || e.metaKey;
     if (ctrl && !e.altKey && !e.shiftKey && (e.key === "ArrowRight" || e.key === "ArrowLeft")){
-      if (!inFrame && typing(e.target)) return;
+      if (!depth && typing(e.target)) return;
       e.preventDefault(); e.stopPropagation();
-      step(e.key === "ArrowRight" ? 1 : -1);
+      goStep(e.key === "ArrowRight" ? 1 : -1);
       return;
     }
     if (ctrl && !e.altKey && (e.key === "m" || e.key === "M")){
       e.preventDefault(); e.stopPropagation();
-      if (inFrame) window.focus();
+      if (depth) window.focus();
       nextBox();
       return;
     }
-    if (ctrl && e.key === "Enter"){ e.preventDefault(); saveThenNext(); return; }
-    if (inFrame || typing(e.target) || ctrl || e.altKey) return;
+    /* work.html listens for Ctrl + Enter on this page and in the work's own
+       frame. A frame inside the work never reaches either, so it is passed
+       on from there and nowhere else, or it would save twice. */
+    if (ctrl && e.key === "Enter"){
+      if (depth >= 2 && typeof saveNextKey === "function") saveNextKey(e);
+      return;
+    }
+    if (depth || typing(e.target) || ctrl || e.altKey) return;
     if (e.key === "?"){ e.preventDefault(); showKeys(); }
   }
-  document.addEventListener("keydown", (e) => onKey(e, false));
+  document.addEventListener("keydown", (e) => onKey(e, 0));
   /* A key pressed in the frame never reaches this page, so the frame is
-     listened to as well, and every frame inside it (the block editor is one),
-     each time a new student is loaded into it. Capturing, so a code editor
-     in the work cannot keep the key to itself. */
-  function hookFrame(win){
+     listened to as well, and every frame inside it, each time a new student
+     is loaded into it. Capturing, so a code editor in the work cannot keep
+     the key to itself. */
+  function hookFrame(win, depth){
     try{
       if (!win || win.__hubKeys) return;
       const doc = win.document;
       win.__hubKeys = true;
-      win.addEventListener("keydown", (e) => onKey(e, true), true);
+      win.addEventListener("keydown", (e) => onKey(e, depth), true);
       const hookKids = () => doc.querySelectorAll("iframe").forEach(f => {
-        try{ hookFrame(f.contentWindow); }catch(e){}
+        try{ hookFrame(f.contentWindow, depth + 1); }catch(e){}
         if (!f.__hubKeysLoad){
           f.__hubKeysLoad = true;
-          f.addEventListener("load", () => { try{ hookFrame(f.contentWindow); }catch(e){} });
+          f.addEventListener("load", () => { try{ hookFrame(f.contentWindow, depth + 1); }catch(e){} });
         }
       });
       hookKids();
@@ -211,17 +171,11 @@
   }
   const frame = $("workFrame");
   if (frame){
-    frame.addEventListener("load", () => hookFrame(frame.contentWindow));
-    hookFrame(frame.contentWindow);
+    frame.addEventListener("load", () => hookFrame(frame.contentWindow, 1));
+    hookFrame(frame.contentWindow, 1);
   }
 
-  /* Saving a mark changes who is ticked off in the student list. */
-  const baseSave = saveFeedback;
-  window.saveFeedback = async function(){
-    const out = await baseSave.apply(this, arguments);
-    if ($("saveFb") && $("saveFb").dataset.saved === "yes") paintPicker();
-    return out;
-  };
+  /* Opening another student, or saving one, changes the count. */
   const baseShow = showStudent;
   window.showStudent = function(){
     const out = baseShow.apply(this, arguments);

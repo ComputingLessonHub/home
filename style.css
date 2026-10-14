@@ -6042,6 +6042,9 @@ body.has-rail .page, body.has-rail .crumbbar{margin-left:228px}
 .markwhere{display:inline-flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center}
 .workbar .onlyunmarked{white-space:nowrap}
 .workbar .onlyunmarked .pace-switch-words{display:inline; min-width:0}
+/* work.html's own button, still the one that holds the setting, once the
+   switch above is standing in for it */
+.workbar #onlyUnmarked.replaced{display:none}
 .markcount{font-size:var(--text-sm); font-weight:700; color:var(--mint); white-space:nowrap}
 .workbar #workFresh{white-space:nowrap; font-size:var(--text-sm)}
 /* Keys, in the corner over everything. Only where there is a real keyboard
