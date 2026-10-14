@@ -399,6 +399,59 @@
     const list = ((lessonJson && lessonJson.rubric) || []).slice();
     return lessonJson && lessonJson.rubricOrder === "lowest-first" ? list : list.reverse();
   }
+  /* A practical marked against a rubric. There used to be two kinds, a
+     graded one (marking "rubric") and a practice one (practiceAssessment),
+     and they were merged into one that works the way practice did: levels
+     to aim for, a Strength and a Target, and no grade shown to anyone but
+     the teacher. practiceAssessment is still the word the builder writes,
+     so every lesson saved as practice opens exactly as it did, and a graded
+     one saved before the merge is read as one too. */
+  function rubricRun(lessonJson){
+    return !!lessonJson && (!!lessonJson.practiceAssessment ||
+                            (!!lessonJson.practical && lessonJson.marking === "rubric"));
+  }
+  /* Whether students are shown each level's grade range rather than its
+     name. Levels unless the builder said otherwise. */
+  function showsGrades(lessonJson){
+    return rubricRun(lessonJson) && lessonJson.rubricShow === "grade";
+  }
+  /* The rubric's entry for a level, by name and whatever its capitals: a
+     level read off the coding tasks is named by their titles, which the
+     rubric does not always write the same way. */
+  function rubricEntry(lessonJson, name){
+    const want = String(name || "").trim().toLowerCase();
+    if (!want) return null;
+    return ((lessonJson && lessonJson.rubric) || [])
+      .find(g => g && String(g.name || "").trim().toLowerCase() === want) || null;
+  }
+  function gradeRange(lessonJson, name){
+    const g = rubricEntry(lessonJson, name);
+    return g ? String(g.grades || "").trim() : "";
+  }
+  /* A practical marked by nothing but the checklists on its coding tasks:
+     every task with a score is a checklist, and there is no bank of topics
+     for a teacher to tick. Only then is "ticks done out of ticks there are"
+     the whole story of how far somebody got. */
+  function checklistOnly(lessonJson){
+    if (!lessonJson || !lessonJson.practical) return false;
+    const tasks = quantifiableTasks(lessonJson);
+    if (!tasks.length || !tasks.every(t => t.type === "ide" || t.type === "web")) return false;
+    const topics = lessonJson.topics || {};
+    return !Object.keys(topics).some(k => topics[k] && (topics[k].strength || topics[k].target));
+  }
+  /* Every checklist line in the lesson, extension included, against the
+     lines this student has ticked. Read through scoreTask, so it is the
+     same count the Progress tab and the checklist itself give. */
+  function checklistTicks(lessonJson, data){
+    let got = 0, max = 0;
+    quantifiableTasks(lessonJson).forEach(t => {
+      if (t.type !== "ide" && t.type !== "web") return;
+      const sc = scoreTask(t.block, data ? data[t.id] : undefined);
+      got += sc.got; max += sc.max;
+    });
+    return { got: got, max: max };
+  }
+
   /* A practical's levels by name, lowest first. The coding tasks' own chain
      where there is one, since that is the order they open in; otherwise the
      rubric. Empty when there are no levels at all. */
@@ -412,5 +465,6 @@
                           quantifiableTasks, scoreTask, checkDone, attempted, withMarkingTicks, withTeacherEdits,
                           pagesLock, defaultLocks, fetchLockedPages, markRoster,
                           levelChain, levelName, levelReached, levelLadder, rubricLevels,
+                          rubricRun, showsGrades, rubricEntry, gradeRange, checklistOnly, checklistTicks,
                           hasWork, absentFeedback, unsavedComment };
 })();

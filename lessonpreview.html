@@ -156,7 +156,8 @@ function catalogueFor(role){
   let l = {};
   try{ l = JSON.parse(lessonText); }catch(e){}
   row.practical = !!(l.assessment && l.practical);
-  row.practice = !!(row.practical && l.practiceAssessment);
+  /* a rubric practical, saved as practice or as the graded rubric merged into it */
+  row.practice = !!(row.practical && (l.practiceAssessment || l.marking === "rubric"));
   const out = { units: [unitRow], years: [yearRow], lessons: [row] };
   if (role === "teacher"){
     out.assignments = [{ lesson_id: lessonId, group_name: STUDENT.group, published: 1, release_at: "", close_on: "" }];

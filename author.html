@@ -887,19 +887,30 @@ function compile(){
   /* For a student who was there but whose work did not save. Only written
      when the teacher wrote one, which is what offers the tick in marking. */
   if (lesson.practical && String(lesson.unsavedComment || "").trim()) out.unsavedComment = lesson.unsavedComment.trim();
-  /* A practice assessment is a practical with no grade: it is sat like any
-     other practical, all its pages open and handed in at the end, and comes
-     back with a Strength, a Target and response tasks. It used to be saved
-     as an ordinary lesson, which left it nowhere to hand out response tasks
-     from. practiceAssessment is the one word that says it is not graded. */
-  const practiceRun = !!(lesson.practical && lesson.practice);
+  /* A practical is marked out of a total or against a rubric, and a rubric
+     one is what used to be called practice: it is sat like any other
+     practical, handed in at the end, and comes back with a Strength, a
+     Target and response tasks, with no grade a student sees. The graded
+     rubric was merged into it. practiceAssessment is still written, because
+     it is the word every screen and every lesson already saved reads.
+     A draft from before the merge can say practice with a total still
+     chosen underneath, and practice won then too, so it wins here. */
+  const practiceRun = !!(lesson.practical && (lesson.practice || lesson.marking !== "score"));
   if (lesson.practical){
-    out.marking = lesson.marking || "rubric";
+    out.marking = practiceRun ? "rubric" : "score";
     if (out.marking === "score") out.outOf = lesson.outOf || 20;
-    /* A practice one keeps its rubric whichever way it was being marked,
-       because there the rubric is the levels a student can aim for, and a
-       teacher can say which one they reached without it being a grade. */
-    if (out.marking !== "score" || practiceRun) out.rubric = (lesson.rubric || []).filter(g => g.name);
+    /* Each level carries the grade range it stands for, which the markbook
+       shows. Students are shown the level or the range, never both: the
+       builder picks which, and levels unless it says otherwise. */
+    if (practiceRun){
+      out.rubric = (lesson.rubric || []).filter(g => g.name).map(g => {
+        const level = Object.assign({}, g);
+        const grades = String(g.grades || "").trim();
+        if (grades) level.grades = grades; else delete level.grades;
+        return level;
+      });
+      if (lesson.rubricShow === "grade") out.rubricShow = "grade";
+    }
     /* Written lowest level first, and said so: a lesson saved without this
        was written best first, and everything that reads it turns it round. */
     if (out.rubric) out.rubricOrder = "lowest-first";
@@ -2595,17 +2606,16 @@ function rubricPlain(html){
   return (d.textContent || "").split("\n").map(s => s.replace(/\s+/g, " ").trim())
                               .filter(Boolean).join("\n");
 }
-/* The grades a practical can be given, each with what earns it. */
+/* A practical's levels, each with what it needs and the grade range it
+   stands for. */
 function rubricPopup(){
   if (!lesson.rubric) lesson.rubric = [];
   openModal(box => {
     box.classList.add("wide");
-    /* the same list in a practice one, where it is levels rather than grades */
-    const lv = !!lesson.practice;
-    box.appendChild(el("h2","", lv ? "Levels" : "Rubric"));
-    box.appendChild(el("p","modal-text", lv
-      ? "Put the lowest level first. Students see them in this order, left to right, while they work, and you can pick the one they reached when you mark."
-      : "Put the lowest grade first. Students see them in this order, left to right, and teachers pick one of these when marking."));
+    box.appendChild(el("h2","","Levels"));
+    box.appendChild(el("p","modal-text",
+      "Put the lowest level first. Students see them in this order, left to right, while they work. " +
+      "Give each one the grade range it stands for: the markbook shows it, and students see it only if you choose the grade range for them."));
     /* What students are told before the levels themselves, which is how this
        practical in particular is meant to be worked through. Left empty, the
        rubric opens with no line under its heading at all. */
@@ -2620,13 +2630,13 @@ function rubricPopup(){
     box.appendChild(list);
     function paint(){
       list.innerHTML = "";
-      if (!lesson.rubric.length) list.appendChild(el("p","hint", lv ? "No levels yet, press \u201c+ New level\u201d."
-                                                                    : "No grades yet, press \u201c+ New grade\u201d."));
+      if (!lesson.rubric.length) list.appendChild(el("p","hint","No levels yet, press \u201c+ New level\u201d."));
       lesson.rubric.forEach((g, i) => {
         const card = el("div","qsub");
         const head = el("div","qsub-head");
         const nameIn = el("input"); nameIn.value = g.name || "";
         nameIn.className = "checkname";
+        nameIn.placeholder = "Level name, e.g. Warm Up";
         nameIn.addEventListener("input", () => { g.name = nameIn.value; saveDraft(); });
         head.appendChild(nameIn);
         const tools = el("span","btools");
@@ -2653,8 +2663,18 @@ function rubricPopup(){
         });
         head.appendChild(tools);
         card.appendChild(head);
+        /* Free text rather than two numbers: a range is written "4-5" in
+           one school and "Grade 4 to 5" or "W4-S4" in the next. */
+        const gr = el("div","bfield");
+        gr.appendChild(el("label","","Grade range"));
+        const grIn = el("input"); grIn.value = g.grades || "";
+        grIn.placeholder = "e.g. 4-5";
+        grIn.maxLength = 40;
+        grIn.addEventListener("input", () => { g.grades = grIn.value; saveDraft(); });
+        gr.appendChild(grIn);
+        card.appendChild(gr);
         const d = el("div","bfield");
-        d.appendChild(el("label","", lv ? "What is needed for this level" : "What is needed for this grade"));
+        d.appendChild(el("label","","What is needed for this level"));
         /* Styled, with lists, so each thing a level asks for can be its own
            bullet. description is kept in step as plain lines because the
            marking screen shows it under the grade picker, which is a line of
@@ -2666,15 +2686,15 @@ function rubricPopup(){
             saveDraft();
           },
           { pictures:false, code:"inline",
-            placeholder: lv ? "What is needed for this level" : "What is needed for this grade" });
+            placeholder: "What is needed for this level" });
         d.appendChild(desc);
         card.appendChild(d);
         list.appendChild(card);
       });
     }
     paint();
-    const add = el("button","btn-ghost bmini2", lv ? "+ New level" : "+ New grade");
-    add.addEventListener("click", () => { lesson.rubric.push({ name:"", description:"" }); saveDraft(); paint(); });
+    const add = el("button","btn-ghost bmini2","+ New level");
+    add.addEventListener("click", () => { lesson.rubric.push({ name:"", grades:"", description:"" }); saveDraft(); paint(); });
     box.appendChild(add);
     const done = el("button","btn-primary modal-cta","Done");
     done.addEventListener("click", () => { closeModal(); render(); schedulePreview(); });
@@ -3405,6 +3425,12 @@ function checklistPopup(block, isWeb){
   });
 }
 
+/* Whether this practical is marked against a rubric. Practice and the
+   graded rubric were merged, and a draft from before then can still say
+   practice with a total chosen underneath, which was practice. */
+function rubricMarked(){
+  return !!lesson.practical && (!!lesson.practice || lesson.marking !== "score");
+}
 function markingSetup(into){
   if (!lesson.marking) lesson.marking = "rubric";   // the usual way to mark a practical
   const card = el("div","bcard");
@@ -3413,18 +3439,14 @@ function markingSetup(into){
   card.appendChild(head);
   const body = el("div","bbody");
 
-  /* Practice sits beside the two ways of grading rather than as a switch of
-     its own, because it is the third answer to the same question. Choosing
-     it leaves lesson.marking alone, so going back to graded finds the rubric
-     or the total as it was. */
+  const rubric = rubricMarked();
   const row = el("div","brow");
-  [["rubric","A grade from a rubric"],["score","A mark out of a total"],["practice","Practice, no grade"]].forEach(pair => {
-    const chosen = pair[0] === "practice" ? !!lesson.practice
-                                          : !lesson.practice && lesson.marking === pair[0];
+  [["rubric","A rubric"],["score","A mark out of a total"]].forEach(pair => {
+    const chosen = (pair[0] === "rubric") === rubric;
     const b = el("button","btn-ghost bmini2" + (chosen ? " right" : ""), pair[1]);
     b.addEventListener("click", () => {
-      if (pair[0] === "practice") lesson.practice = true;
-      else { lesson.practice = false; lesson.marking = pair[0]; }
+      lesson.practice = pair[0] === "rubric";
+      lesson.marking = pair[0];
       paintBuildBar();
       saveDraft(); render(); schedulePreview();
     });
@@ -3432,13 +3454,11 @@ function markingSetup(into){
   });
   body.appendChild(row);
 
-  if (lesson.practice){
+  if (rubric){
     body.appendChild(el("p","bhelp",
-      "Students sit this like any practical and hand it in at the end, but nothing is graded. " +
+      "Students sit this like any practical and hand it in at the end. " +
       "You give a Strength and a Target, filled in for you from their checklists, and they " +
-      "get the response tasks."));
-    /* The rubric stays, as levels to aim for rather than grades: students can
-       open it while they work, and you can say which level they reached. */
+      "get the response tasks. Each level has a grade range, which you see in the markbook."));
     if (!lesson.rubric) lesson.rubric = [];
     const w = el("div","bfield");
     const n = lesson.rubric.filter(g => g.name).length;
@@ -3449,7 +3469,32 @@ function markingSetup(into){
     editBtn.addEventListener("click", rubricPopup);
     w.appendChild(editBtn);
     body.appendChild(w);
-  } else if (lesson.marking === "score"){
+    /* One or the other, never both: a student shown the level never sees
+       the grade range behind it. The markbook always has the range. */
+    const show = el("div","bfield");
+    show.appendChild(el("label","","Students see"));
+    const showRow = el("div","brow");
+    [["level","The level"],["grade","The grade range"]].forEach(pair => {
+      const chosen = (lesson.rubricShow === "grade" ? "grade" : "level") === pair[0];
+      const b = el("button","btn-ghost bmini2" + (chosen ? " right" : ""), pair[1]);
+      b.addEventListener("click", () => {
+        lesson.rubricShow = pair[0];
+        saveDraft(); render(); schedulePreview();
+      });
+      showRow.appendChild(b);
+    });
+    show.appendChild(showRow);
+    /* A level with no range written still has to be called something, so
+       students see its name, and the markbook says the same. Said here so
+       it is not a surprise. */
+    const missing = lesson.rubric.filter(g => g.name && !String(g.grades || "").trim()).length;
+    show.appendChild(el("p","bhelp", lesson.rubricShow === "grade"
+      ? "The rubric shows each level's grade range instead of its name." +
+        (missing ? " " + missing + (missing === 1 ? " level has" : " levels have") +
+                   " no grade range yet, so students see " + (missing === 1 ? "its name" : "their names") + " instead." : "")
+      : "The rubric shows each level by name. Grade ranges stay in the markbook."));
+    body.appendChild(show);
+  } else {
     const w = el("div","bfield");
     w.appendChild(el("label","","Total mark"));
     const st = el("div","stepper");
@@ -3463,17 +3508,6 @@ function markingSetup(into){
     num.addEventListener("input", () => { lesson.outOf = Math.max(1, parseInt(num.value, 10) || 1); saveDraft(); });
     st.appendChild(less); st.appendChild(num); st.appendChild(more);
     w.appendChild(st);
-    body.appendChild(w);
-  } else {
-    if (!lesson.rubric) lesson.rubric = [];
-    const w = el("div","bfield");
-    const n = lesson.rubric.filter(g => g.name).length;
-    w.appendChild(el("p","bhelp", n
-      ? n + " grade" + (n === 1 ? "" : "s") + " set up."
-      : "No grades yet."));
-    const editBtn = el("button","btn-ghost bmini2","Edit the rubric");
-    editBtn.addEventListener("click", rubricPopup);
-    w.appendChild(editBtn);
     body.appendChild(w);
   }
   card.appendChild(body);
@@ -7261,7 +7295,10 @@ function fromCompiled(data, meta){
                 point: data.point || "",
                 assessment: !!data.assessment && !data.practical,
                 practical: !!data.practical || !!data.practiceAssessment,
-                practice: !!data.practiceAssessment,
+                /* Practice and the graded rubric are one thing now, so a
+                   lesson saved as either opens as a rubric. */
+                practice: window.progressMath.rubricRun(data),
+                rubricShow: data.rubricShow === "grade" ? "grade" : "level",
                 homework: !!data.homework,
                 /* The two sentences for everything wrong and everything right
                    were saved but never read back, so reopening an assessment
@@ -7273,7 +7310,10 @@ function fromCompiled(data, meta){
                 star: data.star !== false,
                 versionOf: data.versionOf || "", versionName: data.versionName || "",
                 versionNote: data.versionNote || "", versionCode: data.versionCode || "",
-                marking: data.marking || "score", outOf: data.outOf || 20,
+                /* A practice one saved with a total chosen underneath was
+                   still practice, and is a rubric now. */
+                marking: window.progressMath.rubricRun(data) ? "rubric" : (data.marking || "score"),
+                outOf: data.outOf || 20,
                 /* Edited lowest level first. One saved before v12.1 was
                    written best first, so it is turned round as it opens and
                    saved the new way round. */
@@ -7493,8 +7533,7 @@ function paintBuildBar(){
      kind: it is not part of the lesson at all. */
   const chip = $("modeChip");
   if (chip) chip.hidden = bankOpen;
-  $("modeChipName").textContent = practical && lesson.practice ? "Practice assessment"
-    : practical ? "Practical assessment"
+  $("modeChipName").textContent = practical ? "Practical assessment"
     : assess ? "Assessment"
     : lesson.homework ? "Home learning" : "Lesson";
 }

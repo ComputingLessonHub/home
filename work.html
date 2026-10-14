@@ -75,8 +75,6 @@
         <span class="markrow2" id="scoreRow">
           <input id="fbScore" type="number" min="0"> <span id="outOfLabel">out of 20</span>
         </span>
-        <select id="fbGrade" class="bigselect" hidden></select>
-        <p class="bhelp" id="gradeHelp"></p>
       </div>
       <!-- Where a lesson has a bank of Strengths and Targets, a list of what
            it asks for is ticked off and writes the boxes below. Settings can
@@ -390,7 +388,10 @@ async function loadMarks(){
                           "&group=" + encodeURIComponent(cls), { headers: H(), cache:"no-store" });
     const d = await r.json();
     (d.rows || []).forEach(row => {
-      const st = roster.find(x => x.display_name === row.display_name);
+      /* By username: two students with the same name took each other's
+         mark. The name is only for a server too old to send the username. */
+      const st = row.username ? roster.find(x => x.username === row.username)
+                              : roster.find(x => x.display_name === row.display_name);
       if (st) marks[st.username] = { score: row.score, outOf: row.out_of, grade: row.grade || "",
                                      strength: row.strength || "", target: row.target || "" };
     });
@@ -1084,12 +1085,25 @@ window.addEventListener("message", (e) => {
 function showStudent(i, step){
   if (i < 0 || i >= roster.length) return;
   if (PRACTICE) return showPrograms(i);
+  /* whatever was being written for the one on screen, kept before it goes */
+  stashDraft();
   /* stay on the same page when moving to the next student */
   if (step === undefined) step = lastStep;
   idx = i;
   paintPicker();
   const st = roster[i];
   const row = rows.find(r => r.username === st.username);
+  const draft = drafts[st.username] || null;
+  /* Coming back to unsaved marking, the frame is shown it too: the code as
+     it was being put right, and the lines ticked, so the work and the boxes
+     beside it agree. */
+  let frameFeedback = row ? (row.feedback || "") : "";
+  if (draft){
+    let f = {};
+    try{ f = JSON.parse(frameFeedback || "{}") || {}; }catch(e){ f = { comment: frameFeedback }; }
+    f.ticks = draft.markingTicks;
+    frameFeedback = JSON.stringify(f);
+  }
   /* The lesson page reads this to know whose work to put on the screen, and
      the lesson itself goes with it. The frame is loaded again for every
      student, and it used to ask the API for the same lesson every time: one
@@ -1102,7 +1116,8 @@ function showStudent(i, step){
        student's own work lives. */
     lesson: lessonId, idx: 0, json: OFFLINE ? undefined : lessonJson,
     list: [{ name: st.display_name, username: st.username,
-             data: row ? row.data : {}, feedback: row ? (row.feedback || "") : "" }]
+             data: Object.assign({}, row ? row.data : {}, draft ? draft.pendingEdits : {}),
+             feedback: frameFeedback }]
   };
   try{ localStorage.setItem("hub_inspect", JSON.stringify(box)); }
   catch(e){
@@ -1133,9 +1148,83 @@ function showStudent(i, step){
   /* a practical assessment is marked by hand, so the boxes appear */
   paintMarking(st.username);
   loadFeedback(row);
+  /* What opening them gives, before anything is put back, so leaving with
+     nothing changed keeps nothing. */
+  loadedKey = draftKey(draftNow());
+  shownUser = st.username;
+  carriedEdits = {};
+  if (draft) restoreDraft(row, draft);
   /* Their feedback is saved already, so the buttons say so and Next moves
      on without saving it again, until something is changed. */
-  paintFb(savedFeedback(row) ? "saved" : "idle");
+  paintFb(draft ? "idle" : savedFeedback(row) ? "saved" : "idle");
+  if (draft) $("fbMsg").textContent = "Not saved yet. This is where you left it.";
+}
+
+/* ---------------- unsaved marking, kept while the page is open ----------
+   Going back a student to check something used to throw away what had been
+   typed and ticked for the one on screen. Now each student's unsaved
+   marking is kept here, by username, and put back on returning to them.
+
+   Only in this page's memory, on purpose: it goes when the page is reloaded
+   or closed, and when that student is saved. sessionStorage would have
+   survived a reload, and a reload is how a teacher says start again. */
+const drafts = {};
+let shownUser = "";        // whose marking the boxes hold
+let loadedKey = "";        // what they held when that student opened
+/* Code put right before moving away, handed back to the frame on return.
+   The frame only reports what differs from the code it opened with, which
+   is then this, so the two are put together rather than one replacing it. */
+let carriedEdits = {};
+function draftNow(){
+  return { strength: $("fbStrength").value, target: $("fbTarget").value,
+           comment: $("fbComment").value, score: $("fbScore").value,
+           notSaved: notSaved, notSavedWas: notSavedWas, notSavedAway: notSavedAway,
+           commentOpen: commentOpen,
+           markingTicks: JSON.parse(JSON.stringify(markingTicks)),
+           manualTicks: JSON.parse(JSON.stringify(manualTicks)),
+           got: Object.assign({}, got),
+           pendingEdits: JSON.parse(JSON.stringify(pendingEdits)),
+           listOpen: Object.assign({}, listOpen),
+           ask: ask, asking: !$("fbAsk").hidden };
+}
+function draftKey(d){
+  return JSON.stringify([d.strength, d.target, d.comment, d.score, d.notSaved,
+                         d.markingTicks, d.got, d.pendingEdits]);
+}
+function stashDraft(){
+  if (PRACTICE || !shownUser) return;
+  const d = draftNow();
+  /* saved, or exactly as it opened: nothing to keep */
+  if ($("saveFb").dataset.saved === "yes" || draftKey(d) === loadedKey){ delete drafts[shownUser]; return; }
+  drafts[shownUser] = d;
+}
+function restoreDraft(row, d){
+  $("fbStrength").value = d.strength;
+  $("fbTarget").value = d.target;
+  $("fbComment").value = d.comment;
+  $("fbScore").value = d.score;
+  notSaved = d.notSaved; notSavedWas = d.notSavedWas; notSavedAway = d.notSavedAway;
+  $("notSaved").checked = notSaved;
+  commentOpen = d.commentOpen;
+  markingTicks = JSON.parse(JSON.stringify(d.markingTicks));
+  manualTicks = JSON.parse(JSON.stringify(d.manualTicks));
+  got = Object.assign({}, d.got);
+  pendingEdits = JSON.parse(JSON.stringify(d.pendingEdits));
+  carriedEdits = JSON.parse(JSON.stringify(d.pendingEdits));
+  /* back to the same step of the list, or the same question */
+  if (byQuestions()){
+    if (d.ask && d.ask.row && d.ask.row.username === ((row && row.username) || "")){
+      ask = d.ask;
+      if (row) ask.row = row;          // Refresh hands out new rows
+      showAsk(d.asking);
+      if (d.asking) paintAsk();
+    }
+  } else {
+    listOpen = Object.assign({}, d.listOpen);
+    paintList(row);
+  }
+  paintNotSaved();
+  paintNotSavedOffer(row);
 }
 /* ---------------- one student's practice programs ----------------
    The sandbox itself, in the frame, reading the programs out of localStorage
@@ -1302,7 +1391,7 @@ function loadFeedback(row){
   notSavedWas = "";
   listWas = null;
   $("notSaved").checked = notSaved;
-  /* Nothing of theirs to mark, so no Mark or Grade either, whether they
+  /* Nothing of theirs to mark, so no Mark either, whether they
      were away or were there and lost it. A class rather than `hidden`,
      because paintMarking() owns that. */
   $("workSide").classList.toggle("fbempty",
@@ -1460,16 +1549,6 @@ function ticksChanged(row, byHand){
   if (!byQuestions()) paintList(row);
   const fresh = autoFor(row);
   if (!fresh) return;
-  /* A practical graded by picking a level from a list has nothing to read
-     the level off but these ticks, so the picker follows them. Picked by
-     hand afterwards, it stays as picked until the next tick. */
-  const pick = $("fbGrade");
-  if (byHand && fresh.reached !== null && fresh.reached !== undefined && !pick.hidden && $("fbAsk").hidden && !$("markWrap").hidden){
-    const name = fresh.reached >= 0 ? fresh.ladder[fresh.reached] : "";
-    const match = Array.from(pick.options).find(o => o.value.trim().toLowerCase() === String(name).toLowerCase());
-    pick.value = match ? match.value : "";
-    showGradeHelp();
-  }
   const kept = [];
   [["Strength","strength"],["Target","target"]].forEach(pair => {
     const box = $("fb" + pair[0]);
@@ -1585,7 +1664,7 @@ function showAsk(asking){
   $("fbAsk").hidden = !asking;
   ["fbStrengthWrap","fbTargetWrap","fbSaveRow"].forEach(id => { $(id).hidden = asking; });
   commentShow(!asking);
-  /* The questions decide the level, so the picker waits until they have. */
+  /* The Mark waits until the questions are done with. */
   if (asking) $("markWrap").hidden = true;
   else if (ask && ask.row) paintMarking(ask.row.username);
   const again = $("fbAskAgain");
@@ -1735,7 +1814,6 @@ function paintAsk(){
   }
   if (!ask.strengthEdited) ask.strength = askStrength();
   if (!ask.targetChosen) ask.target = askFirstTarget();
-  const reached = askReached();
   /* The Strength is shown whole and agreed to before the Target comes up,
      so the teacher reads what the student will read rather than taking it
      on trust from the questions. */
@@ -1787,16 +1865,10 @@ function paintAsk(){
   use.addEventListener("click", () => {
     $("fbStrength").value = ask.strength;
     $("fbTarget").value = ask.target;
+    /* Gone through to the end, so the level the answers come to is what
+       Save writes for the markbook. Never shown here. */
+    ask.agreed = true;
     showAsk(false);
-    /* The level the answers reached is picked in Grade, for a practical
-       graded from a list. A practice one has no picker, and says nothing. */
-    const pick = $("fbGrade");
-    if (reached !== null && !pick.hidden){
-      const name = reached >= 0 ? ask.ladder[reached] : "";
-      const match = Array.from(pick.options).find(o => o.value.trim().toLowerCase() === name.toLowerCase());
-      pick.value = match ? match.value : "";
-      showGradeHelp();
-    }
     paintFb("idle");
     $("fbMsg").textContent = "Filled in from your answers.";
   });
@@ -1952,10 +2024,9 @@ function paintList(row){
   box.hidden = off || listOpen.phase === "done";
   listBoxes(off || listOpen.phase === "done");
   paintListAgain(row, !off && listOpen.phase === "done");
-  /* The Grade and Save wait until the Target is agreed: the grade follows
-     what the ticks come to, and there is nothing to save before then. A
-     class rather than `hidden`, because paintMarking() owns that and the
-     picker it fills has to keep following the ticks underneath. */
+  /* Save waits until the Target is agreed: there is nothing to save before
+     then. A class rather than `hidden`, because showAsk() and
+     paintMarking() already set that. */
   $("workSide").classList.toggle("fbticking", !box.hidden);
   const foot = $("fbListRow");
   foot.innerHTML = "";
@@ -2195,7 +2266,7 @@ function paintFb(state){
     next.textContent = state === "saved" ? "Next" : "Save and next";
   }
 }
-["fbStrength","fbTarget","fbComment","fbScore","fbGrade"].forEach(id => {
+["fbStrength","fbTarget","fbComment","fbScore"].forEach(id => {
   const e = $(id);
   if (!e) return;
   const undo = () => { if ($("saveFb").dataset.saved === "yes") paintFb("idle"); };
@@ -2264,59 +2335,56 @@ function askMissing(missing, given, andNext){
 }
 let marks = {};
 function markFor(user){ return marks[user] || null; }
-/* A practical is marked either out of a total or with a grade, whichever the
-   lesson was built with. */
-/* A practice assessment is not marked at all, not even with a level. It
-   used to carry a Level reached row, and that was taken out: the Strength
-   and Target are the whole of its feedback, so it has no mark row. */
-function practiceRun(){ return !!(lessonJson && lessonJson.practiceAssessment); }
-function usesRubric(){
-  if (!lessonJson || !lessonJson.practical || practiceRun()) return false;
-  return lessonJson.marking === "rubric";
-}
-/* How far a practice practical's checklists have got. Not shown anywhere:
-   it only decides whether the Target says there is further to go. */
+/* A practical is marked out of a total or against a rubric. A rubric one
+   (practice, as it was called before the graded rubric was merged into it)
+   has no mark row here: the Strength and Target are the whole of what a
+   teacher writes, and the level is worked out for the markbook. */
+function practiceRun(){ return window.progressMath.rubricRun(lessonJson); }
+/* How far a rubric practical's checklists have got. Not shown here: it
+   decides whether the Target says there is further to go. */
 function levelFor(user){
   if (PRACTICE || !practiceRun() || !window.progressMath.levelReached) return null;
   const row = rows.find(r => r.username === user);
   return window.progressMath.levelReached(lessonJson, (row && row.data) || {});
+}
+/* The level a rubric practical's student reached, saved with their
+   Strength and Target for the markbook and shown nowhere else. Read the
+   way the boxes were written: off the coding tasks where the lesson is
+   built in levels, otherwise off the list or the answers. Where neither
+   has been gone through for this student, the level already saved stays,
+   so opening their work and saving a comment does not wipe it. */
+function levelToSave(row){
+  const pm = window.progressMath;
+  const user = (row && row.username) || "";
+  const kept = (markFor(user) && markFor(user).grade) || "";
+  const named = (name) => {
+    const g = pm.rubricEntry(lessonJson, name);
+    return g ? g.name : String(name || "");
+  };
+  const data = pm.withMarkingTicks((row && row.data) || {}, { ticks: markingTicks });
+  const lv = pm.levelReached(lessonJson, data);
+  if (lv) return lv.reached ? named(lv.reached.name) : "";
+  if (byQuestions()){
+    if (!ask || !ask.agreed || !ask.row || ask.row.username !== user) return kept;
+    const at = askReached();
+    return at === null ? kept : at >= 0 ? named(ask.ladder[at]) : "";
+  }
+  const { items } = listItems(row);
+  if (!items.some(it => it.ticked)) return kept;
+  const fresh = listAuto(row);
+  if (!fresh || fresh.reached === null || fresh.reached === undefined) return kept;
+  return fresh.reached >= 0 ? named(fresh.ladder[fresh.reached]) : "";
 }
 function paintMarking(user){
   const practical = !!(lessonJson && lessonJson.practical) && !practiceRun();
   $("markWrap").hidden = !practical;
   if (!practical) return;
   const mk = markFor(user);
-  const rubric = usesRubric();
-  $("scoreRow").hidden = rubric;
-  $("fbGrade").hidden = !rubric;
-  $("markLabel").textContent = rubric ? "Grade" : "Mark";
-  if (rubric){
-    const sel = $("fbGrade");
-    sel.innerHTML = "";
-    const none = document.createElement("option");
-    none.value = ""; none.textContent = "Not graded yet";
-    sel.appendChild(none);
-    window.progressMath.rubricLevels(lessonJson).forEach(g => {
-      const o = document.createElement("option");
-      o.value = g.name; o.textContent = g.name;
-      sel.appendChild(o);
-    });
-    sel.value = mk && mk.grade ? mk.grade : "";
-    showGradeHelp();
-  } else {
-    const total = lessonJson.outOf || 20;
-    $("outOfLabel").textContent = "out of " + total;
-    $("fbScore").max = String(total);
-    $("fbScore").value = mk && typeof mk.score === "number" ? mk.score : "";
-    $("gradeHelp").textContent = "";
-  }
+  const total = lessonJson.outOf || 20;
+  $("outOfLabel").textContent = "out of " + total;
+  $("fbScore").max = String(total);
+  $("fbScore").value = mk && typeof mk.score === "number" ? mk.score : "";
 }
-function showGradeHelp(){
-  const pick = $("fbGrade").value;
-  const g = ((lessonJson && lessonJson.rubric) || []).find(x => x.name === pick);
-  $("gradeHelp").textContent = g && g.description ? g.description : "";
-}
-on("fbGrade", "change", showGradeHelp);
 async function saveFeedback(){
   const st = roster[idx];
   if (!st) return;
@@ -2354,21 +2422,26 @@ async function saveFeedback(){
                              got: Object.keys(got).length ? got : undefined,
                              notSaved: notSaved || undefined }) });
     if (!r.ok) throw new Error((await r.json()).error || "Could not save it.");
-    /* the mark or grade goes with the feedback; a practice one has neither */
-    if (lessonJson && lessonJson.practical && !practiceRun()){
-      const rubric = usesRubric();
-      const grade = rubric ? $("fbGrade").value : "";
+    /* The mark goes with the feedback. A rubric practical has no mark, but
+       its results row is where the markbook reads the level and where the
+       spreadsheet reads the Strength and Target, so it is always written,
+       as nought out of one with the level in it. Nothing a student sees
+       reads that level. */
+    if (lessonJson && lessonJson.practical){
+      const rubric = practiceRun();
+      const grade = rubric ? levelToSave(row0 || { username: st.username, data: {} }) : "";
       const total = lessonJson.outOf || 20;
       const score = rubric ? 0 : (parseInt($("fbScore").value, 10) || 0);
       const worth = rubric ? 1 : total;
-      if (rubric ? grade : $("fbScore").value !== ""){
+      const strength = showing("Strength") ? $("fbStrength").value : "";
+      const target = showing("Target") ? $("fbTarget").value : "";
+      if (rubric || $("fbScore").value !== ""){
         const mr = await fetch(API + "/api/teacher/set-mark", { method:"POST", headers: HJ(),
           body: JSON.stringify({ username: st.username, lesson: lessonId, overrides: {},
                                  score: score, outOf: worth, grade: grade,
-                                 strength: showing("Strength") ? $("fbStrength").value : "",
-                                 target: showing("Target") ? $("fbTarget").value : "" }) });
+                                 strength: strength, target: target }) });
         if (!mr.ok) throw new Error((await mr.json()).error || "Could not save the mark.");
-        marks[st.username] = { score: score, outOf: worth, grade: grade };
+        marks[st.username] = { score: score, outOf: worth, grade: grade, strength: strength, target: target };
       }
     }
     let row = rows.find(x => x.username === st.username);
@@ -2384,6 +2457,9 @@ async function saveFeedback(){
       got: Object.keys(got).length ? got : undefined,
       notSaved: notSaved || undefined,
       edits: keptEdits && Object.keys(keptEdits).length ? keptEdits : undefined });
+    /* saved, so there is nothing left to remember for them */
+    delete drafts[st.username];
+    carriedEdits = {};
     paintFb("saved");
     return true;
   }catch(e){ paintFb("idle"); $("fbMsg").textContent = e.message; return false; }
@@ -2470,12 +2546,9 @@ async function handBack(){
                 d: Object.assign({}, row.data || {}, pendingEdits), fb: fb };
 
   if (lessonJson && lessonJson.practical && !practiceRun()){
-    const rubric = usesRubric();
-    const grade = rubric ? $("fbGrade").value : "";
     const total = lessonJson.outOf || 20;
-    if (rubric ? grade : $("fbScore").value !== ""){
-      box.mk = { score: rubric ? 0 : (parseInt($("fbScore").value, 10) || 0),
-                 outOf: rubric ? 1 : total, grade: grade };
+    if ($("fbScore").value !== ""){
+      box.mk = { score: parseInt($("fbScore").value, 10) || 0, outOf: total, grade: "" };
       marks[st.username] = box.mk;
     }
   }
@@ -2496,6 +2569,7 @@ async function handBack(){
       $("fbMsg").textContent = "That is too long to send as a link. Shorten the feedback.";
       return false;
     }
+    delete drafts[st.username];      // in the link now, so nothing to remember
     paintFb("saved");
     showMarkedLink();
     return true;
@@ -2550,7 +2624,7 @@ window.addEventListener("message", (e) => {
   /* Code the teacher has changed in the work, every task of it that no
      longer reads as it arrived, saved with the feedback on Save. */
   if (e.data.hubEdits && typeof e.data.hubEdits === "object" && e.source === $("workFrame").contentWindow){
-    pendingEdits = e.data.hubEdits;
+    pendingEdits = Object.assign({}, carriedEdits, e.data.hubEdits);
     if (Object.keys(pendingEdits).length){
       paintFb("idle");
       $("fbMsg").textContent = "Your change to their code saves when you press Save.";

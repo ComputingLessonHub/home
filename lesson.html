@@ -274,7 +274,23 @@ function rubricLevels(){
   const list = ((lesson && lesson.rubric) || []).slice();
   return lesson && lesson.rubricOrder === "lowest-first" ? list : list.reverse();
 }
-/* All the grades and what each one needs, side by side. */
+/* A practical marked against a rubric, saved as practice or as the graded
+   rubric that was merged into it. The same as progressMath.rubricRun,
+   which this page does not load. */
+function rubricRun(){
+  return !!lesson && (!!lesson.practiceAssessment || (!!lesson.practical && lesson.marking === "rubric"));
+}
+/* What a level is called in front of a student: its name, or its grade
+   range when the builder chose that. Never both, so a class shown the
+   levels never sees the grades behind them. A level with no range written
+   keeps its name rather than going blank. */
+function levelHeading(g){
+  const range = String((g && g.grades) || "").trim();
+  return rubricRun() && lesson.rubricShow === "grade" && range ? range : String((g && g.name) || "");
+}
+/* All the levels and what each one needs, side by side. Nobody's own level
+   is picked out: the Strength and Target are their feedback, and the
+   rubric is only what there is to aim for. */
 function showRubric(){
   {
     const back = el("div","modal-back");
@@ -289,12 +305,9 @@ function showRubric(){
     if (note) box.appendChild(el("p","rubric-note", note));
     const strip = el("div","rubricstrip");
     rubricLevels().forEach(g => {
-      const col = el("div","rubriccol" + (myResult && myResult.grade === g.name ? " mine" : ""));
-      col.appendChild(el("b","", g.name));
+      const col = el("div","rubriccol");
+      col.appendChild(el("b","", levelHeading(g)));
       col.appendChild(rubricWords(g, "rubric-desc"));
-      /* A practice one is not graded, so what a teacher picks is a level */
-      if (myResult && myResult.grade === g.name)
-        col.appendChild(el("span","rubricmine", lesson.practiceAssessment ? "Your level" : "Your grade"));
       strip.appendChild(col);
     });
     box.appendChild(strip);
@@ -8510,39 +8523,24 @@ async function assessmentFinish(){
   renderAssessmentComplete(true, res, st, sent);
 }
 
-/* A practical has no questions to add up: the mark or grade comes from the
-   teacher, so this page is built from that rather than from a score. */
+/* A practical has no questions to add up: the mark comes from the teacher,
+   so this page is built from that rather than from a score. One marked
+   against a rubric shows no grade and no level, even one saved before the
+   two kinds were merged: its feedback is the Strength and Target. The
+   rubric itself is in the bar along the bottom. */
 function renderPracticalComplete(){
-  /* A practice assessment says no level, even one saved before the Level
-     reached row came out of Mark work: its feedback is the Strength and
-     Target and nothing that reads as a mark. */
-  const graded = myResult && myResult.grade && !lesson.practiceAssessment;
-  const scored = myResult && typeof myResult.score === "number" && myResult.outOf > 1;
-  const marked = graded || scored ||
+  const scored = !rubricRun() && myResult && typeof myResult.score === "number" && myResult.outOf > 1;
+  const marked = scored ||
     (teacherNote && (teacherNote.strength || teacherNote.target || teacherNote.comment));
 
   const box = doneShell(marked ? "Marked!" : "Submitted!");
   const hero = heroBits(marked ? "Marked!" : "Submitted!",
     marked ? lesson.title
-           : lesson.practiceAssessment ? "Your teacher will look at your work and give you some feedback."
+           : rubricRun() ? "Your teacher will look at your work and give you some feedback."
            : "Your teacher will mark your assessment.");
-  /* the mark or grade sits where a percentage would on a normal assessment */
-  if (graded){
-    hero.appendChild(el("p","done-score", String(myResult.grade).trim()));
-    const rub = ((lesson && lesson.rubric) || []).find(x => x.name === myResult.grade);
-    if (rub && (rub.descriptionHtml || rub.description)) hero.appendChild(rubricWords(rub, "done-sub rubric-desc"));
-  } else if (scored){
-    hero.appendChild(el("p","done-score", myResult.score + " / " + myResult.outOf));
-  }
+  /* the mark sits where a percentage would on a normal assessment */
+  if (scored) hero.appendChild(el("p","done-score", myResult.score + " / " + myResult.outOf));
   box.appendChild(hero);
-
-  /* The work is the thing to look at; the rubric is the reference beside it,
-     so it takes the quieter of the two. They stay in this order. */
-  if (graded){
-    const rb = el("button","btn-ghost done-save","View rubric");
-    rb.addEventListener("click", showRubric);
-    hero.appendChild(rb);
-  }
 
   /* No View my work here. Back to my work at the top is the way into it, a
      practical's work is the whole program rather than a list of answers,
