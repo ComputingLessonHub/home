@@ -2136,7 +2136,13 @@ body.workpage .grow{flex:1}
 .fblist-row input:disabled{cursor:default}
 /* Present but nothing saved: ticked, nothing is left to write but the
    comment, so the boxes, the list and the questions all go. */
-.fbnotsaved-tick{margin:0 0 10px; font-weight:600}
+/* in the foot, under whichever row of buttons is showing */
+.fbfoot .fbnotsaved-tick{margin:8px 0 0; font-weight:600}
+/* The list's Strength and Target are typed into directly. Grown to fit the
+   words by the script, but never past eight lines, which with the buttons
+   below still fits the column on a laptop without scrolling it. */
+.fbask-edit.fblist-edit{resize:none; overflow-y:auto; min-height:calc(2 * 1.45em + 26px);
+  max-height:calc(8 * 1.45em + 26px)}
 .workside.fbnotsaved #fbStrengthWrap, .workside.fbnotsaved #fbTargetWrap, .workside.fbnotsaved #fbList,
 .workside.fbnotsaved #fbAsk, .workside.fbnotsaved #fbAskAgain{display:none}
 .fblist-row.on .fblist-words{color:var(--text)}

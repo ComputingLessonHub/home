@@ -82,12 +82,6 @@
       <!-- Where a lesson has a bank of Strengths and Targets, a list of what
            it asks for is ticked off and writes the boxes below. Settings can
            swap it for a few Yes or No questions instead. -->
-      <!-- Only for a student with nothing saved. Ticked, the Strength and
-           Target go and the lesson's comment for lost work takes their place. -->
-      <label class="fblist-row fbnotsaved-tick" id="notSavedWrap" hidden>
-        <input type="checkbox" id="notSaved">
-        <span>Student was present but did not save their work properly</span>
-      </label>
       <div class="fblist" id="fbList" hidden></div>
       <div class="fbask" id="fbAsk" hidden></div>
       <div class="fbask-again" id="fbAskAgain" hidden></div>
@@ -113,6 +107,14 @@
         <!-- While the list is being ticked, its own way on stands where Save
              does: nothing is ready to save until the Target is agreed. -->
         <div class="fbsave" id="fbListRow" hidden></div>
+        <!-- Ticked, the Strength and Target go and the lesson's comment for
+             lost work takes their place. Under the buttons, so it is never
+             in the way of the ticks, and in the foot, so it is always to hand
+             while nothing has been ticked. -->
+        <label class="fblist-row fbnotsaved-tick" id="notSavedWrap" hidden>
+          <input type="checkbox" id="notSaved">
+          <span>Student was present but did not save their work properly</span>
+        </label>
         <p class="hint" id="fbMsg"></p>
         <!-- Their feedback is saved: said here, in place of whatever the line
              above last said about how the boxes were filled in. -->
@@ -1965,7 +1967,7 @@ function paintList(row){
   $("workSide").classList.toggle("fbticking", !box.hidden);
   const foot = $("fbListRow");
   foot.innerHTML = "";
-  foot.hidden = box.hidden || listOpen.phase !== "levels";
+  foot.hidden = box.hidden;
   if (box.hidden) return;
   if (listOpen.phase === "strength" || listOpen.phase === "target"){ paintListCheck(row); return; }
   box.appendChild(el("p","bankhead","What have they done?"));
@@ -2037,51 +2039,42 @@ let listOpen = { user: null, at: null, phase: "levels" };
 /* The Strength, then the Target, as the student will read them, each to be
    agreed to or changed. They are the boxes' own words, so a change here is
    a change there, and a tick changed afterwards keeps it the way a change
-   typed into the box is kept. */
+   typed into the box is kept. Written straight into the box rather than
+   behind an Edit button: most need a word changed at most, and one press
+   fewer is thirty fewer down a class. Back and Looks good go where Done
+   ticking and Next level were, so the way on is always in the same place. */
 function paintListCheck(row){
   const box = $("fbList");
   const strength = listOpen.phase === "strength";
   const field = $(strength ? "fbStrength" : "fbTarget");
   box.appendChild(el("p","fbask-count", strength ? "This is their Strength:" : "And this is their Target:"));
-  if (listOpen.editing){
-    const edit = el("textarea","fbask-edit");
-    edit.rows = 4;
-    edit.value = field.value;
-    edit.addEventListener("input", () => { field.value = edit.value; paintFb("idle"); });
-    box.appendChild(edit);
-    setTimeout(() => edit.focus(), 0);
-  } else {
-    const card = el("div","fbask-card");
-    card.appendChild(el("p","", field.value || "Nothing yet. Press Edit to write one."));
-    box.appendChild(card);
-  }
-  const buttons = el("div","fbask-yesno");
-  if (!listOpen.editing){
-    const change = el("button","btn-ghost", strength ? "Edit Strength" : "Edit Target");
-    change.type = "button";
-    change.addEventListener("click", () => { listOpen.editing = true; paintList(row); });
-    buttons.appendChild(change);
-  }
-  const ok = el("button","btn-primary","Looks good");
-  ok.type = "button";
-  ok.addEventListener("click", () => {
-    listOpen.editing = false;
-    listOpen.phase = strength ? "target" : "done";
-    paintList(row);
-    if (listOpen.phase === "done") $("fbMsg").textContent = "Filled in from the ticks.";
-  });
-  buttons.appendChild(ok);
-  box.appendChild(buttons);
-  const foot = el("div","fbask-foot");
-  const back = el("button","bank-link","Back");
+  const edit = el("textarea","fbask-edit fblist-edit");
+  edit.rows = 2;
+  edit.value = field.value;
+  edit.placeholder = strength ? "Write their Strength here." : "Write their Target here.";
+  edit.setAttribute("aria-label", strength ? "Strength" : "Target");
+  /* As tall as the words, up to the most the CSS allows. Past that it
+     scrolls inside itself, so the column never has to. */
+  const fit = () => { edit.style.height = "auto"; edit.style.height = edit.scrollHeight + 2 + "px"; };
+  edit.addEventListener("input", () => { field.value = edit.value; fit(); paintFb("idle"); });
+  box.appendChild(edit);
+  fit();
+  const foot = $("fbListRow");
+  const back = el("button","btn-ghost","Back");
   back.type = "button";
   back.addEventListener("click", () => {
-    listOpen.editing = false;
     listOpen.phase = strength ? "levels" : "strength";
     paintList(row);
   });
   foot.appendChild(back);
-  box.appendChild(foot);
+  const ok = el("button","btn-primary","Looks good");
+  ok.type = "button";
+  ok.addEventListener("click", () => {
+    listOpen.phase = strength ? "target" : "done";
+    paintList(row);
+    if (listOpen.phase === "done") $("fbMsg").textContent = "Filled in from the ticks.";
+  });
+  foot.appendChild(ok);
 }
 /* The boxes, away while the list is being ticked. A lesson with STAR
    feedback switched off never shows the first two either way. */
