@@ -169,6 +169,23 @@
     });
     return out;
   }
+  /* Code a teacher put right while marking, kept with the feedback, laid
+     over the work the same way, so every screen shows their version. Kept
+     there as well as in the work because the student's own browser can hand
+     in its older copy after it, and the feedback is the one place nothing
+     the student does can write. */
+  function withTeacherEdits(data, feedback){
+    let f = feedback;
+    if (typeof f === "string"){ try{ f = JSON.parse(f); }catch(e){ f = null; } }
+    const edits = f && f.edits;
+    if (!edits || typeof edits !== "object") return data;
+    const out = Object.assign({}, data || {});
+    Object.keys(edits).forEach(id => {
+      const e = edits[id];
+      if (e && e.value && typeof e.value === "object") out[id] = e.value;
+    });
+    return out;
+  }
   function attempted(data, id){
     if (!data) return false;
     const v = data[id];
@@ -247,7 +264,7 @@
     (roster || []).forEach(st => {
       const row = (rows || []).find(r => r.username === st.username) || null;
       /* with any lines a teacher ticked while marking, which live in the feedback */
-      const data = row ? withMarkingTicks(row.data, row.feedback) : null;
+      const data = row ? withMarkingTicks(withTeacherEdits(row.data, row.feedback), row.feedback) : null;
       let got = 0, max = 0;
       tasks.forEach(t => {
         const sc = scoreTask(t.block, data ? data[t.id] : undefined);
@@ -385,7 +402,7 @@
   }
 
   window.progressMath = { TASK_LABEL, plainText, normAns, taskInfo,
-                          quantifiableTasks, scoreTask, checkDone, attempted, withMarkingTicks,
+                          quantifiableTasks, scoreTask, checkDone, attempted, withMarkingTicks, withTeacherEdits,
                           pagesLock, defaultLocks, fetchLockedPages, markRoster,
                           levelChain, levelName, levelReached, levelLadder, rubricLevels,
                           hasWork, absentFeedback };

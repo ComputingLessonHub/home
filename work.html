@@ -365,7 +365,8 @@ async function fetchWork(){
   /* Lines ticked while marking live in the feedback. Laid over the work as
      it arrives, so every total on this screen counts them. */
   return (d.rows || []).map(row => Object.assign({}, row,
-    { data: window.progressMath.withMarkingTicks(row.data, row.feedback) }));
+    { data: window.progressMath.withMarkingTicks(
+        window.progressMath.withTeacherEdits(row.data, row.feedback), row.feedback) }));
 }
 /* What has been marked so far. Pulled out of boot so Refresh can ask for it
    again: a colleague marking the same class in the next room is exactly the
@@ -1285,6 +1286,7 @@ function loadFeedback(row){
   markingTicks = (f.ticks && typeof f.ticks === "object") ? JSON.parse(JSON.stringify(f.ticks)) : {};
   /* and what was ticked on the list, kept with them for the same reason */
   got = (f.got && typeof f.got === "object") ? Object.assign({}, f.got) : {};
+  pendingEdits = {};
   manualTicks = {};
   Object.keys(markingTicks).forEach(id => { if (markingTicks[id].manual) manualTicks[id] = markingTicks[id].manual; });
   /* An assessment marks itself and writes a strength and a target as it does.
@@ -2253,6 +2255,27 @@ async function saveFeedback(){
   paintFb("saving");
   $("fbMsg").textContent = "";
   try{
+    let row0 = rows.find(x => x.username === st.username);
+    /* Code first: the feedback saved after it reads the change back and
+       keeps it. */
+    const editIds = Object.keys(pendingEdits);
+    if (editIds.length){
+      const er = await fetch(API + "/api/teacher/edit-work", { method:"POST", headers: HJ(),
+        body: JSON.stringify({ username: st.username, lesson: lessonId, edits: pendingEdits }) });
+      if (!er.ok) throw new Error((await er.json()).error || "Could not save the change to their code.");
+      const at = (await er.json()).at;
+      if (row0){
+        row0.data = Object.assign({}, row0.data || {});
+        let old = {};
+        try{ old = JSON.parse(row0.feedback || "{}") || {}; }catch(e){ old = {}; }
+        row0.edits = Object.assign({}, old.edits || row0.edits || {});
+        editIds.forEach(id => {
+          row0.data[id] = pendingEdits[id];
+          row0.edits[id] = { value: pendingEdits[id], at: at };
+        });
+      }
+      pendingEdits = {};
+    }
     const r = await fetch(API + "/api/teacher/feedback", { method:"POST", headers: HJ(),
       body: JSON.stringify({ username: st.username, lesson: lessonId,
                              strength: showing("Strength") ? $("fbStrength").value : "",
@@ -2282,12 +2305,16 @@ async function saveFeedback(){
     }
     let row = rows.find(x => x.username === st.username);
     if (!row){ row = { username: st.username, display_name: st.display_name, data: {} }; rows.push(row); }
+    /* the server kept any code put right; so does this copy */
+    let keptEdits = row.edits;
+    if (!keptEdits){ try{ keptEdits = (JSON.parse(row.feedback || "{}") || {}).edits; }catch(e){ keptEdits = undefined; } }
     row.feedback = JSON.stringify({
       strength: showing("Strength") ? $("fbStrength").value : "",
       target: showing("Target") ? $("fbTarget").value : "",
       comment: $("fbComment").value,
       ticks: Object.keys(markingTicks).length ? markingTicks : undefined,
-      got: Object.keys(got).length ? got : undefined });
+      got: Object.keys(got).length ? got : undefined,
+      edits: keptEdits && Object.keys(keptEdits).length ? keptEdits : undefined });
     paintFb("saved");
     return true;
   }catch(e){ paintFb("idle"); $("fbMsg").textContent = e.message; return false; }
@@ -2370,7 +2397,8 @@ async function handBack(){
   };
   if (Object.keys(markingTicks).length) fb.ticks = markingTicks;
   if (Object.keys(got).length) fb.got = got;
-  const box = { n: st.display_name, l: lessonId, d: row.data || {}, fb: fb };
+  const box = { n: st.display_name, l: lessonId,
+                d: Object.assign({}, row.data || {}, pendingEdits), fb: fb };
 
   if (lessonJson && lessonJson.practical && (!practiceRun() || usesRubric())){
     const rubric = usesRubric();
@@ -2440,6 +2468,8 @@ function showMarkedLink(){
 
 /* Marks the teacher changed question by question, sent up from the viewer. */
 let markOverrides = null;
+/* code put right in the work while marking, by task, waiting for Save */
+let pendingEdits = {};
 /* and the checklist lines they ticked off by hand */
 let manualTicks = {};
 /* Every line ticked on each task while marking, the ones the code did not
@@ -2448,6 +2478,15 @@ let markingTicks = {};
 window.addEventListener("message", (e) => {
   if (!e || !e.data) return;
   if (e.data.hubMarks) markOverrides = e.data.hubMarks;
+  /* Code the teacher has changed in the work, every task of it that no
+     longer reads as it arrived, saved with the feedback on Save. */
+  if (e.data.hubEdits && typeof e.data.hubEdits === "object" && e.source === $("workFrame").contentWindow){
+    pendingEdits = e.data.hubEdits;
+    if (Object.keys(pendingEdits).length){
+      paintFb("idle");
+      $("fbMsg").textContent = "Your change to their code saves when you press Save.";
+    }
+  }
   /* Checklist lines only a teacher can judge, ticked in the viewer. Kept by
      task so several coding tasks in one lesson do not overwrite each other. */
   if (e.data.hubManual){

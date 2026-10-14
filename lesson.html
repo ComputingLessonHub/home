@@ -188,7 +188,7 @@ function parseFeedback(raw){
   try{ f = JSON.parse(raw); }catch(e){ f = { comment: String(raw) }; }
   if (!f || typeof f !== "object") f = { comment: String(raw) };
   /* a note can be only ticks, given while marking before anything was written */
-  if (!f.strength && !f.target && !f.comment && !f.ticks) return null;
+  if (!f.strength && !f.target && !f.comment && !f.ticks && !f.edits) return null;
   return f;
 }
 /* a practical is marked by hand, so the mark comes from the results list */
@@ -223,8 +223,9 @@ async function loadMyMark(){
 
 function showFeedback(raw){
   teacherNote = parseFeedback(raw);
-  /* feedback fetched after the work was put back: its ticks go on now */
-  if (restoreDone) applyMarkingTicks();
+  /* feedback fetched after the work was put back: its ticks go on now, and
+     any code the teacher put right */
+  if (restoreDone){ applyTeacherEdits(); applyMarkingTicks(); }
 }
 
 /* Putting a link's contents back on the page. Used by a teacher opening a
@@ -653,6 +654,7 @@ const holdWatchers = new Set();
 function markDirty(){
   holdWatchers.forEach(fn => { try{ fn(); }catch(e){} });
   assessRepaintSoon();
+  if (restoreDone && markingView) noteMarkingEdits();
   if (spectate || !restoreDone) return;
   if (!unsavedTyping) paintSaveButtons("idle");   // they stand out again
   unsavedTyping = true;
@@ -1196,7 +1198,7 @@ const handedOver = handedLesson();
         if (!(handedIn && handedIn.kind !== "broken")) await nameGate(l.title);
       }
     }
-    try{ await loadSaved(); applyMarkingTicks(); }
+    try{ await loadSaved(); applyTeacherEdits(); applyMarkingTicks(); }
     finally{ restoreDone = true; }      // saving is allowed from here on
     if (spectate){
       $("saveBtn").hidden = true;
@@ -1372,8 +1374,12 @@ const handedOver = handedLesson();
     if (wasDone){
       /* A mark or feedback added after they finished has to be fetched before
          the summary is drawn, or it shows as though nothing was left. */
-      if (lesson.practical) await loadMyMark();
+      /* The feedback first: the mark fills in a Strength and Target of its
+         own when there is no feedback, and fetched the other way round that
+         left the feedback never asked for, and with it the ticks given while
+         marking, the comment and any code the teacher put right. */
       if (!teacherNote) await loadMyFeedback();
+      if (lesson.practical) await loadMyMark();
       freezeIfFed();
       /* The progress bar on the summary says which pages the teacher kept
          shut, so it needs the same answer the lesson itself starts with. On a
@@ -4983,6 +4989,72 @@ function postTicks(id, list, code){
 function recheckForMarking(){
   if (!markingView) return;
   writtenTickers.forEach(fn => { try{ fn(); }catch(e){} });
+  /* what their code says as it arrived, to tell a teacher's change from it */
+  codeTaskIds().forEach(id => {
+    try{ editBase[id] = frozenKey(id, fields[id].get()); }catch(e){}
+  });
+}
+
+/* ---------- a teacher putting a student's code right ----------
+   Marking is reading, and nothing in this frame writes. The one exception
+   is code a teacher changes on purpose, a line a student deleted by accident
+   put back: every coding task whose code no longer reads as it arrived is
+   sent up to the marking screen, which saves it with the feedback when Save
+   is pressed. Code carried in from the level before and not touched is not
+   a change. */
+const editBase = {};
+let editTimer = null;
+function codeTaskIds(){
+  return lessonTaskIds().filter(id => {
+    const b = blockById(id);
+    return b && (b.type === "ide" || b.type === "web");
+  });
+}
+function noteMarkingEdits(){
+  clearTimeout(editTimer);
+  editTimer = setTimeout(() => {
+    const edits = {};
+    codeTaskIds().forEach(id => {
+      if (!Object.prototype.hasOwnProperty.call(editBase, id)) return;
+      let v;
+      try{ v = fields[id].get(); }catch(e){ return; }
+      if (!v || v.carried || frozenKey(id, v) === editBase[id]) return;
+      edits[id] = editedValue(id, v);
+    });
+    try{ window.parent.postMessage({ hubEdits: edits }, "*"); }catch(e){}
+  }, 300);
+}
+/* What they saved, with only the code changed: their runs, their output and
+   their ticks are still theirs. */
+function editedValue(id, v){
+  const had = restoredData && restoredData[id];
+  const out = Object.assign({}, (had && typeof had === "object") ? had : {});
+  if (blockById(id).type === "ide") out.code = v.code;
+  else ["html","css","js","extra"].forEach(k => { out[k] = v[k]; });
+  delete out.carried;
+  return out;
+}
+/* On the student's own page: code a teacher put right while marking, kept
+   with the feedback, goes into the task here as well, once. Without it this
+   browser's own copy, which is what the page opens and what it hands in,
+   still has the old code, and the work held at what was marked would hold
+   that. Once only, so it is not put back over anything they write after. */
+function applyTeacherEdits(){
+  const edits = teacherNote && teacherNote.edits;
+  if (spectate || !edits || typeof edits !== "object") return;
+  let changed = false;
+  Object.keys(edits).forEach(id => {
+    const e = edits[id], f = fields[id];
+    if (!e || !e.value || !f || typeof f.set !== "function") return;
+    const seenKey = "hub_edit_" + lessonId + "_" + id;
+    try{ if (localStorage.getItem(seenKey) === String(e.at)) return; }catch(err){}
+    try{
+      f.set(e.value);
+      changed = true;
+      localStorage.setItem(seenKey, String(e.at));
+    }catch(err){}
+  });
+  if (changed && restoreDone) save();
 }
 /* The marking screen's list ticks a checklist line off, or takes a tick it
    gave back: the same as ticking it here, so the level, the page and the
