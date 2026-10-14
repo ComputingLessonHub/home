@@ -116,6 +116,9 @@
         <!-- Their feedback is saved: said here, in place of whatever the line
              above last said about how the boxes were filled in. -->
         <p class="fbmarked" id="fbMarked">✓ Marked</p>
+        <!-- Save and next moves on before the save has finished. One that
+             then fails is said here, whoever is on screen by then. -->
+        <p class="fbbehind" id="fbBehind" hidden></p>
       </div>
     </aside>
   </div>
@@ -419,6 +422,9 @@ async function refreshWork(){
   btn.textContent = "Checking…";
   $("workFresh").textContent = "";
   try{
+    /* Fetched before the saves still going have landed, the list would come
+       back without them and show those students unmarked again. */
+    await saveChain;
     /* The lesson comes back as well: the frame is given this copy rather
        than fetching its own, so this is the one press that picks up a lesson
        a colleague has edited since this screen was opened. It is also the
@@ -1158,6 +1164,7 @@ function showStudent(i, step){
      on without saving it again, until something is changed. */
   paintFb(draft ? "idle" : savedFeedback(row) ? "saved" : "idle");
   if (draft) $("fbMsg").textContent = "Not saved yet. This is where you left it.";
+  paintBehind();
 }
 
 /* ---------------- unsaved marking, kept while the page is open ----------
@@ -2274,9 +2281,10 @@ function paintFb(state){
   e.addEventListener("change", undo);
 });
 
-/* Save, and with andNext the next student in the picker once it has worked.
-   A save that fails stays put, so the message saying why is still on screen
-   beside the feedback it is about. */
+/* Save, and with andNext the next student in the picker. A lesson moves on
+   at once and saves behind (see queueSave). Practice still waits: a save
+   that fails stays put, so the message saying why is still on screen beside
+   the feedback it is about. */
 async function submitFeedback(andNext){
   /* Practice is not marked and a note on it is not a report: a teacher
      writing one line about a program somebody made in their own time should
@@ -2287,7 +2295,7 @@ async function submitFeedback(andNext){
   const hasS = showing("Strength"), hasT = showing("Target");
   if (hasS && !hasT) return askMissing("target", "strength", andNext);
   if (hasT && !hasS) return askMissing("strength", "target", andNext);
-  afterSave(await saveFeedback(), andNext);
+  saveFeedback(andNext);
 }
 function afterSave(ok, andNext){
   if (ok) paintPicker();              // they are marked now
@@ -2329,7 +2337,7 @@ function askMissing(missing, given, andNext){
       $("fb" + (missing === "target" ? "Target" : "Strength")).focus();
     });
     const anyway = el("button","btn-ghost modal-stay","Save without a " + missing);
-    anyway.addEventListener("click", async () => { closeModal(); afterSave(await saveFeedback(), andNext); });
+    anyway.addEventListener("click", () => { closeModal(); saveFeedback(andNext); });
     box.appendChild(add); box.appendChild(anyway);
   });
 }
@@ -2385,84 +2393,237 @@ function paintMarking(user){
   $("fbScore").max = String(total);
   $("fbScore").value = mk && typeof mk.score === "number" ? mk.score : "";
 }
-async function saveFeedback(){
+/* ---------------- saving behind the next student ----------------
+   Save and next used to wait for two or three round trips to the server
+   before the next student appeared, every time, thirty times a class. Now
+   what is on screen is taken down in one go, kept here as saved, and sent
+   while the next student is already being read.
+
+   The saves go one after another rather than all at once, so a student
+   saved twice in quick succession is written in the order it was done. One
+   that fails is put back as unsaved marking, where it was left, and said in
+   the foot of the column until it has been saved again. */
+let saveChain = Promise.resolve();
+const savesQueued = [];        // the saves still to go, oldest first
+const saveFailed = {};         // username -> why it did not save
+let behindSince = 0;           // when the oldest save still going was queued
+let behindTimer = 0;
+/* Long enough for a slow school connection, short enough that one stuck
+   request does not hold every save behind it for the rest of the lesson. */
+const SAVE_WAIT_MS = 20000;
+
+/* Everything a save needs, read off the screen now, because by the time it
+   is sent the screen is showing somebody else. */
+function feedbackJob(){
   const st = roster[idx];
-  if (!st) return;
-  if (OFFLINE) return handBack();
-  paintFb("saving");
-  $("fbMsg").textContent = "";
+  if (!st) return null;
+  const row = rows.find(x => x.username === st.username) || null;
+  const strength = showing("Strength") ? $("fbStrength").value : "";
+  const target = showing("Target") ? $("fbTarget").value : "";
+  const draft = draftNow();
+  const job = {
+    username: st.username, name: st.display_name, draft: draft, key: draftKey(draft),
+    edits: JSON.parse(JSON.stringify(pendingEdits)),
+    feedback: { strength: strength, target: target, text: $("fbComment").value,
+                ticks: Object.keys(markingTicks).length ? JSON.parse(JSON.stringify(markingTicks)) : undefined,
+                got: Object.keys(got).length ? Object.assign({}, got) : undefined,
+                notSaved: notSaved || undefined },
+    mark: null,
+    /* how this student stood before, to put back if the save fails */
+    before: { row: row, data: row && row.data, edits: row && row.edits,
+              feedback: row && row.feedback, mark: marks[st.username] }
+  };
+  /* The mark goes with the feedback. A rubric practical has no mark, but
+     its results row is where the markbook reads the level and where the
+     spreadsheet reads the Strength and Target, so it is always written,
+     as nought out of one with the level in it. Nothing a student sees
+     reads that level. */
+  if (lessonJson && lessonJson.practical){
+    const rubric = practiceRun();
+    if (rubric || $("fbScore").value !== ""){
+      job.mark = { score: rubric ? 0 : (parseInt($("fbScore").value, 10) || 0),
+                   outOf: rubric ? 1 : (lessonJson.outOf || 20),
+                   grade: rubric ? levelToSave(row || { username: st.username, data: {} }) : "",
+                   strength: strength, target: target };
+    }
+  }
+  return job;
+}
+
+/* This page's copy says what the server will, straight away. */
+function keepLocally(job){
+  let row = rows.find(x => x.username === job.username);
+  const editIds = Object.keys(job.edits);
+  if (row && editIds.length){
+    row.data = Object.assign({}, row.data || {});
+    let old = {};
+    try{ old = JSON.parse(row.feedback || "{}") || {}; }catch(e){ old = {}; }
+    row.edits = Object.assign({}, old.edits || row.edits || {});
+    editIds.forEach(id => {
+      row.data[id] = job.edits[id];
+      row.edits[id] = { value: job.edits[id], at: new Date().toISOString() };
+    });
+  }
+  if (job.mark) marks[job.username] = Object.assign({}, job.mark);
+  if (!row){ row = { username: job.username, display_name: job.name, data: {} }; rows.push(row); }
+  /* the server keeps any code put right; so does this copy */
+  let keptEdits = row.edits;
+  if (!keptEdits){ try{ keptEdits = (JSON.parse(row.feedback || "{}") || {}).edits; }catch(e){ keptEdits = undefined; } }
+  const f = job.feedback;
+  row.feedback = JSON.stringify({ strength: f.strength, target: f.target, comment: f.text,
+    ticks: f.ticks, got: f.got, notSaved: f.notSaved,
+    edits: keptEdits && Object.keys(keptEdits).length ? keptEdits : undefined });
+  delete drafts[job.username];
+  delete saveFailed[job.username];
+}
+
+async function postSave(path, body, fallback){
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), SAVE_WAIT_MS);
+  let r;
   try{
-    let row0 = rows.find(x => x.username === st.username);
-    /* Code first: the feedback saved after it reads the change back and
-       keeps it. */
-    const editIds = Object.keys(pendingEdits);
-    if (editIds.length){
-      const er = await fetch(API + "/api/teacher/edit-work", { method:"POST", headers: HJ(),
-        body: JSON.stringify({ username: st.username, lesson: lessonId, edits: pendingEdits }) });
-      if (!er.ok) throw new Error((await er.json()).error || "Could not save the change to their code.");
-      const at = (await er.json()).at;
-      if (row0){
-        row0.data = Object.assign({}, row0.data || {});
-        let old = {};
-        try{ old = JSON.parse(row0.feedback || "{}") || {}; }catch(e){ old = {}; }
-        row0.edits = Object.assign({}, old.edits || row0.edits || {});
-        editIds.forEach(id => {
-          row0.data[id] = pendingEdits[id];
-          row0.edits[id] = { value: pendingEdits[id], at: at };
-        });
-      }
-      pendingEdits = {};
+    r = await fetch(API + path, { method:"POST", headers: HJ(), body: JSON.stringify(body), signal: stop.signal });
+  }catch(e){
+    throw new Error(stop.signal.aborted ? "The server took too long to answer." : "Could not reach the server.");
+  }finally{ clearTimeout(timer); }
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(out.error || fallback);
+  return out;
+}
+/* Code first: the feedback saved after it reads the change back and keeps
+   it. */
+async function sendJob(job){
+  if (Object.keys(job.edits).length)
+    await postSave("/api/teacher/edit-work", { username: job.username, lesson: lessonId, edits: job.edits },
+                   "Could not save the change to their code.");
+  await postSave("/api/teacher/feedback", Object.assign({ username: job.username, lesson: lessonId }, job.feedback),
+                 "Could not save it.");
+  if (job.mark)
+    await postSave("/api/teacher/set-mark", Object.assign({ username: job.username, lesson: lessonId, overrides: {} }, job.mark),
+                   "Could not save the mark.");
+}
+
+/* Resolves true once it is on the server, false if it never got there. */
+function queueSave(job){
+  keepLocally(job);
+  savesQueued.push(job);
+  if (savesQueued.length === 1) behindSince = Date.now();
+  paintBehind();
+  const done = saveChain.then(() => sendJob(job)).then(() => true, (e) => { saveWentWrong(job, e); return false; })
+    .then(ok => {
+      savesQueued.splice(savesQueued.indexOf(job), 1);
+      behindSince = savesQueued.length ? Date.now() : 0;
+      paintBehind();
+      return ok;
+    });
+  saveChain = done;
+  return done;
+}
+
+function saveWentWrong(job, e){
+  /* Saved again since, and still to go: that one carries the boxes as they
+     are now, and only needs the code put right this time as well, which it
+     would otherwise not send because it had already gone. */
+  const later = savesQueued.find(j => j !== job && j.username === job.username &&
+                                      savesQueued.indexOf(j) > savesQueued.indexOf(job));
+  if (later){ later.edits = Object.assign({}, job.edits, later.edits); return; }
+  const b = job.before;
+  const row = rows.find(x => x.username === job.username);
+  if (!b.row){ if (row) rows.splice(rows.indexOf(row), 1); }
+  else if (row){ row.data = b.data; row.edits = b.edits; row.feedback = b.feedback; }
+  if (b.mark) marks[job.username] = b.mark; else delete marks[job.username];
+  saveFailed[job.username] = e.message || "Could not save it.";
+  if (shownUser === job.username){
+    if (draftKey(draftNow()) === job.key){
+      /* still looking at what failed: show it again as unsaved, the way
+         coming back to them would */
+      drafts[job.username] = job.draft;
+      shownUser = "";                 // or stashDraft throws the draft away as saved
+      showStudent(idx);
+    } else {
+      /* changed since: what is on screen is newer, so it stays, with the code
+         put right added back so the next save sends it */
+      pendingEdits = Object.assign({}, job.edits, pendingEdits);
+      paintFb("idle");
     }
-    const r = await fetch(API + "/api/teacher/feedback", { method:"POST", headers: HJ(),
-      body: JSON.stringify({ username: st.username, lesson: lessonId,
-                             strength: showing("Strength") ? $("fbStrength").value : "",
-                             target: showing("Target") ? $("fbTarget").value : "",
-                             text: $("fbComment").value,
-                             ticks: Object.keys(markingTicks).length ? markingTicks : undefined,
-                             got: Object.keys(got).length ? got : undefined,
-                             notSaved: notSaved || undefined }) });
-    if (!r.ok) throw new Error((await r.json()).error || "Could not save it.");
-    /* The mark goes with the feedback. A rubric practical has no mark, but
-       its results row is where the markbook reads the level and where the
-       spreadsheet reads the Strength and Target, so it is always written,
-       as nought out of one with the level in it. Nothing a student sees
-       reads that level. */
-    if (lessonJson && lessonJson.practical){
-      const rubric = practiceRun();
-      const grade = rubric ? levelToSave(row0 || { username: st.username, data: {} }) : "";
-      const total = lessonJson.outOf || 20;
-      const score = rubric ? 0 : (parseInt($("fbScore").value, 10) || 0);
-      const worth = rubric ? 1 : total;
-      const strength = showing("Strength") ? $("fbStrength").value : "";
-      const target = showing("Target") ? $("fbTarget").value : "";
-      if (rubric || $("fbScore").value !== ""){
-        const mr = await fetch(API + "/api/teacher/set-mark", { method:"POST", headers: HJ(),
-          body: JSON.stringify({ username: st.username, lesson: lessonId, overrides: {},
-                                 score: score, outOf: worth, grade: grade,
-                                 strength: strength, target: target }) });
-        if (!mr.ok) throw new Error((await mr.json()).error || "Could not save the mark.");
-        marks[st.username] = { score: score, outOf: worth, grade: grade, strength: strength, target: target };
-      }
-    }
-    let row = rows.find(x => x.username === st.username);
-    if (!row){ row = { username: st.username, display_name: st.display_name, data: {} }; rows.push(row); }
-    /* the server kept any code put right; so does this copy */
-    let keptEdits = row.edits;
-    if (!keptEdits){ try{ keptEdits = (JSON.parse(row.feedback || "{}") || {}).edits; }catch(e){ keptEdits = undefined; } }
-    row.feedback = JSON.stringify({
-      strength: showing("Strength") ? $("fbStrength").value : "",
-      target: showing("Target") ? $("fbTarget").value : "",
-      comment: $("fbComment").value,
-      ticks: Object.keys(markingTicks).length ? markingTicks : undefined,
-      got: Object.keys(got).length ? got : undefined,
-      notSaved: notSaved || undefined,
-      edits: keptEdits && Object.keys(keptEdits).length ? keptEdits : undefined });
-    /* saved, so there is nothing left to remember for them */
-    delete drafts[st.username];
-    carriedEdits = {};
+    $("fbMsg").textContent = saveFailed[job.username];
+  } else {
+    /* opened and written in again since, then left: that is the newer
+       marking, and only the code put right is added back to it */
+    const d = drafts[job.username];
+    if (d) d.pendingEdits = Object.assign({}, job.edits, d.pendingEdits);
+    else drafts[job.username] = job.draft;
+  }
+  paintPicker();
+}
+
+/* Quiet while saves are keeping up. A save that is slow, or one that failed,
+   is said under the buttons, by name, with a way back to them. */
+function paintBehind(){
+  const line = $("fbBehind");
+  if (!line) return;
+  clearTimeout(behindTimer);
+  line.innerHTML = "";
+  const failed = roster.filter(st => saveFailed[st.username] && st.username !== shownUser);
+  if (failed.length){
+    line.className = "fbbehind failed";
+    line.appendChild(document.createTextNode("Not saved: "));
+    failed.forEach((st, n) => {
+      if (n) line.appendChild(document.createTextNode(", "));
+      const go = el("button","bank-link", st.display_name);
+      go.type = "button";
+      go.title = saveFailed[st.username];
+      go.addEventListener("click", () => showStudent(roster.indexOf(st)));
+      line.appendChild(go);
+    });
+    line.appendChild(document.createTextNode(". Open them to save again."));
+    line.hidden = false;
+    return;
+  }
+  const waited = behindSince ? Date.now() - behindSince : 0;
+  if (savesQueued.length && waited >= 2000){
+    line.className = "fbbehind";
+    line.textContent = "Still saving " + (savesQueued.length === 1 ? "one student" : savesQueued.length + " students") + "…";
+    line.hidden = false;
+  } else {
+    line.hidden = true;
+  }
+  if (savesQueued.length) behindTimer = setTimeout(paintBehind, Math.max(250, 2000 - waited));
+}
+/* Closing the page with a save still going would lose it without a word. */
+window.addEventListener("beforeunload", (e) => {
+  if (!savesQueued.length) return;
+  e.preventDefault();
+  e.returnValue = "";
+});
+
+/* Save on its own waits and says so; Save and next does not wait at all. */
+async function saveFeedback(andNext){
+  if (!roster[idx]) return false;
+  if (OFFLINE){
+    const ok = await handBack();
+    if (ok && andNext) goStep(1, true);
+    return ok;
+  }
+  const job = feedbackJob();
+  pendingEdits = {};
+  carriedEdits = {};
+  /* what the boxes hold once it has gone, to tell later whether anything
+     has been changed since */
+  job.key = draftKey(draftNow());
+  $("fbMsg").textContent = "";
+  const done = queueSave(job);
+  paintPicker();                      // they are marked now
+  if (andNext){
     paintFb("saved");
+    goStep(1, true);
     return true;
-  }catch(e){ paintFb("idle"); $("fbMsg").textContent = e.message; return false; }
+  }
+  paintFb("saving");
+  const ok = await done;
+  if (ok && shownUser === job.username && draftKey(draftNow()) === job.key) paintFb("saved");
+  else if (ok && shownUser === job.username) paintFb("idle");
+  return ok;
 }
 
 /* ---------------- who opened this link ----------------
