@@ -879,7 +879,12 @@ function compile(){
     const topics = {};
     Object.keys(lesson.topics || {}).forEach(k => {
       const t = lesson.topics[k];
-      if (t && (t.label || t.strength || t.target)) topics[k] = { label:t.label||k, strength:t.strength||"", target:t.target||"" };
+      if (t && (t.label || t.strength || t.target)){
+        topics[k] = { label:t.label||k, strength:t.strength||"", target:t.target||"" };
+        /* The rubric level it belongs to, which is the order marking asks
+           about it in. Dropped here, every lesson reopened would lose it. */
+        if (lesson.practical && t.level) topics[k].level = t.level;
+      }
     });
     if (Object.keys(topics).length) out.topics = topics;
     const responses = {};
@@ -3344,6 +3349,13 @@ function markingSetup(into){
   into.appendChild(card);
 }
 
+/* The rubric's levels by name, lowest first. The rubric is written best
+   first, so it is read backwards. The same order progressMath.levelLadder
+   gives the marking screen, which this page does not load. */
+function practicalLevels(){
+  if (!lesson.practical) return [];
+  return (lesson.rubric || []).map(g => String((g && g.name) || "").trim()).filter(Boolean).reverse();
+}
 function paintTargets(into){
   const used = {};
   lesson.blocks.forEach(b => { if (b.topic) used[b.topic] = true; });
@@ -3397,6 +3409,31 @@ function paintTargets(into){
         inp.addEventListener("input", () => { t[pair[0]] = inp.value; saveDraft(); schedulePreview(); });
         w.appendChild(inp); body.appendChild(w);
       });
+    /* Which level of the rubric this is part of. Marking asks about the
+       topics a level at a time, lowest first, and stops at the first one a
+       student has not done, so this is what lets it say which level they
+       reached. Listed lowest first, the order a teacher thinks of them in,
+       whatever order the rubric itself is written. */
+    const levels = practicalLevels();
+    if (levels.length){
+      const w = el("div","bfield");
+      w.appendChild(el("label","", "Rubric level"));
+      const pick = el("select");
+      [["", "Not part of a level"]].concat(levels.map(n => [n, n])).forEach(([value, words]) => {
+        const o = el("option","", words); o.value = value; pick.appendChild(o);
+      });
+      /* A level since renamed or removed in the rubric still shows, so it
+         is not quietly changed to something else just by being looked at. */
+      if (t.level && levels.indexOf(t.level) < 0){
+        const o = el("option","", t.level + " (not in the rubric)"); o.value = t.level; pick.appendChild(o);
+      }
+      pick.value = t.level || "";
+      pick.addEventListener("change", () => {
+        if (pick.value) t.level = pick.value; else delete t.level;
+        saveDraft();
+      });
+      w.appendChild(pick); body.appendChild(w);
+    }
     card2.appendChild(body);
     into.appendChild(card2);
   });

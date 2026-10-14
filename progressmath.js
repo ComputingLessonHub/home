@@ -271,8 +271,19 @@
     return { at: at, total: chain.length, reached: named(at), next: named(at + 1) };
   }
 
+  /* A practical's levels by name, lowest first. The coding tasks' own chain
+     where there is one, since that is the order they open in; otherwise the
+     rubric, which the builder asks to be written best first. Empty when
+     there are no levels at all. */
+  function levelLadder(lessonJson){
+    const chain = levelChain(lessonJson);
+    if (chain) return chain.map((b, k) => levelName(b, k + 1));
+    return ((lessonJson && lessonJson.rubric) || [])
+      .map(g => String((g && g.name) || "").trim()).filter(Boolean).reverse();
+  }
+
   window.progressMath = { TASK_LABEL, plainText, normAns, taskInfo,
                           quantifiableTasks, scoreTask, checkDone, attempted, withMarkingTicks,
                           pagesLock, defaultLocks, fetchLockedPages, markRoster,
-                          levelChain, levelReached };
+                          levelChain, levelName, levelReached, levelLadder };
 })();

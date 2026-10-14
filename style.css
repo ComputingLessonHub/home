@@ -2127,8 +2127,11 @@ body.workpage .grow{flex:1}
 .fbask-card b{display:block; margin:0 0 4px; font-size:15px; color:var(--amber-dark)}
 .fbask-card p{margin:0; font-size:15px; line-height:1.45; color:var(--text)}
 .fbask-card .fbask-met{margin-top:8px; font-size:13px; color:var(--muted)}
+.fbask-level{margin:0 0 16px; padding:12px 14px; border-radius:12px; background:var(--panel-2);
+  border:1.5px solid var(--amber); font-family:var(--display); font-size:17px; font-weight:700;
+  line-height:1.35; color:var(--amber-dark)}
 .fbask-yesno{display:flex; gap:8px}
-.fbask-yesno button{flex:1}
+.fbask-yesno button{flex:1; white-space:nowrap}
 .fbask-foot{display:flex; justify-content:space-between; gap:12px; margin-top:12px}
 .fbask-foot .bank-link:only-child{margin-left:auto}
 .fbask-again{margin:0 0 10px; text-align:right}
