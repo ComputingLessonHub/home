@@ -1026,6 +1026,9 @@ function compileOne(b, id, target){
       if (!b.key) b.key = newCodeKey();
       const blk = { type:"ide", id, starter: b.starter || "", key: b.key };
       if (b.startFrom) blk.startFrom = b.startFrom;
+      /* A response task standing in for a task in the lesson opens with that
+         task's ticks, so a level already done there is done here. */
+      if (b.ticksFrom) blk.ticksFrom = b.ticksFrom;
       /* The checklist lines still to do on every coding task before this one,
          or every one in the lesson for a response task. Saved as the keys
          rather than worked out on the lesson page, so it is the tasks there
@@ -2187,10 +2190,12 @@ function card(b, i, arr){
   }
   /* Holding back the rest of the page until this task is done. Only a task
      sitting straight on a page has a "rest of the page" to hold back, and an
-     assessment has no pages at all. Lit up while a level is set, so a
-     teacher can see which tasks are holding their page from the outline. */
+     assessment has no pages at all. A practical has pages, and its levels
+     open one after another by exactly this, so it gets the button too. Lit
+     up while a level is set, so a teacher can see which tasks are holding
+     their page from the outline. */
   if (onAPage && b !== bankRoot && GATE_TYPES.includes(b.type)
-      && !lesson.assessment && !lesson.practical){
+      && !(lesson.assessment && !lesson.practical)){
     const level = gateLevel(b);
     const gb = el("button","btn-ghost bmini gatebtn" + (level === "none" ? "" : " on"));
     gb.type = "button";

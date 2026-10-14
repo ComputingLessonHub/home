@@ -164,7 +164,66 @@
              byUsername: byUsername, byLabel: byLabel };
   }
 
+  /* ---------- the level a practical's student reached ----------
+     A practical built up level by level is coding tasks that each carry on
+     from the one before (startFrom names the last one's key). A level is
+     reached when every line on its checklist the page can tick itself is
+     ticked, and the ones before it are too: the levels open one at a time,
+     so a later one done without an earlier one is not a level reached.
+     Teacher-checked lines are left out, as they are when the page decides
+     whether a level opens, so this never names a level the student could
+     not see they had reached.
+
+     Comes back null when there is no chain of levels to read, so a practical
+     made some other way keeps its own way of being marked. */
+  function levelChain(lessonJson){
+    const codes = [];
+    const walk = (blocks) => (blocks || []).forEach(b => {
+      if (!b) return;
+      if (b.type === "page" || b.type === "group" || b.type === "extension"){ walk(b.blocks); return; }
+      if (b.type === "ide" && b.key) codes.push(b);
+    });
+    walk(lessonJson && lessonJson.blocks);
+    let best = [];
+    codes.forEach(first => {
+      if (first.startFrom && codes.some(c => c.key === first.startFrom)) return;   // not the start of one
+      const chain = [first];
+      for (;;){
+        const last = chain[chain.length - 1];
+        const next = codes.find(c => c.startFrom === last.key && chain.indexOf(c) < 0);
+        if (!next) break;
+        chain.push(next);
+      }
+      if (chain.length > best.length) best = chain;
+    });
+    return best.length > 1 ? best : null;
+  }
+  /* "Level 2: Level Up" is called Level Up; anything else by its title. */
+  function levelName(block, n){
+    const title = plainText(block && block.title || "");
+    const m = /^(?:level|step|stage|part)\s*\d+\s*[:.\-–]\s*(.+)$/i.exec(title);
+    return m ? m[1].trim() : (title || "Level " + n);
+  }
+  function levelReached(lessonJson, data){
+    const chain = levelChain(lessonJson);
+    if (!chain) return null;
+    let at = -1;
+    for (let k = 0; k < chain.length; k++){
+      const b = chain[k];
+      const own = (b.checks || []).filter(c => !(c && c.manual));
+      const v = data ? data[b.id] : null;
+      const all = own.length > 0 && (b.checks || []).every((c, i) => (c && c.manual) || checkDone(c, i, v));
+      if (!all) break;
+      at = k;
+    }
+    const named = (k) => k < 0 || k >= chain.length ? null
+      : { number: k + 1, name: levelName(chain[k], k + 1),
+          label: "Level " + (k + 1) + " - " + levelName(chain[k], k + 1) };
+    return { at: at, total: chain.length, reached: named(at), next: named(at + 1) };
+  }
+
   window.progressMath = { TASK_LABEL, plainText, normAns, taskInfo,
                           quantifiableTasks, scoreTask, checkDone, attempted,
-                          defaultLocks, fetchLockedPages, markRoster };
+                          defaultLocks, fetchLockedPages, markRoster,
+                          levelChain, levelReached };
 })();

@@ -870,23 +870,94 @@ async function loadResults(force){
   await fetchResults();
   resultsLoaded = true;
 }
-/* every lesson a teacher has written feedback on */
+/* Lessons that are practice practicals: sat like an assessment, but not
+   graded, so what comes back is STAR feedback rather than a result. */
+function practiceIds(){
+  const out = new Set();
+  ((catalogue && catalogue.lessons) || []).forEach(c => { if (c.practice) out.add(c.lesson_id); });
+  return out;
+}
 
-function paintResults(box, d){
+function paintResults(box, d, fb){
 box.innerHTML = "";
   /* Two lists, because they are two different things. An assessment is a
      test somebody sat; exam practice is a lesson of past paper questions
      that happened to add up to a mark. A row saved before there was a
      difference has no kind on it and is an assessment, which is what it
-     was. */
-  const all = d.results || [];
+     was. A practice practical is neither: it has no mark to show, and is
+     listed with the STAR feedback below. */
+  const practiceSet = practiceIds();
+  const all = (d.results || []).filter(r => !practiceSet.has(r.lesson_id));
   const assessments = all.filter(r => String(r.kind || "") !== "exam");
   const practice = all.filter(r => String(r.kind || "") === "exam");
-  if (!all.length) box.appendChild(el("p","hint","No assessment results yet."));
+  const star = starRows(d.results || [], fb || [], practiceSet);
+  if (!all.length && !star.length) box.appendChild(el("p","hint","No assessment results or feedback yet."));
   if (assessments.length) box.appendChild(el("p","unit-head","Assessments"));
   paintResultRows(box, assessments);
   if (practice.length) box.appendChild(el("p","unit-head","Exam questions"));
   paintResultRows(box, practice);
+  if (star.length) box.appendChild(el("p","unit-head","STAR feedback"));
+  paintStarRows(box, star);
+}
+/* What goes under STAR feedback: every lesson a teacher has written a
+   Strength or Target on, practice practicals included, except a graded
+   assessment, whose card above already carries its own. The teacher's own
+   words win; a practice practical marked before those were kept falls back
+   to the Strength and Target on its results row. */
+function starRows(results, fb, practiceSet){
+  const graded = new Set(results.filter(r => !practiceSet.has(r.lesson_id)).map(r => r.lesson_id));
+  const byLesson = new Map();
+  fb.forEach(row => {
+    if (graded.has(row.lesson_id)) return;
+    let f = {};
+    try{ f = JSON.parse(row.feedback); }catch(e){ f = { comment: row.feedback }; }
+    if (!f || typeof f !== "object") return;
+    byLesson.set(row.lesson_id, { lesson_id: row.lesson_id, strength: f.strength || "",
+                                  target: f.target || "", comment: f.comment || "" });
+  });
+  results.forEach(r => {
+    if (!practiceSet.has(r.lesson_id)) return;
+    const have = byLesson.get(r.lesson_id) || { lesson_id: r.lesson_id, strength: "", target: "", comment: "" };
+    if (!have.strength) have.strength = r.strength || "";
+    if (!have.target) have.target = r.target || "";
+    have.updated_at = r.updated_at;
+    byLesson.set(r.lesson_id, have);
+  });
+  return [...byLesson.values()].filter(x => x.strength || x.target || x.comment);
+}
+/* A star where a mark would be: there is no mark, and nothing here should
+   read as one. Written with textContent, because these are a teacher's own
+   words and are not markup. */
+function paintStarRows(box, rows){
+  rows.forEach(fbRow => {
+    const card = document.createElement("a"); card.className = "result-card star-card";
+    card.href = "lesson.html?id=" + encodeURIComponent(fbRow.lesson_id);
+    const sc = el("span","sc sc-star"); sc.textContent = "★";
+    const body = el("span","body");
+    const name = document.createElement("b");
+    name.textContent = lessonTitles[fbRow.lesson_id] || fbRow.lesson_id;
+    body.appendChild(name);
+    if (fbRow.updated_at){
+      const when = document.createElement("span");
+      when.textContent = new Date(fbRow.updated_at + "Z").toLocaleDateString("en-GB");
+      body.appendChild(when);
+    }
+    const st = el("span","st");
+    const line = (label, cls, text) => {
+      if (!text) return;
+      const p = el("span","st-line " + cls);
+      const tag = document.createElement(cls === "s" ? "b" : "i");
+      tag.textContent = label + ": ";
+      p.appendChild(tag);
+      p.appendChild(document.createTextNode(text));
+      st.appendChild(p);
+    };
+    line("Strength", "s", fbRow.strength);
+    line("Target", "t", fbRow.target);
+    line("Comment", "c", fbRow.comment);
+    card.appendChild(sc); card.appendChild(body); card.appendChild(st);
+    box.appendChild(card);
+  });
 }
 function paintResultRows(box, rows){
   rows.forEach(res => {
@@ -931,11 +1002,16 @@ async function fetchResults(){
   if (!ready){ box.innerHTML = '<p class="hint">Site not connected to its server yet.</p>'; return; }
   wait(box, "Loading your results");
   try{
-    const r = await fetch(API + "/api/results", { headers: { Authorization: "Bearer " + token } });
+    const auth = { headers: { Authorization: "Bearer " + token } };
+    /* The feedback is extra: if it cannot be read, the results still show. */
+    const fbComing = fetch(API + "/api/work?feedback=1", auth)
+      .then(r => r.ok ? r.json() : null).catch(() => null);
+    const r = await fetch(API + "/api/results", auth);
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || "Could not load results.");
+    const fb = await fbComing;
     resultsLoaded = true;
-    paintResults(box, d);
+    paintResults(box, d, (fb && fb.feedback) || []);
 
   }catch(e){ box.innerHTML = '<p class="hint">' + e.message + '</p>'; }
 }

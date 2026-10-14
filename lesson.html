@@ -523,6 +523,32 @@ function markDirty(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(save, 400);
   lingerTouch();
+  /* On the summary, the response tasks are handed in as they are done, a few
+     seconds after the last change, rather than by a button they had to find
+     at the bottom of the page and remember to press. */
+  if (onSummary()){
+    clearTimeout(summaryTimer);
+    summaryTimer = setTimeout(saveSummary, SUMMARY_SAVE_AFTER);
+  }
+}
+const SUMMARY_SAVE_AFTER = 3000;
+let summaryTimer = null;
+let summaryResponsesDone = null;     // tells the summary the practice has been saved
+function onSummary(){
+  if (spectate || OFFLINE || !finished) return false;
+  const ds = $("doneScreen");
+  return !!(ds && !ds.hidden);
+}
+async function saveSummary(){
+  clearTimeout(summaryTimer);
+  summaryTimer = null;
+  if (!onSummary()) return;
+  const st = await submitWork();
+  if (st === "done"){
+    noteSaved(true);
+    paintSaveButtons("saved");
+    if (summaryResponsesDone) summaryResponsesDone();
+  }
 }
 function save(){
   if (spectate || !restoreDone) return;
@@ -538,8 +564,13 @@ function save(){
   }
 }
 // Flush immediately if the page is being hidden or closed.
-window.addEventListener("pagehide", () => { clearTimeout(saveTimer); save(); });
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") save(); });
+window.addEventListener("pagehide", () => { clearTimeout(saveTimer); save(); if (summaryTimer) saveSummary(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "hidden") return;
+  save();
+  /* leaving with a summary save still waiting: send it now */
+  if (summaryTimer) saveSummary();
+});
 
 
 /* ---------- teacher-paced release ----------
@@ -1446,8 +1477,14 @@ function leaveSummary(i){
   returnAllSections();
   const done = $("doneScreen");
   if (done) done.hidden = true;
-  $("dock").classList.remove("gone");
+  $("dock").classList.remove("gone", "on-summary");
   showStep(i);
+}
+/* Whether the summary keeps the bottom bar: only to open the rubric, and not
+   inside the marking screen, which draws its own around the work. */
+function rubricOnSummary(){
+  return embedParam === null && !!(lesson && lesson.practical &&
+    Array.isArray(lesson.rubric) && lesson.rubric.length);
 }
 
 function buildTracker(){
@@ -5121,6 +5158,19 @@ function rIDE(b){
   }
   ideTipWire(ta, tip, showTip);
 
+  /* A response task standing in for a task in the lesson opens with that
+     task's ticks, until it has some of its own. A level done in the lesson
+     is then done here too, so a response built of the same levels opens on
+     the one they had reached rather than at the start. Its own saved work,
+     put back afterwards, replaces these. */
+  if (b.ticksFrom && checklist){
+    const src = fields[codeKeys[b.ticksFrom]];
+    let v = null;
+    try{ v = src && src.get ? src.get() : null; }catch(e){ v = null; }
+    if (v && Array.isArray(v.checks)) checklist.list.show(v.checks.map(ok => ({ ok: !!ok })));
+    if (v && v.manual && checklist.list.setManual) checklist.list.setManual(v.manual);
+  }
+
   return { section:s,
            onShow: carryIn,
            /* for the level-up between this task and the one carrying on from it */
@@ -7484,14 +7534,18 @@ function renderResponses(container, targetTopic, statusEl){
   const wrap = el("div","responses");
   wrap.appendChild(el("h2","sect-head","Response tasks"));
   /* a practical gives everyone the same list, so it is not chosen from anything */
+  const saving = OFFLINE ? " Press Save Work when you're done." : " Your work saves as you go.";
   wrap.appendChild(el("p","resp-sub", lesson && lesson.practical
-    ? "Use your feedback to make your work even better. Press Save Work when you're done."
-    : "Chosen from your target. Work through them, press Save Work when you're done."));
+    ? "Use your feedback to make your work even better." + saving
+    : "Chosen from your target. Work through them." + saving));
   list.forEach((b, i) => {
     if (!b.id) b.id = "resp_" + targetTopic + "_" + i;
+    /* A page as well: a practical built in levels gives its response as the
+       same levels again, opening one after another the way they did in the
+       lesson, which only a page knows how to do. */
     const R = { question:rQuestion, quiz:rQuiz, python:rPython, blanks:rBlanks, mc:rMC, short:rShort,
                 text:rText, picture:rPicture, ide:rIDE, web:rWeb, order:rOrder, image:rImage,
-                embed:rEmbed, link:rLink, pastelink:rPasteLink, frame:rFrame }[b.type];
+                embed:rEmbed, link:rLink, pastelink:rPasteLink, frame:rFrame, page:rPage }[b.type];
     if (!R) return;
     try{
       const built = R(b);
@@ -7504,11 +7558,14 @@ function renderResponses(container, targetTopic, statusEl){
       built.section.hidden = false;
       task.appendChild(built.section);
       wrap.appendChild(task);
-      if (restoredData && restoredData[b.id] !== undefined && fields[b.id]) fields[b.id].set(restoredData[b.id]);
+      /* Their own saved answers, all the way down: a page of response tasks
+         is several tasks, each saved under its own id. */
+      restoreResponse(b);
       /* A response task can start from the code they wrote in the lesson, and
          a page does that as it is shown. Nothing shows these one at a time,
-         so it is done here, once their own saved answer is back in. */
-      if (b.type === "ide" && typeof built.onShow === "function") built.onShow();
+         so it is done here, once their own saved answer is back in. A page
+         also works out again which of its tasks are open. */
+      if ((b.type === "ide" || b.type === "page") && typeof built.onShow === "function") built.onShow();
     }catch(e){ console.error("response task failed:", e); }
   });
   /* extension tasks: everyone gets these after their own practice */
@@ -7534,14 +7591,27 @@ function renderResponses(container, targetTopic, statusEl){
       }catch(e){ console.error("extension task failed:", e); }
     });
   }
-  if (!spectate){
+  /* Online, what is done here saves itself (saveSummary), and having been
+     saved is what counts as having done the practice. Offline nothing goes
+     anywhere until they hand it over, so the button that does that stays. */
+  if (!spectate && OFFLINE){
     const save = saveButton(statusEl);
-    /* saving the practice is what counts as having done it */
     save.addEventListener("click", announceDone);
     wrap.appendChild(save);
-    if (OFFLINE && linkPossible()) wrap.appendChild(pdfButton(statusEl, false));
+    if (linkPossible()) wrap.appendChild(pdfButton(statusEl, false));
   }
+  if (!spectate && !OFFLINE) summaryResponsesDone = announceDone;
   container.appendChild(wrap);
+}
+/* A response task's saved answer put back, and every task inside it when it
+   is a page, including those behind a choice's buttons. */
+function restoreResponse(b){
+  if (!b || !restoredData) return;
+  if (b.id && restoredData[b.id] !== undefined && fields[b.id]){
+    try{ fields[b.id].set(restoredData[b.id]); }catch(e){ console.warn("Could not restore " + b.id, e); }
+  }
+  (b.blocks || []).forEach(restoreResponse);
+  (b.options || []).forEach(o => (o.blocks || []).forEach(restoreResponse));
 }
 
 /* Builds the PDF in the browser and shows it inside the page. Nothing is
@@ -7663,9 +7733,18 @@ function doneShell(title){
     back.addEventListener("click", () => leaveSummary(Math.max(0, steps.length - 1)));
     box.appendChild(back);
   }
-  $("briefTitle").textContent = title || "Well done!";
-  $("briefText").textContent = ""; $("briefText").hidden = true;
-  $("dock").classList.add("gone");
+  /* No title in the bar at the top: the summary says what it is in the big
+     heading of its own just below, and the bar saying it first was a strip of
+     the screen spent saying it twice. Every kind of summary. */
+  $("brief").hidden = true;
+  /* The bar along the bottom stays where there is a rubric to open, with
+     only that in it: Back to my work is at the top of the summary, and they
+     have already finished. With no rubric there would be nothing in it. */
+  const dock = $("dock");
+  dock.classList.add("on-summary");
+  dock.classList.toggle("gone", !rubricOnSummary());
+  /* drawn by showStep, which somebody opening a finished lesson never reaches */
+  paintRubricButton();
   $("stage").scrollTop = 0;
   /* The page around an embedded view keeps its place when the teacher moves
      on to the next student, and the summary is a place like any other. It is

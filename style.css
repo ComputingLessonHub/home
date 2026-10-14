@@ -656,6 +656,13 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:var
 .result-card .body span{font-size:var(--text-base); color:var(--muted)}
 .result-card .st{font-size:var(--text-md); max-width:40%}
 .result-card .st b{color:var(--mint)} .result-card .st i{color:var(--amber); font-style:normal}
+/* STAR feedback: a star where a mark would be, and the words given the room
+   a mark would have taken, because on these the words are the whole point */
+.result-card .sc-star{color:var(--amber); text-align:center}
+.star-card .st{max-width:55%}
+.star-card .st-line{display:block}
+.star-card .st-line + .st-line{margin-top:4px}
+.star-card .st-line.c i{color:var(--muted)}
 
 
 /* ---- completion ---- */
@@ -768,6 +775,9 @@ textarea.code{background:var(--code-bg) !important; color:var(--code-fg) !import
 
 /* dock hides on completion screens */
 .dock.gone{display:none}
+/* ...or, where there is a rubric to open, stays with only that in it: Back
+   to my work is at the top of the summary, and Finish is behind them */
+.dock.on-summary #backBtn, .dock.on-summary #btnWrap, .dock.on-summary #bypassDot{display:none}
 
 /* blanks: dropdowns in a small inline box */
 .blank-select{
@@ -2007,6 +2017,21 @@ body.workpage .grow{flex:1}
 .rt-dot.rt-auto{background:linear-gradient(135deg, var(--text) 50%, transparent 50%)}
 
 /* the bank of strengths and targets */
+/* The way into it from the marking column: a quiet link under the box, since
+   the box is usually filled in already. Small on a phone as well, with the
+   tap area made up by an invisible 44px patch rather than a tall button. */
+.bank-link{position:relative; background:none; border:none; padding:0; cursor:pointer;
+  font:inherit; font-size:var(--text-sm); font-weight:600; color:var(--muted);
+  text-decoration:underline; text-underline-offset:2px}
+.bank-link:hover{color:var(--amber-dark)}
+@media (pointer:coarse){
+  .bank-link{min-height:0; min-width:0}
+  .bank-link::after{content:""; position:absolute; left:-8px; right:-8px; top:50%; height:44px; transform:translateY(-50%)}
+}
+/* The level a practice practical reached, read off the checklists. One line:
+   the rubric it names is a button away and would push the boxes down. */
+.levelshown{margin:2px 0 0; font-family:var(--display); font-size:var(--text-xl); font-weight:700; color:var(--amber-dark)}
+.levelshown.none{font-family:var(--body); font-size:var(--text-md); font-weight:600; color:var(--muted)}
 
 .bankhead{margin:0 0 6px; font-size:var(--text-xs); letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
 .bankpick{ width:100%; text-align:left; padding:8px 11px;
@@ -4884,7 +4909,9 @@ html[data-arrive=off] body > *:not(script):not(.modal-back):not(#hubTint):not(.c
 
 /* ---------- the task bank, in the builder ---------- */
 html[data-bank=yes] .build-preview{display:none}
-.bank{padding:0 20px 40px}
+/* section.bank, because the marking column's Strength and Target banks are
+   .bank too, and this put 40px of nothing under each of their boxes */
+section.bank{padding:0 20px 40px}
 .bank[hidden]{display:none}
 /* Above 1180px html.builder pins the page to the window and hands the
    scrolling to the builder's own columns, which have overflow-y:auto on

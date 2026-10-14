@@ -73,6 +73,7 @@
           <input id="fbScore" type="number" min="0"> <span id="outOfLabel">out of 20</span>
         </span>
         <select id="fbGrade" class="bigselect" hidden></select>
+        <p class="levelshown" id="levelShown" hidden></p>
         <p class="bhelp" id="gradeHelp"></p>
       </div>
       <div class="bfield" id="fbStrengthWrap">
@@ -1230,10 +1231,20 @@ function checklistAuto(row){
   if (!done.length && !todo.length) return null;
   const said = (list, key) => list.map(c => String((c && c[key]) || "").trim()).filter(Boolean);
   const strengths = said(done, "strength"), targets = said(todo, "target");
-  return {
-    strength: strengths.length ? joinSentences(strengths.slice(-2)) : (lessonJson.zeroStrength || ""),
-    target: targets.length ? targets[0] : (todo.length ? "" : (lessonJson.perfectTarget || ""))
-  };
+  let strength = strengths.length ? joinSentences(strengths.slice(-2)) : (lessonJson.zeroStrength || "");
+  let target = targets.length ? targets[0] : (todo.length ? "" : (lessonJson.perfectTarget || ""));
+  /* A practical built in levels starts with the level reached, said warmly,
+     because that is the thing they will want to know first, and the target
+     ends by pointing at the next one. */
+  const lv = window.progressMath.levelReached ? window.progressMath.levelReached(lessonJson, data) : null;
+  if (lv && lv.reached){
+    const well = "Well done for reaching " + lv.reached.label + ".";
+    strength = strength ? well + " " + strength : well;
+  }
+  if (lv && lv.next && target){
+    target = (/[.!?]$/.test(target) ? target : target + ".") + " Keep working to try to reach the next level.";
+  }
+  return { strength: strength, target: target };
 }
 /* The sentences written in the builder, offered as a starting point. Picking
    one fills the box, which the teacher can then reword. */
@@ -1282,7 +1293,10 @@ function paintBank(which){
   if (!holder) return;
   holder.innerHTML = "";
   if (!bankFor(which).length) return;
-  const open2 = el("button","btn-ghost bmini2","From your bank\u2026");
+  /* A small link under the box rather than a button: the boxes are already
+     filled in, so the bank is the thing to reach for now and then. */
+  const open2 = el("button","bank-link","From your bank\u2026");
+  open2.type = "button";
   open2.addEventListener("click", () => bankPopup(which));
   holder.appendChild(open2);
 }
@@ -1444,7 +1458,39 @@ function usesRubric(){
   if (!lessonJson || !lessonJson.practical) return false;
   return practiceRun() ? (lessonJson.rubric || []).length > 0 : lessonJson.marking === "rubric";
 }
+/* The level a practice practical's student reached, worked out from what
+   their checklists say rather than picked by hand: the levels open one after
+   another as the lines are ticked, so the ticks already are the answer, and
+   a picker beside them could only disagree. Null for a practical with no
+   levels to read, which keeps its picker. */
+function levelFor(user){
+  if (PRACTICE || !practiceRun() || !window.progressMath.levelReached) return null;
+  const row = rows.find(r => r.username === user);
+  return window.progressMath.levelReached(lessonJson, (row && row.data) || {});
+}
+/* The name a level is saved under: the rubric's own wording where one
+   matches, because that is what the student's rubric picks out as theirs. */
+function levelGrade(lv){
+  if (!lv || !lv.reached) return "";
+  const named = ((lessonJson && lessonJson.rubric) || [])
+    .find(g => String(g.name || "").trim().toLowerCase() === lv.reached.name.toLowerCase());
+  return named ? named.name : lv.reached.name;
+}
 function paintMarking(user){
+  const lv = levelFor(user);
+  const shown = $("levelShown");
+  if (shown) shown.hidden = !lv;
+  if (lv){
+    $("markWrap").hidden = false;
+    $("markLabel").textContent = "Level reached";
+    $("scoreRow").hidden = true;
+    $("fbGrade").hidden = true;
+    $("gradeHelp").textContent = "";
+    shown.textContent = lv.reached ? lv.reached.label
+      : "Not reached " + (lv.next ? lv.next.label : "the first level") + " yet";
+    shown.classList.toggle("none", !lv.reached);
+    return;
+  }
   const practical = !!(lessonJson && lessonJson.practical) && (!practiceRun() || usesRubric());
   $("markWrap").hidden = !practical;
   if (!practical) return;
@@ -1495,9 +1541,10 @@ async function saveFeedback(){
     if (!r.ok) throw new Error((await r.json()).error || "Could not save it.");
     /* the mark or grade goes with the feedback; a practice one only has a
        level, and only when it has levels to pick from */
-    if (lessonJson && lessonJson.practical && (!practiceRun() || usesRubric())){
-      const rubric = usesRubric();
-      const grade = rubric ? $("fbGrade").value : "";
+    const lv = levelFor(st.username);
+    if (lessonJson && lessonJson.practical && (lv || !practiceRun() || usesRubric())){
+      const rubric = !!lv || usesRubric();
+      const grade = lv ? levelGrade(lv) : rubric ? $("fbGrade").value : "";
       const total = lessonJson.outOf || 20;
       const score = rubric ? 0 : (parseInt($("fbScore").value, 10) || 0);
       const worth = rubric ? 1 : total;
