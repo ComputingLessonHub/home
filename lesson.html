@@ -3581,16 +3581,69 @@ function rPage(b){
      works, and the quiz marks itself where they can see it. */
   const holdNote = el("p","pg-hold");
   holdNote.hidden = true;
+
+  /* ---------- a teacher looking ----------
+     A teacher previewing a lesson, or reading a student's work, can choose
+     what this page shows: as a student would see it right now, one level of
+     a program built up in levels, or everything. It is how this one page is
+     being looked at and nothing else. Nothing is saved (every way a teacher
+     sees a lesson is one where nothing writes), so a level a teacher skips
+     to is never a level the student finds open. A student never has the bar:
+     teacherHere() needs both a teacher's view of the page and a teacher's
+     sign-in. */
+  let teacherPick = null;       // null: this view's own default; "student", "all", or a level's place in levelSeats
+  let levelSeats = null;        // where each level of the program sits in items, first to last
+  const teacherBar = el("div","teacher-levels no-print");
+  teacherBar.hidden = true;
+  const teacherLooking = () => pdfParam === null && teacherHere();
+  function seatsOfLevels(){
+    if (levelSeats) return levelSeats;
+    const start = items.findIndex((e, i) => nextLevelOf(items, i + 1) && !nextLevelOf(items, i));
+    levelSeats = start < 0 ? [] : levelChain(items, start + 1).map(e => items.indexOf(e)).filter(i => i >= 0);
+    return levelSeats;
+  }
+  function viewMode(){
+    /* Reading a student's work, or printing it, needs all of it. Hiding
+       what came after an unfinished quiz hid the very answers a teacher had
+       opened the page to mark, so that is where it starts. */
+    const fallback = (viewParam !== null || pdfParam !== null || allParam !== null) ? "all" : "student";
+    return (teacherLooking() && teacherPick !== null) ? teacherPick : fallback;
+  }
+  function paintTeacherBar(){
+    const seats = seatsOfLevels();
+    const anyHold = items.some(e => e.built.hold && e.built.hold.on());
+    teacherBar.hidden = !teacherLooking() || (!seats.length && !anyHold);
+    if (teacherBar.hidden) return;
+    const now = viewMode();
+    teacherBar.innerHTML = "";
+    teacherBar.appendChild(el("span","tl-label","Teacher view:"));
+    const pick = (label, value, title) => {
+      const b = el("button","tl-btn" + (now === value ? " on" : ""));
+      b.type = "button";
+      b.textContent = label;
+      b.title = title;
+      b.setAttribute("aria-pressed", now === value ? "true" : "false");
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        teacherPick = value;
+        refreshHold();
+        try{ paintRail(); }catch(err){}
+      });
+      teacherBar.appendChild(b);
+    };
+    pick("As a student", "student", "What a student would see now, with the page opening as they go");
+    seats.forEach((seat, k) => pick("Level " + (k + 1), k, "Just " + levelName(items[seat], k + 1) + ", whatever has been ticked"));
+    pick("Everything", "all", "Every part of this page at once");
+  }
+
   function refreshHold(){
     /* A quiz finishing does not go through markDirty, so the count an
        extension is waiting on is taken again here as well, on the same click
        that opens the page below a quiz. */
     waiting.forEach(x => x.recount());
     let shut = -1;
-    /* A teacher reading a student's work, or printing it, needs all of it.
-       Hiding what came after an unfinished quiz hid the very answers they
-       had opened the page to mark. */
-    const holdsOff = viewParam !== null || pdfParam !== null || allParam !== null;
+    const mode = viewMode();
+    const holdsOff = mode !== "student";
     for (let i = 0; i < items.length && !holdsOff; i++){
       const h = items[i].built.hold;
       if (!h || !h.on() || h.passed()) continue;
@@ -3618,7 +3671,7 @@ function rPage(b){
       /* The next level of a program being built up task by task. It has just
          been earned in front of us, so it waits behind the level-up rather
          than appearing in the middle of the tick that earned it. */
-      if (!hide[i] && entry.item.hidden && nextLevelOf(items, i)
+      if (mode === "student" && !hide[i] && entry.item.hidden && nextLevelOf(items, i)
           && items[i - 1].built.justCheered()){
         entry.levelling = true;
         hide[i] = true;
@@ -3632,6 +3685,13 @@ function rPage(b){
         });
       }
     }
+    /* One level picked by a teacher: that level and none of the others,
+       whatever has been ticked. Its code is carried in as it is shown, the
+       same as when a level opens for a student. */
+    if (typeof mode === "number"){
+      seatsOfLevels().forEach((seat, k) => { hide[seat] = k !== mode; });
+    }
+    paintTeacherBar();
     items.forEach((entry, i) => {
       const wasHidden = entry.item.hidden;
       entry.item.hidden = hide[i];
@@ -3709,6 +3769,7 @@ function rPage(b){
 
   /* Whatever the teacher put them among, extension tasks belong at the end. */
   extras.forEach(x => s.appendChild(x.section));
+  s.insertBefore(teacherBar, s.firstChild);
   refreshHold();
 
   return {

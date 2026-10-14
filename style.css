@@ -1397,6 +1397,17 @@ html.builder .loadscreen{z-index:90}
    reached. This line stands where that work will appear. */
 .pg-hold{margin:0; padding:14px 16px; text-align:center; border:1.5px dashed var(--line-2);
   border-radius:var(--rad-md); background:var(--panel-2); color:var(--muted); font-size:var(--text-lg); font-weight:700}
+/* The teacher's choice of what a held page shows. Only a teacher ever sees
+   it, so it says so, and stays small above the page rather than among the
+   tasks a student would see. */
+.teacher-levels{display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 12px;
+  padding:8px 10px; border-radius:12px; border:1.5px dashed var(--amber); background:var(--panel)}
+.teacher-levels[hidden]{display:none}
+.tl-label{font-size:13px; font-weight:800; color:var(--amber-dark); margin-right:4px}
+.tl-btn{font:inherit; font-size:13.5px; font-weight:700; padding:5px 12px; border-radius:999px; cursor:pointer;
+  background:var(--panel-2); color:var(--text); border:1.5px solid var(--line-2)}
+.tl-btn:hover{border-color:var(--amber)}
+.tl-btn.on{background:var(--amber); border-color:var(--amber); color:var(--amber-ink)}
 
 
 /* teacher console: where am I */
