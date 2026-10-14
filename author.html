@@ -884,9 +884,9 @@ function compile(){
   if (lesson.practical && String(lesson.absentStrength || "").trim()) out.absentStrength = lesson.absentStrength.trim();
   if (lesson.practical && String(lesson.absentTarget || "").trim()) out.absentTarget = lesson.absentTarget.trim();
   if (lesson.zeroStrength) out.zeroStrength = lesson.zeroStrength;
-  /* For a student who was there but whose work did not save. Any lesson,
-     and only written when the teacher wrote one. */
-  if (String(lesson.unsavedComment || "").trim()) out.unsavedComment = lesson.unsavedComment.trim();
+  /* For a student who was there but whose work did not save. Only written
+     when the teacher wrote one, which is what offers the tick in marking. */
+  if (lesson.practical && String(lesson.unsavedComment || "").trim()) out.unsavedComment = lesson.unsavedComment.trim();
   /* A practice assessment is a practical with no grade: it is sat like any
      other practical, all its pages open and handed in at the end, and comes
      back with a Strength, a Target and response tasks. It used to be saved
@@ -3663,7 +3663,11 @@ function extremeSentences(into){
    ["perfectTarget","Target for when a student gets everything right"]]
   .concat(lesson.practical
     ? [["absentStrength","Strength for when a student has nothing saved (not here)", siteWords.strength],
-       ["absentTarget","Target for when a student has nothing saved (not here)", siteWords.target]] : [])
+       ["absentTarget","Target for when a student has nothing saved (not here)", siteWords.target],
+       /* The other reason for nothing saved. No wording of the site's
+          own: left empty, marking does not offer the tick. */
+       ["unsavedComment","Comment for when a student was present but did not save their work properly",
+        "Leave empty and marking will not offer the Student was present tick."]] : [])
   .forEach(pair => {
     const w = el("div","bfield");
     w.appendChild(el("label","", pair[1]));
@@ -3886,16 +3890,6 @@ on("optionsBtn", "click", () => {
          + "the bottom of their summary. The tabs above change to Questions and Extension tasks."]));
       w5.appendChild(row5); box.appendChild(w5);
     }
-
-    /* Every lesson can be handed in empty by somebody who was there, so
-       every lesson has this, not only an assessment. Left empty, the site's
-       own wording is used, shown as the example in the box. */
-    const w6 = el("div","bfield");
-    w6.appendChild(el("label","","Comment for a student who was here but did not save their work"));
-    const t6 = el("textarea"); t6.rows = 3; t6.value = lesson.unsavedComment || "";
-    t6.placeholder = window.progressMath.unsavedComment(null);
-    t6.addEventListener("input", () => { lesson.unsavedComment = t6.value; saveDraft(); });
-    w6.appendChild(t6); box.appendChild(w6);
 
     box.appendChild(versionField());
 

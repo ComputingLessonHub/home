@@ -1297,12 +1297,15 @@ function loadFeedback(row){
   }
   $("fbComment").value = f.comment || "";
   commentOpen = false;
-  /* Offered only when there is nothing of theirs to see, or when it was
-     ticked and saved, so it is still ticked when they are opened again. */
+  /* Offered only when there is nothing of theirs to see and the lesson has
+     words to give them, or when it was ticked and saved, so it is still
+     ticked when they are opened again. */
   notSaved = !!f.notSaved;
   notSavedWas = "";
   $("notSaved").checked = notSaved;
-  $("notSavedWrap").hidden = PRACTICE || !notSaved && !(lessonJson && !window.progressMath.hasWork(lessonJson, row && row.data));
+  const offer = !!lessonJson && !!window.progressMath.unsavedComment(lessonJson) &&
+                !window.progressMath.hasWork(lessonJson, row && row.data);
+  $("notSavedWrap").hidden = PRACTICE || (!notSaved && !offer);
   /* Lines ticked while marking this student, saved with their feedback. A
      fresh copy for each student, so one child's ticks never travel with the
      next one's feedback. */
@@ -1337,8 +1340,9 @@ function loadFeedback(row){
      A comment still has its box. */
   const noStar = !!(lessonJson && lessonJson.assessment && !lessonJson.practical && lessonJson.star === false);
   ["fbStrengthWrap","fbTargetWrap"].forEach(id => { $(id).hidden = noStar; });
+  notSavedAway = away;
   $("fbMsg").textContent = away
-    ? "Nothing saved, so these say they were away."
+    ? AWAY_MSG
     : fromList && (fromList.strength || fromList.target)
     ? "Filled in from the ticks."
     : "";
@@ -1359,9 +1363,13 @@ function loadFeedback(row){
    is written in the comment box instead, still there to be changed. */
 let notSaved = false;
 let notSavedWas = "";    // the comment box before the tick wrote over it
+let notSavedAway = false; // the boxes underneath say they were away
+const AWAY_MSG = "Nothing saved, so these say they were away.";
 function paintNotSaved(){
   $("workSide").classList.toggle("fbnotsaved", notSaved);
   if (notSaved) commentOpen = true;
+  /* the comment is the whole of the feedback then, so it gets the room */
+  $("fbComment").rows = notSaved ? 6 : 2;
   commentShow(true);
 }
 on("notSaved", "change", () => {
@@ -1375,7 +1383,8 @@ on("notSaved", "change", () => {
     if (box.value.trim() === words) box.value = notSavedWas;
     commentOpen = !!box.value.trim();
   }
-  $("fbMsg").textContent = "";
+  /* untick, and the away words are back in the boxes, so say so again */
+  $("fbMsg").textContent = !notSaved && notSavedAway ? AWAY_MSG : "";
   feedbackMode(row, true);
   paintNotSaved();
   paintFb("idle");

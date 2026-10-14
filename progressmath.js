@@ -384,10 +384,10 @@
   }
   /* The other reason for nothing saved: they were there, and it was lost.
      A Strength and Target would be about work nobody can see, so marking
-     gives them this comment instead. Any lesson can word its own. */
-  const UNSAVED_COMMENT = "You were in this lesson, but your work did not save. Next time, press Save Work before you leave so your teacher can see everything you did.";
+     gives them this comment instead. There is no wording of the site's own:
+     a lesson that has not written one is not offered the tick at all. */
   function unsavedComment(lessonJson){
-    return String((lessonJson && lessonJson.unsavedComment) || "").trim() || UNSAVED_COMMENT;
+    return String((lessonJson && lessonJson.unsavedComment) || "").trim();
   }
 
   /* A practical's rubric, lowest level first. The builder has written it
