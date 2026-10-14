@@ -5183,16 +5183,27 @@ function markQuestion(b, v){
   /* Marked by shortmatch.js, the same code the lesson page and the assessment
      use, so a mark in the markbook is the mark the student was shown. */
   if (b.type === "short") return { max:1, got: window.shortAnswer.mark(b, v).ok ? 1 : 0 };
+  /* A table and a label picture, the same as everywhere else marks them:
+     progressmath.js holds the one copy of those rules. */
+  if ((b.type === "table" || b.type === "label") && window.progressMath && window.progressMath.scoreTask){
+    const m = window.progressMath.scoreTask(b, v);
+    return m.max ? { max: m.max, got: m.got } : null;
+  }
   return null;
 }
 function assessmentQuestions(){
   const out = [];
   let n = 0;
+  /* Numbered the way the student saw them: every question counts, reading
+     does not, so Q5 here is the question that was 5 on their page. */
+  const reading = ["text","picture","embed","link","frame"];
   ((lessonJson && lessonJson.blocks) || []).forEach(b => {
-    if (["mc","order","blanks","short"].includes(b.type)){
-      n++;
+    if (reading.includes(b.type)) return;
+    n++;
+    if (["mc","order","blanks","short"].includes(b.type) ||
+        ((b.type === "table" || b.type === "label") && markQuestion(b, null))){
       out.push({ id: b.id, n: n, block: b,
-                 label: "Q" + n, title: stripTags(b.prompt || b.title || b.id) });
+                 label: "Q" + n, title: stripTags(b.prompt || b.title || b.task || b.id) });
     }
   });
   return out;

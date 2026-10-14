@@ -6418,3 +6418,25 @@ body.lpvpage{height:100vh; height:100dvh; overflow:hidden; display:flex; flex-di
    reads as something else rather than one more version. */
 .edit-original{display:block; width:100%; margin:6px 0 12px; padding:13px 18px; font-size:16px}
 .edit-newversion{display:block; margin:0 auto 10px; font-size:14.5px}
+
+/* ---------- a marked assessment, as a student sits it ----------
+   The bar along the top has a piece for each question rather than each
+   page, with how far they have got written beside it. New classes only, so
+   being at the end of the file beats nothing the mobile rules above set. */
+.tracker.assess-track{gap:12px; padding-bottom:4px}
+.tracker.assess-track[hidden]{display:none}
+.aq-segs{display:flex; flex:1; min-width:0; gap:4px; align-items:center; align-self:stretch}
+.aq-meta{flex:none; font-size:12.5px; font-weight:600; color:var(--muted); white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+@media (max-width:640px){
+  .aq-where{display:none}
+}
+.assess-rules ul{margin:6px 0 0; padding-left:20px}
+.assess-rules li{margin:5px 0; line-height:1.45}
+.assess-end{color:var(--muted); font-size:14px; text-align:center; margin:22px 0 8px}
+/* A handed-in assessment keeps the bottom bar for the teacher's dot alone,
+   where the code to let a student back in is typed. */
+.dock.on-summary.keep-dot #bypassDot{display:inline-block}
+/* A label picture in the review, kept to a size that leaves the words
+   under it in view. */
+.rev-label-pic{max-width:520px; margin:6px 0 4px}

@@ -643,6 +643,7 @@ let typedAt = 0;
 const holdWatchers = new Set();
 function markDirty(){
   holdWatchers.forEach(fn => { try{ fn(); }catch(e){} });
+  assessRepaintSoon();
   if (spectate || !restoreDone) return;
   if (!unsavedTyping) paintSaveButtons("idle");   // they stand out again
   unsavedTyping = true;
@@ -1172,6 +1173,7 @@ const handedOver = handedLesson();
     document.title = l.title;
     $("lessonTitle").textContent = l.title;
     l.blocks.forEach(renderBlock);
+    if (assessLayout()) arrangeAssessment();
     buildTracker();
     /* Asked before anything is restored: a name change means a different
        child, and the work waiting on this machine is cleared, so restoring
@@ -1622,7 +1624,7 @@ function leaveSummary(i){
   returnAllSections();
   const done = $("doneScreen");
   if (done) done.hidden = true;
-  $("dock").classList.remove("gone", "on-summary");
+  $("dock").classList.remove("gone", "on-summary", "keep-dot");
   paintFrozenNote(false);
   showStep(i);
 }
@@ -1633,7 +1635,325 @@ function rubricOnSummary(){
     Array.isArray(lesson.rubric) && lesson.rubric.length);
 }
 
+/* =====================================================================
+   A MARKED ASSESSMENT, AS A STUDENT SITS IT
+   =====================================================================
+   Two pages and then the summary. The first is a welcome: whatever the
+   builder put before the first question (a paragraph of instructions, a
+   picture), then the reminders every assessment gives. The second is every
+   question, one under another, so a student can scroll back to anything
+   they skipped rather than hunting through pages for it.
+
+   Underneath, every question is still its own step, exactly as before.
+   Saving, the marked work, the review and a teacher reading the work all go
+   a question at a time, and none of them had to learn about this. The two
+   pages are only two boxes the questions are moved into, and `step` is the
+   question in view, so a student who comes back lands where they were.
+
+   A teacher reading the work, printing it or marking it sees it a question
+   at a time as before. The builder's preview and the console's preview are
+   what a student sees, so they get this too. A practical is sat in pages
+   and is left alone. */
+let assessPages = null;
+function assessLayout(){
+  return !!(lesson && lesson.assessment && !lesson.practical) &&
+    viewParam === null && pdfParam === null && allParam === null && embedParam === null;
+}
+function arrangeAssessment(){
+  const welcome = el("section","assess-page assess-welcome");
+  const questions = el("section","assess-page assess-questions");
+  const items = [];
+  let leading = true;
+  steps.forEach((st, i) => {
+    const b = (lesson.blocks || []).find(x => x.id === st.qid);
+    if (!b) return;
+    const reading = ASSESS_READING.includes(b.type);
+    if (!reading) leading = false;
+    const bb = (typeof st.brief === "function") ? st.brief() : (st.brief || {});
+    const item = el("div","pg-item");
+    item.dataset.blockId = b.id;
+    if (b.type !== "picture"){
+      if (bb.title) item.appendChild(el("h3","pg-h", bb.title));
+      if (bb.text) item.appendChild(el("p","pg-t", bb.text));
+    }
+    st.section.hidden = false;
+    item.appendChild(st.section);
+    (leading ? welcome : questions).appendChild(item);
+    if (!reading) items.push({ step: i, block: b, num: questionNo[b.id], item: item, built: st });
+  });
+
+  const n = items.length;
+  const rules = el("div","pg-item assess-rules");
+  rules.appendChild(el("h3","pg-h","Before you start"));
+  const list = el("ul");
+  [ n === 1 ? "There is 1 question, on the next page."
+            : "There are " + n + " questions, all on the next page, one after another.",
+    "Answer every question. You can scroll back up and change an answer at any time until you hand it in.",
+    "The bar along the top shows which questions you have answered. Press it to jump to a question.",
+    "Your answers are saved as you go.",
+    "When you have finished, press Finish at the bottom. Once you have handed it in, you cannot go back and change anything."
+  ].forEach(t => list.appendChild(el("li","", t)));
+  rules.appendChild(list);
+  welcome.appendChild(rules);
+  questions.appendChild(el("p","assess-end","That was the last question. Check your answers, then press Finish."));
+
+  welcome.hidden = true; questions.hidden = true;
+  $("blocks").appendChild(welcome);
+  $("blocks").appendChild(questions);
+  assessPages = { welcome, questions, items, onQuestions: false, shown: false, meta: null, pinnedUntil: 0 };
+
+  /* Which question is in view, worked out as they scroll, once a frame. */
+  let queued = false;
+  $("stage").addEventListener("scroll", () => {
+    if (queued || !assessPages.onQuestions) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; noteQuestionInView(); });
+  }, { passive: true });
+}
+
+/* Whether a question has something in it yet. Not whether it is right:
+   nothing is marked until it is handed in. Each kind says it its own way,
+   because a fresh "put in order" list or binary task already holds a value
+   before anybody has touched it. */
+function questionAnswered(it){
+  const b = it.block;
+  let v = null;
+  try{ v = fields[b.id] ? fields[b.id].get() : null; }catch(e){ v = null; }
+  const filled = (x) => String(x == null ? "" : x).trim() !== "";
+  switch (b.type){
+    case "mc": return v !== null && v !== undefined;
+    /* A list starts shuffled, so it counts once it has been moved. */
+    case "order": return Array.isArray(v) && v.join(",") !== orderStart(b).join(",");
+    case "blanks": return Array.isArray(v) && v.every(filled);
+    case "short": return filled(v);
+    case "table": return Array.isArray(v) && v.every(filled);
+    case "label": return (b.spots || []).every((_, i) => !!(v && v.placed && v.placed[i]));
+    case "exam": return filled(v && typeof v === "object" ? v.text : v);
+    case "binary": case "binadd":
+      return !!(v && Array.isArray(v.answers) && v.answers.length && v.answers.every(filled));
+    case "ide": case "web": return !!(v && v.ran);
+  }
+  try{ return it.built.check().ok; }catch(e){ return true; }
+}
+
+function showAssessPage(onQuestions, i){
+  const A = assessPages;
+  A.onQuestions = !!onQuestions;
+  A.shown = true;
+  /* returnSection hides whatever a pop-up borrowed, and the summary hides
+     the lot, so every question is put back on show here. */
+  steps.forEach(st => { st.section.hidden = false; });
+  A.welcome.hidden = A.onQuestions;
+  A.questions.hidden = !A.onQuestions;
+  const page = A.onQuestions ? A.questions : A.welcome;
+  steps.forEach(st => { if (page.contains(st.section)){ try{ if (st.onShow) st.onShow(); }catch(e){} } });
+  try{ tuneColours(); }catch(e){}
+
+  const note = $("resumeNote");
+  if (note) note.hidden = true;
+  if (note && restoredWork && !resumeShown && !wasDone){
+    note.hidden = false;
+    resumeShown = true;
+    setTimeout(() => {
+      note.classList.add("fading");
+      setTimeout(() => { note.hidden = true; note.classList.remove("fading"); }, 3000);
+    }, 5000);
+  }
+
+  $("briefTitle").textContent = A.onQuestions ? "Questions" : "Welcome to your assessment";
+  $("briefText").textContent = A.onQuestions
+    ? "Answer every question, then press Finish at the bottom."
+    : "Read this page before you start.";
+  $("briefTitle").hidden = false;
+  $("briefText").hidden = false;
+  $("brief").hidden = false;
+
+  $("backBtn").disabled = !A.onQuestions;
+  $("nextBtn").textContent = !A.onQuestions ? "Start \u2192"
+    : workFrozen ? "STAR Feedback" : "Finish";
+
+  const stage = $("stage");
+  stage.scrollTop = 0;
+  if (A.onQuestions){
+    const it = A.items.find(x => x.step === i) || A.items[0];
+    step = it ? it.step : 0;
+    if (it && it !== A.items[0]) stage.scrollTop = questionTop(it);
+  } else {
+    step = 0;
+  }
+  paintTracker();
+  paintRubricButton();
+  paintRail();
+  refreshGate();
+}
+
+/* How far down the stage a question starts, with a little room above it so
+   its heading is not pressed against the top. */
+function questionTop(it){
+  const stage = $("stage");
+  return Math.max(0, it.item.getBoundingClientRect().top - stage.getBoundingClientRect().top + stage.scrollTop - 12);
+}
+function goToQuestion(it, flash){
+  if (!assessPages.onQuestions) showAssessPage(true, it.step);
+  /* Scrolling to it passes other questions on the way, and the last few can
+     never reach the top of the page, so the one pressed is held as the
+     current one until the scroll has finished. */
+  assessPages.pinnedUntil = Date.now() + 900;
+  step = it.step;
+  paintTracker();
+  $("stage").scrollTo({ top: questionTop(it), behavior: "smooth" });
+  if (flash){
+    it.item.classList.add("justopened");
+    setTimeout(() => it.item.classList.remove("justopened"), 1800);
+  }
+}
+function noteQuestionInView(){
+  const A = assessPages;
+  if (!A || !A.onQuestions || !A.items.length || Date.now() < A.pinnedUntil) return;
+  const stage = $("stage");
+  const box = stage.getBoundingClientRect();
+  const line = box.top + Math.min(160, box.height * 0.35);
+  let cur = A.items[0];
+  A.items.forEach(it => { if (it.item.getBoundingClientRect().top <= line) cur = it; });
+  /* At the very bottom the last question may never reach the line. */
+  if (stage.scrollTop + stage.clientHeight >= stage.scrollHeight - 4) cur = A.items[A.items.length - 1];
+  if (cur.step !== step){ step = cur.step; paintTracker(); }
+}
+
+/* The bar along the top: one piece for each question rather than each
+   page, green once it has an answer, amber for the one in view. */
+function buildAssessTracker(){
+  const t = $("tracker"); t.innerHTML = "";
+  t.classList.add("assess-track");
+  const A = assessPages;
+  const bar = el("div","aq-segs");
+  A.items.forEach(it => {
+    const seg = el("button","seg");
+    seg.type = "button";
+    seg.appendChild(el("span","seg-n", String(it.num)));
+    seg.addEventListener("click", () => {
+      if (finished && !spectate) return;
+      goToQuestion(it, true);
+    });
+    bar.appendChild(seg);
+    it.seg = seg;
+  });
+  t.appendChild(bar);
+  A.meta = el("span","aq-meta");
+  t.appendChild(A.meta);
+}
+function paintAssessTracker(){
+  const A = assessPages;
+  const ds = $("doneScreen");
+  const onSummaryNow = !!(ds && !ds.hidden);
+  /* The summary has a score to show, not questions to get to. */
+  $("tracker").hidden = onSummaryNow;
+  let answered = 0, here = null;
+  A.items.forEach(it => {
+    const has = questionAnswered(it);
+    if (has) answered++;
+    const now = A.onQuestions && !onSummaryNow && it.step === step;
+    if (now) here = it;
+    it.seg.className = "seg" + (now ? " now" : has ? " done" : "");
+    const words = "Question " + it.num + (has ? ", answered" : ", not answered yet");
+    it.seg.title = words;
+    it.seg.setAttribute("aria-label", words);
+    if (now) it.seg.setAttribute("aria-current", "step"); else it.seg.removeAttribute("aria-current");
+  });
+  const total = A.items.length;
+  /* Where they are, and how many are done. A phone has room for only the
+     second, so they are two pieces it can drop one of. */
+  A.meta.innerHTML = "";
+  if (here) A.meta.appendChild(tel("span","aq-where", "Question " + here.num + " of " + total + " \u00b7 "));
+  A.meta.appendChild(tel("span","aq-count", answered + " of " + total + " answered"));
+}
+/* Typing calls markDirty on every key, and the bar only needs to keep up
+   with what is on screen, so it is painted once a frame at most. */
+let assessPaintQueued = false;
+function assessRepaintSoon(){
+  if (!assessPages || assessPaintQueued) return;
+  assessPaintQueued = true;
+  requestAnimationFrame(() => { assessPaintQueued = false; paintTracker(); });
+}
+
+/* Finish is never held up, but before anything is handed in it says what
+   is still empty, the way a form does before it is sent. Three numbers at
+   most: a list of eleven reads as a telling-off, and the first few are
+   enough to go and find. Then, empty or not, one last question, because
+   there is no coming back from it without a teacher. */
+function askToHandIn(){
+  const missing = assessPages.items.filter(it => !questionAnswered(it));
+  if (!missing.length){ confirmHandIn(); return; }
+  const count = missing.length;
+  const nums = missing.slice(0, 3).map(it => String(it.num));
+  const which = count === 1 ? "Question " + nums[0] + " has no answer yet."
+    : count <= 3 ? "Questions " + joinWords(nums) + " have no answer yet."
+    : "Including questions " + joinWords(nums) + ".";
+  handInModal({
+    eyebrow: "Not finished yet",
+    title: "You have not answered " + (count === 1 ? "1 question" : count + " questions"),
+    text: which,
+    yes: { label: "Go back and complete the questions", act: () => goToQuestion(missing[0], true) },
+    no:  { label: "Submit my assessment anyway", act: confirmHandIn },
+    focus: "yes"
+  });
+}
+function confirmHandIn(){
+  handInModal({
+    title: "Are you sure you want to submit your assessment?",
+    text: "You cannot go back after submitting your assessment.",
+    yes: { label: "Yes", act: finishLesson },
+    no:  { label: "No", act: () => {} },
+    /* Enter on a pop-up that has just opened should not hand anything in. */
+    focus: "no"
+  });
+}
+function handInModal(o){
+  const back = el("div","modal-back no-print");
+  const box = el("div","modal narrow hand-in");
+  box.setAttribute("role","dialog");
+  box.setAttribute("aria-modal","true");
+  if (o.eyebrow) box.appendChild(tel("p","modal-eyebrow", o.eyebrow));
+  box.appendChild(tel("h2","", o.title));
+  if (o.text) box.appendChild(tel("p","modal-text", o.text));
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  const close = () => { back.remove(); document.removeEventListener("keydown", onKey); };
+  const yes = tel("button","btn-primary modal-cta", o.yes.label);
+  yes.type = "button";
+  yes.addEventListener("click", () => { close(); o.yes.act(); });
+  const no = tel("button","btn-ghost modal-stay", o.no.label);
+  no.type = "button";
+  no.addEventListener("click", () => { close(); o.no.act(); });
+  box.appendChild(yes);
+  box.appendChild(no);
+  back.appendChild(box);
+  /* Clicking away, or Escape, is the cautious answer: nothing is handed in. */
+  back.addEventListener("mousedown", (e) => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(back);
+  setTimeout(() => (o.focus === "no" ? no : yes).focus(), 30);
+}
+
+/* A teacher's code on the summary lets a student who handed in too early,
+   by accident or not, back to their answers. The score already sent is not
+   taken back here: handing in again writes the new one over it, which is
+   what the results row does with any second hand-in. */
+function reopenAssessment(){
+  returnAllSections();
+  finished = false;
+  wasDone = false;
+  const done = $("doneScreen");
+  if (done){ done.hidden = true; done.innerHTML = ""; }
+  $("dock").classList.remove("gone", "on-summary", "keep-dot");
+  paintFrozenNote(false);
+  save();
+  submitWork();
+  const first = assessPages.items[0];
+  showAssessPage(true, first ? first.step : 0);
+}
+
 function buildTracker(){
+  if (assessPages){ buildAssessTracker(); return; }
   const t = $("tracker"); t.innerHTML = "";
   steps.forEach((_, i) => {
     /* A button, not a div: a page they have already done is somewhere they can
@@ -1748,6 +2068,13 @@ function showStep(i){
   if (embedParam !== null){
     try{ parent.postMessage({ hubWorkStep: i }, "*"); }catch(e){}
   }
+  if (assessPages){
+    /* Anyone coming back with answers already saved goes straight to the
+       questions rather than through the welcome again. */
+    const resuming = !assessPages.shown && restoredWork && !wasDone;
+    showAssessPage(i > 0 || resuming, i);
+    return;
+  }
   step = Math.min(Math.max(i, 0), steps.length - 1);
   // A restored position can be ahead of what the teacher has opened.
   if (isLocked(step)){
@@ -1822,6 +2149,7 @@ function refreshGate(){
   $("nextBtn").disabled = false;
 }
 $("backBtn").addEventListener("click", () => {
+  if (assessPages){ showAssessPage(false, 0); return; }
   const b = nextOpen(step - 1, -1);
   if (b !== null) showStep(b);
 });
@@ -1840,6 +2168,20 @@ let askingToMoveOn = false;
    the way through a task is the button reading "move on anyway". */
 async function tryContinue(){
   if (coolingDown()) return;                       // still in the waiting period
+  if (assessPages){
+    if (!assessPages.onQuestions){
+      const first = assessPages.items[0];
+      showAssessPage(true, first ? first.step : 0);
+      lingerFlush();
+      return;
+    }
+    if (workFrozen){ backToFeedback(); return; }
+    /* Handing in has started already: a second press while the score is on
+       its way would hand it in twice. */
+    if (finished && !spectate) return;
+    askToHandIn();
+    return;
+  }
   if (askingToMoveOn) return;                      // one is already in the air
   if (spectate){                                   // teachers roam freely
     if (step === steps.length - 1){ finishLesson(); } else { showStep(step + 1); }
@@ -2061,6 +2403,7 @@ function hideLockTip(){
 }
 
 function paintTracker(){
+  if (assessPages){ paintAssessTracker(); return; }
   /* A teacher is not working through the lesson, they are looking at it: the
      builder's preview, the console's preview and the work viewer all want
      every page and the summary reachable straight away, forwards as well as
@@ -3027,6 +3370,11 @@ $("bypassDot").addEventListener("keydown", (e) => { if (e.key === "Enter") askBy
    ticking, so a computer handed back to a student is never left able to tick
    its own list. Nothing is remembered: a reload needs the code again. */
 const TICK_HASH = 1344109433;
+/* The code that lets a student back into an assessment they handed in too
+   early. Only its hash is here, for the same reason as the ticking code:
+   the code itself is in CREATE-A-LESSON.md. A student who learned it could
+   read the marked answers and then go back and change their own. */
+const REOPEN_HASH = 172224993;
 const TICK_IDLE_MS = 180000;
 let teacherTicking = false, tickIdle = null, tickBar = null;
 function startTeacherTicking(){
@@ -3073,8 +3421,10 @@ function askBypass(){
      student who opened it by mistake starts guessing. */
   box.appendChild(el("h2","","Teacher code console"));
   box.appendChild(el("p","modal-text","<b>Only to be used by your teacher. Close this if you have opened it accidentally!</b>"));
-  box.appendChild(el("p","modal-text",
-    "Type in the correct code below to either skip a page, skip all pages, or enable teacher checklist marking."));
+  const reopening = !!assessPages && finished;
+  box.appendChild(el("p","modal-text", reopening
+    ? "Type in the correct code below to let this student back into their assessment to change their answers."
+    : "Type in the correct code below to either skip a page, skip all pages, or enable teacher checklist marking."));
 
   const inp = el("input","bypassin");
   inp.type = "password";
@@ -3088,6 +3438,16 @@ function askBypass(){
     const typed = inp.value.trim();
     const wanted = (lesson && lesson.bypassHash) || 2667650483;   // default: SKIP-2026
     const word = typed.toUpperCase();
+    if (strHash(word) === REOPEN_HASH){
+      if (!assessPages || !finished){
+        msg.textContent = "That code lets a student back into an assessment they have handed in.";
+        return;
+      }
+      if (markingLocked){ msg.textContent = "This is locked for marking. Unlock it in the console first."; return; }
+      if (workFrozen){ msg.textContent = "Feedback has already been given on this, so it cannot be opened again."; return; }
+      back.remove(); reopenAssessment();
+      return;
+    }
     if (strHash(word) === TICK_HASH){
       /* Reading one student's work has its own ticking that needs no code,
          and a printout or every page at once is not anybody's lesson. A
@@ -3298,6 +3658,13 @@ function pageSlot(container){
 }
 
 let qCounter = 0;
+/* Every question in a marked assessment by the number it has on the page,
+   so the review, the bar along the top and "you have not answered" all say
+   the same number for the same question. */
+const questionNo = {};
+/* What an assessment shows to be read rather than asks. A run of these
+   before the first question is its welcome page. */
+const ASSESS_READING = ["text","picture","embed","link","frame"];
 /* Builds one activity without putting it on the page, used both for ordinary
    steps and for the several activities that share a "page". */
 function buildBlock(b, i){
@@ -4144,9 +4511,16 @@ function renderBlock(b, i){
     built.check = () => ({ ok:true });
   }
   let final = built;
-  if (lesson && lesson.assessment && ["mc","order","blanks","short"].includes(b.type)){
-    qCounter++;
-    final.brief = { ...final.brief, title: qCounter + ". " + final.brief.title };
+  /* Every question in a marked assessment is numbered, not only the four
+     kinds that used to be: a table or a label carries marks like any other,
+     and a student told they have not answered 5 has to be able to find 5.
+     A practical is sat in pages and numbers nothing. */
+  if (lesson && lesson.assessment && !lesson.practical && !ASSESS_READING.includes(b.type)){
+    const n = ++qCounter;
+    questionNo[b.id] = n;
+    const was = final.brief;
+    const numbered = (x) => ({ ...(x || {}), title: n + ". " + ((x && x.title) || "") });
+    final.brief = (typeof was === "function") ? () => numbered(was()) : numbered(was);
   }
   final = applyLock(b, final);
   final.qid = b.id;                 // so the marked work can find this question
@@ -6677,7 +7051,10 @@ function rBinAdd(b){
 /* The four in tasks-extra.js return a plain object, so this puts the usual
    clothes on them: a field that saves, and a rule for carrying on. */
 function wrapExtra(b, build, eyebrow){
-  const made = build(b, { changed: markDirty });
+  /* In a marked assessment nothing is marked until it is handed in, so a
+     table or a picture must not offer its own Check button there. */
+  const made = build(b, { changed: markDirty,
+                          assessment: !!(lesson && lesson.assessment && !lesson.practical) });
   fields[b.id] = { get: made.get, set: made.set };
   return {
     section: made.section,
@@ -7701,6 +8078,43 @@ function rShort(b){
 }
 
 /* ---------- marking ---------- */
+/* A table is marked a box at a time: every box the teacher gave an answer is
+   one mark, compared the way the table's own Check button compares it, so a
+   lesson and an assessment never disagree about the same table. A box with
+   no answer is still a box the student can type in, and it keeps its place
+   in what was saved, so the boxes are counted in the same order the table
+   draws them. */
+function tableMarks(b, v){
+  const typed = Array.isArray(v) ? v : [];
+  const items = [];
+  let box = 0;
+  (Array.isArray(b.rows) ? b.rows : []).forEach(row => (Array.isArray(row) ? row : []).forEach(cell => {
+    if (!cell || typeof cell !== "object" || !cell.fill) return;
+    const answer = String(cell.t == null ? "" : cell.t).trim();
+    const given = String(typed[box] == null ? "" : typed[box]).trim();
+    box++;
+    if (!answer) return;
+    const ok = !!given && window.shortAnswer.mark({ answers: [answer] }, given).ok;
+    items.push({ given: given || "(blank)", ok, expected: answer, box: box - 1 });
+  }));
+  return { got: items.filter(x => x.ok).length, max: items.length, items };
+}
+/* A label is one mark a spot, against the word dropped there. The same rule
+   as Check my labels: the word itself, whatever its capitals. What was
+   dropped is saved by the spot's place in the list, as a string key once it
+   has been through JSON. */
+function labelMarks(b, v){
+  const placed = (v && v.placed && typeof v.placed === "object") ? v.placed : {};
+  const items = [];
+  (Array.isArray(b.spots) ? b.spots : []).forEach((sp, i) => {
+    const answer = String((sp && sp.answer) || "").trim();
+    if (!answer) return;
+    const given = String(placed[i] == null ? "" : placed[i]).trim();
+    const ok = !!given && given.toLowerCase() === answer.toLowerCase();
+    items.push({ given: given || "(blank)", ok, expected: answer, spot: i });
+  });
+  return { got: items.filter(x => x.ok).length, max: items.length, items };
+}
 function computeAssessment(){
   const perQ = [], byTopic = {};
   let score = 0, outOf = 0, n = 0;
@@ -7711,8 +8125,12 @@ function computeAssessment(){
     const codingMarks = isCodeTask(b)
       && Array.isArray(b.checks)
       && b.checks.some(c => (parseInt(c.marks, 10) || 0) > 0);
-    if (!codingMarks && !["mc","order","blanks","short","exam"].includes(b.type)) return;
+    if (!codingMarks && !["mc","order","blanks","short","exam","table","label"].includes(b.type)) return;
     const v = fields[b.id] ? fields[b.id].get() : null;
+    /* A table with no answers in it, or a picture with no labels, has
+       nothing to mark, so it is left out the way an unmarked checklist is. */
+    if (b.type === "table" && !tableMarks(b, v).max) return;
+    if (b.type === "label" && !labelMarks(b, v).max) return;
     n++;
     let pts = 0, max = 0, review = {};
     if (b.type === "mc"){
@@ -7737,6 +8155,10 @@ function computeAssessment(){
         if (ok) pts++;
         return { given: given || "(blank)", ok, expected: set[0] };
       });
+    } else if (b.type === "table" || b.type === "label"){
+      const m = b.type === "table" ? tableMarks(b, v) : labelMarks(b, v);
+      pts = m.got; max = m.max;
+      review.items = m.items;
     } else if (isCodeTask(b)){
       const flags = (v && Array.isArray(v.checks)) ? v.checks : [];
       review.items = (b.checks || []).map((c, i) => {
@@ -7786,13 +8208,20 @@ function computeAssessment(){
     const ov = markOverrides && markOverrides.overrides;
     if (ov && ov[b.id] !== undefined) pts = Math.max(0, Math.min(max, Number(ov[b.id]) || 0));
     score += pts; outOf += max;
-    perQ.push({ id: b.id, n, type: b.type, title: stripTags(b.prompt || b.title || b.id), pts, max, review });
+    /* Numbered as the student saw it, so Question 4 in the review is the
+       question that was 4 on the page. */
+    perQ.push({ id: b.id, n: questionNo[b.id] || n, type: b.type,
+                title: stripTags(b.prompt || b.title || b.task || "") || REVIEW_NAME[b.type] || b.id,
+                pts, max, review });
     const topic = b.topic || "general";
     byTopic[topic] = byTopic[topic] || { right: 0, total: 0 };
     byTopic[topic].right += pts; byTopic[topic].total += max;
   });
   return { score, outOf, perQ, byTopic };
 }
+
+/* What a question with no heading of its own is called in the review. */
+const REVIEW_NAME = { table:"Complete the table", label:"Label the picture" };
 
 /* Best topic -> strength, worst topic -> target. Sentences live in the
    assessment JSON's "topics" bank, so each assessment owns its own wording. */
@@ -8101,6 +8530,9 @@ function renderAssessmentComplete(justFinished, res, st, sent){
       body.appendChild(el("span","why", q.pts + " of " + q.max + " gaps correct, one mark per gap."));
     }
 
+    if (q.type === "table") body.appendChild(reviewTable(b, q));
+    if (q.type === "label") body.appendChild(reviewLabels(b, q));
+
     if (q.type === "short"){
       body.appendChild(el("div","rev-quote", q.review.yours));
       if (q.review.mode === "keywords"){
@@ -8195,6 +8627,88 @@ function renderAssessmentComplete(justFinished, res, st, sent){
       setTimeout(() => respHolder.classList.add("in"), 2750);
     }, 950);
   }
+}
+
+/* A table in the review, drawn as the table it was, with each box showing
+   what went in it the way a fill in the blanks gap does: green where it was
+   right, and what it should have been where it was not. A box with nothing
+   to mark against just shows what was typed. */
+function reviewTable(b, q){
+  const wrap = el("div");
+  const byBox = {};
+  q.review.items.forEach(it => { byBox[it.box] = it; });
+  const v = fields[q.id] ? fields[q.id].get() : [];
+  const scroller = el("div","tt-scroll");
+  const table = el("table","tt rev-tt");
+  const head = Array.isArray(b.head) ? b.head : [];
+  if (head.length){
+    const tr = el("tr");
+    head.forEach(h => { const th = el("th"); th.textContent = String(h == null ? "" : h); tr.appendChild(th); });
+    const thead = el("thead"); thead.appendChild(tr); table.appendChild(thead);
+  }
+  const body = el("tbody");
+  let box = 0;
+  (Array.isArray(b.rows) ? b.rows : []).forEach(row => {
+    const tr = el("tr");
+    (Array.isArray(row) ? row : []).forEach((cell, c) => {
+      const want = cell && typeof cell === "object" ? cell : { t: String(cell == null ? "" : cell) };
+      const td = el(b.sideHead && c === 0 && !want.fill ? "th" : "td");
+      if (want.fill){
+        const it = byBox[box];
+        const typed = String((Array.isArray(v) && v[box]) || "").trim();
+        box++;
+        if (it){
+          const chip = el("span","blank-fill " + (it.ok ? "ok" : "no"));
+          chip.textContent = it.ok ? it.given : ((it.given === "(blank)" ? "" : it.given) + " \u2192 " + it.expected);
+          td.appendChild(chip);
+        } else td.textContent = typed;
+      } else {
+        td.textContent = String(want.t == null ? "" : want.t);
+      }
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  table.appendChild(body);
+  scroller.appendChild(table);
+  wrap.appendChild(scroller);
+  wrap.appendChild(el("span","why", q.pts + " of " + q.max + " boxes correct, one mark per box."));
+  return wrap;
+}
+/* The picture with what they dropped on it, marked, and underneath it each
+   label in the same green and red as a gap, with the right word beside any
+   that were wrong. */
+function reviewLabels(b, q){
+  const wrap = el("div");
+  const bySpot = {};
+  q.review.items.forEach(it => { bySpot[it.spot] = it; });
+  if (b.image){
+    const holder = el("div","label-pic rev-label-pic");
+    const img = el("img"); img.src = b.image; img.alt = b.alt || ""; img.draggable = false;
+    holder.appendChild(img);
+    (b.spots || []).forEach((sp, i) => {
+      const it = bySpot[i];
+      if (!it) return;
+      const spot = el("div","label-spot");
+      spot.style.left = sp.x + "%"; spot.style.top = sp.y + "%";
+      spot.style.width = sp.w + "%"; spot.style.height = sp.h + "%";
+      spot.textContent = it.given === "(blank)" ? "" : it.given;
+      spot.dataset.filled = it.given === "(blank)" ? "no" : "yes";
+      spot.dataset.verdict = it.ok ? "yes" : "no";
+      holder.appendChild(spot);
+    });
+    wrap.appendChild(holder);
+  }
+  const line = el("p","blanks");
+  q.review.items.forEach(it => {
+    const chip = el("span","blank-fill " + (it.ok ? "ok" : "no"));
+    chip.textContent = it.ok ? it.given : ((it.given === "(blank)" ? "nothing" : it.given) + " \u2192 " + it.expected);
+    line.appendChild(chip);
+    line.appendChild(document.createTextNode(" "));
+  });
+  wrap.appendChild(line);
+  wrap.appendChild(el("span","why", q.pts + " of " + q.max + " labels in the right place, one mark per label."));
+  return wrap;
 }
 
 /* An assessment works out its own strength and target the moment it is
@@ -8513,6 +9027,7 @@ function confetti(){
 
 function doneShell(title){
   steps.forEach(st => { st.section.hidden = true; });
+  if (assessPages){ assessPages.welcome.hidden = true; assessPages.questions.hidden = true; }
   /* The summary is not one of the pages, so the bar down the left has nothing
      to point at while it is up. leaveSummary goes back through showStep,
      which paints it again. */
@@ -8526,7 +9041,10 @@ function doneShell(title){
   if (markingLocked && !spectate){
     box.appendChild(el("p","done-locked",
       "🔒 Your teacher has locked this while they mark it, so it cannot be changed just now."));
-  } else if (steps.length){
+  } else if (steps.length && !(assessPages && !spectate)){
+    /* Not for a marked assessment a student has handed in. They were told
+       twice that there was no going back; their answers are under View my
+       assessment, and a teacher's code is the way back in. */
     const back = el("button","btn-ghost done-back", workFrozen ? "← View my original work" : "← Back to my work");
     back.addEventListener("click", () => leaveSummary(Math.max(0, steps.length - 1)));
     box.appendChild(back);
@@ -8540,7 +9058,12 @@ function doneShell(title){
      have already finished. With no rubric there would be nothing in it. */
   const dock = $("dock");
   dock.classList.add("on-summary");
-  dock.classList.toggle("gone", !rubricOnSummary());
+  /* A handed-in assessment keeps the bar for its teacher's dot and nothing
+     else: the code that lets a student back in is typed there, the same
+     place as every other teacher code. */
+  const keepDot = !!assessPages && !spectate;
+  dock.classList.toggle("keep-dot", keepDot);
+  dock.classList.toggle("gone", !rubricOnSummary() && !keepDot);
   paintFrozenNote(true);
   /* drawn by showStep, which somebody opening a finished lesson never reaches */
   paintRubricButton();
@@ -8718,7 +9241,8 @@ function paintStatus(elm, state){
    assessment, which has its own scoring and its own screen. */
 const ACH_LABEL = { quiz:"Quiz", mc:"Multiple choice", order:"Put in order",
                      blanks:"Fill the gaps", short:"Short answer",
-                     ide:"Coding task", web:"Coding task" };
+                     ide:"Coding task", web:"Coding task",
+                     table:"Table", label:"Label a picture" };
 /* The words after the number, so "9 of 9" reads as what it actually is:
    ticked checklist points, not an unexplained score "on coding task". Kept
    apart from the number itself so pluralising the noun is one word here
@@ -8729,7 +9253,9 @@ const ACH_PHRASE = {
   "Put in order": (m) => " of " + m + " ordering task" + (m === 1 ? "" : "s") + " right",
   "Fill the gaps": (m) => " of " + m + " gap" + (m === 1 ? "" : "s") + " filled in correctly",
   "Short answer": (m) => " of " + m + " short answer" + (m === 1 ? "" : "s") + " right",
-  "Coding task": (m) => " of " + m + " checklist point" + (m === 1 ? "" : "s") + " ticked off"
+  "Coding task": (m) => " of " + m + " checklist point" + (m === 1 ? "" : "s") + " ticked off",
+  "Table": (m) => " of " + m + " table box" + (m === 1 ? "" : "es") + " filled in correctly",
+  "Label a picture": (m) => " of " + m + " label" + (m === 1 ? "" : "s") + " in the right place"
 };
 /* Whether a task has been touched at all, read off the same live value
    lessonTaskScore marks. A live quiz or "put in order" get() is always a
@@ -8745,6 +9271,8 @@ function lessonTaskAttempted(b, v){
   if (b.type === "short") return typeof v === "string" && v.trim() !== "";
   if (b.type === "ide" || b.type === "web") return !!(v && v.ran);
   if (b.type === "scratch") return !!(v && (v.changed || v.runs));
+  if (b.type === "table") return Array.isArray(v) && v.some(x => String(x == null ? "" : x).trim() !== "");
+  if (b.type === "label") return !!(v && v.placed && Object.keys(v.placed).some(k => v.placed[k]));
   return true;
 }
 function lessonTaskScore(b, v){
@@ -8773,6 +9301,12 @@ function lessonTaskScore(b, v){
   }
   if (b.type === "short")
     return { got: (window.shortAnswer && window.shortAnswer.mark(b, v).ok) ? 1 : 0, max: 1 };
+  /* Nothing to mark against, nothing to count: a table of boxes with no
+     answers set, or a picture with no labels. */
+  if (b.type === "table" || b.type === "label"){
+    const m = b.type === "table" ? tableMarks(b, v) : labelMarks(b, v);
+    return m.max ? { got: m.got, max: m.max } : null;
+  }
   if (isCodeTask(b) && Array.isArray(b.checks) && b.checks.length){
     const flags = (v && Array.isArray(v.checks)) ? v.checks : [];
     const manual = (v && v.manual && typeof v.manual === "object") ? v.manual : {};

@@ -641,8 +641,12 @@
     const check = make("button", "btn-primary", "Check my labels");
     const note = make("p", "label-note");
     note.hidden = true;
-    side.appendChild(check);
-    side.appendChild(note);
+    /* In an assessment the labels are marked when it is handed in. A Check
+       button there would tell them which ones to move before they did. */
+    if (!(ctx && ctx.assessment)){
+      side.appendChild(check);
+      side.appendChild(note);
+    }
 
     let right = false;
     function paint(){
@@ -1049,7 +1053,9 @@
     const markable = boxes.filter(x => x.answer);
     const fb = make("p", "tt-said");
     fb.hidden = true;
-    if (markable.length){
+    /* An assessment marks the table when it is handed in, so it has no Check
+       button of its own: one would put the answers on screen during the test. */
+    if (markable.length && !(ctx && ctx.assessment)){
       const row = make("div", "tt-actions");
       const btn = make("button", "btn-primary tt-check", "Check the table");
       btn.addEventListener("click", () => {

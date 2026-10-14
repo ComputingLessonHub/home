@@ -1671,6 +1671,9 @@ EDITORS.label = function(b, k){
     paintSpots();
   }
   add(w);
+  /* Each label is a mark in an assessment, so it needs a topic for the
+     Strength and Target the same as any other question. */
+  if (lesson.assessment) F("Topic tag", "topic");
 };
 
 EDITORS.binary = EDITORS.binadd = function(b, k){
@@ -1914,6 +1917,8 @@ EDITORS.table = function(b, k){
     : "No boxes yet, so there is nothing for them to fill in."));
   w.appendChild(foot);
   add(w);
+  /* Each box with an answer is a mark in an assessment. */
+  if (lesson.assessment) F("Topic tag", "topic");
   if (specLevel()) specPicker(k.here(), b);
 };
 

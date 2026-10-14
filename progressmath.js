@@ -7,16 +7,50 @@
 (function(){
   const TASK_LABEL = { quiz:"Quiz", mc:"Multiple choice", order:"Put in order",
                        blanks:"Fill the gaps", short:"Short answer",
-                       ide:"Coding task", web:"Coding task", scratch:"Coding task" };
+                       ide:"Coding task", web:"Coding task", scratch:"Coding task",
+                       table:"Table", label:"Label a picture" };
   function plainText(html){ return String(html || "").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim(); }
   function normAns(x){ return String(x || "").toLowerCase().trim().replace(/\s+/g," ").replace(/[.,!?;:'"]+$/g,""); }
 
+  /* A table is one mark for each box the teacher gave an answer, compared
+     the way its own Check button compares it; a label picture is one mark a
+     spot, the word dropped there against the one set, whatever its
+     capitals. The same rules as tableMarks and labelMarks in lesson.html. */
+  function tableScore(b, v){
+    const typed = Array.isArray(v) ? v : [];
+    let box = 0, got = 0, max = 0;
+    (Array.isArray(b.rows) ? b.rows : []).forEach(row => (Array.isArray(row) ? row : []).forEach(cell => {
+      if (!cell || typeof cell !== "object" || !cell.fill) return;
+      const answer = String(cell.t == null ? "" : cell.t).trim();
+      const given = String(typed[box] == null ? "" : typed[box]).trim();
+      box++;
+      if (!answer) return;
+      max++;
+      if (given && window.shortAnswer && window.shortAnswer.mark({ answers: [answer] }, given).ok) got++;
+    }));
+    return { got: got, max: max };
+  }
+  function labelScore(b, v){
+    const placed = (v && v.placed && typeof v.placed === "object") ? v.placed : {};
+    let got = 0, max = 0;
+    (Array.isArray(b.spots) ? b.spots : []).forEach((sp, i) => {
+      const answer = String((sp && sp.answer) || "").trim();
+      if (!answer) return;
+      max++;
+      const given = String(placed[i] == null ? "" : placed[i]).trim();
+      if (given && given.toLowerCase() === answer.toLowerCase()) got++;
+    });
+    return { got: got, max: max };
+  }
   function taskInfo(b){
     const label = TASK_LABEL[b.type];
     if (!label) return null;
     if (b.type === "quiz" && !(b.questions || []).length) return null;
     if ((b.type === "ide" || b.type === "web" || b.type === "scratch") && !(Array.isArray(b.checks) && b.checks.length)) return null;
     if (b.type === "blanks" && !/\[\[.*?\]\]/.test(String(b.text || ""))) return null;
+    /* nothing to mark against, so not a task with a score */
+    if (b.type === "table" && !tableScore(b, null).max) return null;
+    if (b.type === "label" && !labelScore(b, null).max) return null;
     return { id: b.id, type: b.type, label: label,
              title: plainText(b.prompt || b.title) || label, block: b };
   }
@@ -74,6 +108,8 @@
     }
     if (b.type === "short")
       return { got: (window.shortAnswer && window.shortAnswer.mark(b, v).ok) ? 1 : 0, max: 1 };
+    if (b.type === "table") return tableScore(b, v);
+    if (b.type === "label") return labelScore(b, v);
     /* a checklist: every line counts once, whether a run ticked it or a
        teacher did, the same as the checklist's own "done of counted" score */
     let got = 0;
@@ -124,6 +160,9 @@
     const v = data[id];
     if (v === null || v === undefined || v === "") return false;
     if (Array.isArray(v)) return v.some(x => x !== null && x !== undefined && x !== "");
+    /* A label picture saves its spots whether or not a word is in any */
+    if (typeof v === "object" && v.placed && typeof v.placed === "object")
+      return Object.keys(v.placed).some(k => v.placed[k]);
     if (typeof v === "object") return Object.keys(v).length > 0;
     if (typeof v === "boolean") return v;
     return true;
