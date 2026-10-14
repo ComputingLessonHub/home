@@ -3711,7 +3711,16 @@ function rPage(b){
     });
     /* Extension work sits at the end of the page, so it is below the quiz as
        well. Somebody who has not passed it yet has not finished early. */
-    extras.forEach(x => { x.section.hidden = shut !== -1; });
+    /* On a page built in levels, an extension waiting for the page stays out
+       of sight altogether until every level is done: it is what comes after
+       Go for Gold, and a greyed-out box beside Level 1 is a distraction from
+       the level in front of them. Elsewhere the box is shown and waits. A
+       teacher looking sees it either way. */
+    const levelled = seatsOfLevels().length > 0;
+    extras.forEach(x => {
+      x.section.hidden = shut !== -1 ||
+        (mode === "student" && levelled && typeof x.left === "function" && x.left() > 0);
+    });
     /* "There is more on this page" under a level that is about to open is the
        level-up saying the same thing worse. */
     holdNote.hidden = shut === -1 || items.some(e => e.levelling);
@@ -3958,6 +3967,9 @@ function rExtension(b){
   }
 
   return { section:s,
+           /* how much of the page is still to do, for a page that keeps
+              these out of sight until it is all done */
+           left: () => (tasksLeft && !cb.checked ? tasksLeft() : 0),
            waitFor: (count) => { tasksLeft = count; holdWatchers.add(paintWait); paintWait(); },
            recount: paintWait,
            onShow: () => kids.forEach(k => { if (k.onShow) k.onShow(); }),

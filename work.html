@@ -1238,7 +1238,9 @@ function checklistAuto(row){
      ends by pointing at the next one. */
   const lv = window.progressMath.levelReached ? window.progressMath.levelReached(lessonJson, data) : null;
   if (lv && lv.reached){
-    const well = "Well done for reaching " + lv.reached.label + ".";
+    /* every level done is the whole of the practical, and is said so */
+    const well = lv.next ? "Well done for reaching " + lv.reached.label + "."
+                         : "Well done for completing every level of the practical, right up to " + lv.reached.label + ".";
     strength = strength ? well + " " + strength : well;
   }
   if (lv && lv.next && target){

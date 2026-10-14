@@ -180,7 +180,10 @@
     const codes = [];
     const walk = (blocks) => (blocks || []).forEach(b => {
       if (!b) return;
-      if (b.type === "page" || b.type === "group" || b.type === "extension"){ walk(b.blocks); return; }
+      /* Not into an extension: a coding task there carries on from Go for
+         Gold, but it is work beyond the levels, not a fifth one. */
+      if (b.type === "extension") return;
+      if (b.type === "page" || b.type === "group"){ walk(b.blocks); return; }
       if (b.type === "ide" && b.key) codes.push(b);
     });
     walk(lessonJson && lessonJson.blocks);
