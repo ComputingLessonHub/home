@@ -3025,6 +3025,7 @@ function stopTeacherTicking(){
   /* Now any level the ticks earned opens, with its level-up, for the student. */
   attachedLists.forEach(a => { try{ a.teacherDone(); }catch(e){} });
   holdWatchers.forEach(fn => { try{ fn(); }catch(e){} });
+  try{ paintRail(); }catch(e){}      // the Finished button is outside the page too
 }
 /* Each tick gives the teacher another three minutes. */
 function noteTeacherTick(){
@@ -3743,13 +3744,23 @@ function rPage(b){
       /* The next level of a program being built up task by task. It has just
          been earned in front of us, so it waits behind the level-up rather
          than appearing in the middle of the tick that earned it. */
+      /* Once only. Okay opens the level by asking this again, while the level
+         is still hidden and the tick that earned it is still recent, and
+         without `levelledUp` that asked for a second level-up straight after
+         the first. Pressing Okay quickly after a run, or after a teacher
+         finished ticking, played it twice. */
       if (mode === "student" && !hide[i] && entry.item.hidden && nextLevelOf(items, i)
-          && items[i - 1].built.justCheered()){
+          && !entry.levelledUp && items[i - 1].built.justCheered()){
         entry.levelling = true;
+        entry.levelledUp = true;
         hide[i] = true;
         startLevelUp(items, i, () => {
           entry.levelling = false;
           refreshHold();
+          /* Okay is outside the page, so nothing else tells the task bar the
+             level has changed. Left alone it kept pointing at the level just
+             finished, now hidden, and shrank its icon to a dot at the bottom. */
+          try{ paintRail(); }catch(err){}
           scrollStageTo(entry.item, () => {
             entry.item.classList.add("justopened");
             setTimeout(() => entry.item.classList.remove("justopened"), 1400);
