@@ -488,12 +488,29 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:var
   background:rgba(240,168,60,.04);
 }
 .paste-zone[hidden]{display:none}
-.paste-big{font-family:var(--display); font-size:var(--text-3xl); font-weight:700; margin:0 0 10px; color:var(--text)}
-.paste-big kbd{
-  font-family:var(--mono); font-size:var(--text-xl); background:var(--bg); border:1px solid var(--line-2);
-  border-bottom-width:3px; border-radius:var(--rad-sm); padding:3px 9px; margin:0 2px; color:var(--amber);
+/* The two steps, numbered, in large type and left aligned so a long line
+   wraps under its own words rather than under the number. */
+.paste-steps{list-style:none; margin:0 auto 18px; padding:0; max-width:640px; text-align:left;
+  display:flex; flex-direction:column; gap:16px}
+.paste-steps li{display:flex; align-items:flex-start; gap:14px;
+  font-family:var(--display); font-size:21px; font-weight:600; line-height:1.6; color:var(--text)}
+.paste-num{flex:none; width:36px; height:36px; border-radius:50%; display:grid; place-items:center;
+  background:var(--amber); color:var(--amber-ink); font-size:19px; font-weight:800; line-height:1}
+.paste-steps kbd{
+  display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
+  font-family:var(--mono); font-size:17px; background:var(--bg); border:1px solid var(--line-2);
+  border-bottom-width:3px; border-radius:7px; padding:1px 9px; margin:0 2px; color:var(--amber);
+  vertical-align:1px; line-height:1.5;
 }
-.paste-sub{font-size:var(--text-lg); color:var(--muted); margin:0 auto 20px; max-width:52ch; line-height:1.5}
+.kbd-ico{width:15px; height:15px; fill:currentColor; flex:none}
+.kbd-ico-line{fill:none; stroke:currentColor; stroke-width:1.6; stroke-linejoin:round}
+.paste-steps + .paste-or{margin-bottom:26px}
+.paste-sub{font-size:16px; color:var(--muted); margin:0 auto 12px; max-width:52ch; line-height:1.5}
+@media (max-width:600px){
+  .paste-steps li{font-size:18px; gap:10px}
+  .paste-num{width:30px; height:30px; font-size:16px}
+  .paste-steps kbd{font-size:15px; padding:1px 7px}
+}
 .paste-sub b{color:var(--text)}
 .paste-or{display:flex; justify-content:center; flex-wrap:wrap; gap:10px}
 .shot[hidden]{display:none}
@@ -517,9 +534,15 @@ html[data-bg=dark] .shot-full-btn:hover,html[data-bg=night] .shot-full-btn:hover
 .shot-viewer{
   position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center;
   padding:16px; padding-bottom:max(16px, env(safe-area-inset-bottom)); background:rgba(10,10,12,.92); cursor:zoom-out;
+  overflow:hidden;
 }
-/* stretched to fill: a screenshot is stored at 1000px, smaller than most screens */
-.shot-viewer-img{width:100%; height:100%; object-fit:contain}
+/* stretched to fill: a screenshot is stored at 1400px, smaller than most
+   screens. The wheel zooms it from its top-left corner, which is what
+   showPictureFull's sums assume. */
+.shot-viewer-img{width:100%; height:100%; object-fit:contain; transform-origin:0 0}
+/* only while zoomed, so a phone can still pinch the picture the usual way */
+.shot-viewer.zoomed .shot-viewer-img{cursor:grab; touch-action:none}
+.shot-viewer.zoomed .shot-viewer-img:active{cursor:grabbing}
 .shot-viewer-close{
   position:absolute; top:12px; right:12px; width:44px; height:44px; padding:0; cursor:pointer;
   font-size:30px; line-height:1; background:#fff; color:#000; border:0; border-radius:10px;
@@ -2096,6 +2119,25 @@ body.workpage .grow{flex:1}
 .bankpick b{display:block; font-size:var(--text-sm); color:var(--amber-dark)}
 .bankpick span{font-size:var(--text-base); color:var(--muted); line-height:1.4}
 .markrow2{display:flex; align-items:center; gap:8px}
+/* Feedback written by answering questions, one at a time, above the boxes. */
+.fbask{margin:4px 0 14px}
+.fbask-count{margin:0 0 8px; font-size:14px; font-weight:600; color:var(--muted)}
+.fbask-card{padding:12px 14px; margin:0 0 12px; background:var(--panel-2);
+  border:1.5px solid var(--line); border-radius:12px}
+.fbask-card b{display:block; margin:0 0 4px; font-size:15px; color:var(--amber-dark)}
+.fbask-card p{margin:0; font-size:15px; line-height:1.45; color:var(--text)}
+.fbask-card .fbask-met{margin-top:8px; font-size:13px; color:var(--muted)}
+.fbask-yesno{display:flex; gap:8px}
+.fbask-yesno button{flex:1}
+.fbask-foot{display:flex; justify-content:space-between; gap:12px; margin-top:12px}
+.fbask-foot .bank-link:only-child{margin-left:auto}
+.fbask-again{margin:0 0 10px; text-align:right}
+.fbask-pick{display:block; width:100%; text-align:left; padding:10px 12px; margin:0 0 8px;
+  background:var(--panel-2); border:1.5px solid var(--line); border-radius:12px; cursor:pointer;
+  font-family:var(--body); color:var(--text)}
+.fbask-pick:hover,.fbask-pick.on{border-color:var(--amber)}
+.fbask-pick b{display:block; font-size:13px; color:var(--amber-dark)}
+.fbask-pick span{font-size:14.5px; line-height:1.4}
 .markrow2 input{width:78px !important; text-align:center}
 
 

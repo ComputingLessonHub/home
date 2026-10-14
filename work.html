@@ -76,6 +76,10 @@
         <p class="levelshown" id="levelShown" hidden></p>
         <p class="bhelp" id="gradeHelp"></p>
       </div>
+      <!-- Where a lesson has a bank of Strengths and Targets, a few Yes or No
+           questions come first and write the boxes below. -->
+      <div class="fbask" id="fbAsk" hidden></div>
+      <div class="fbask-again" id="fbAskAgain" hidden></div>
       <div class="bfield" id="fbStrengthWrap">
         <label>Strength</label><textarea id="fbStrength" rows="3"></textarea>
         <div class="bank" id="bankStrength"></div>
@@ -84,7 +88,7 @@
         <label>Target</label><textarea id="fbTarget" rows="3"></textarea>
         <div class="bank" id="bankTarget"></div>
       </div>
-      <div class="bfield"><label>General comment</label><textarea id="fbComment" rows="2"></textarea></div>
+      <div class="bfield" id="fbCommentWrap"><label>General comment</label><textarea id="fbComment" rows="2"></textarea></div>
       <button class="btn-primary wide" id="saveFb">Save feedback</button>
       <p class="hint" id="fbMsg"></p>
     </aside>
@@ -223,6 +227,9 @@ async function boot(){
       PRACTICE ? Promise.resolve(null) : fetchLesson(), fetchRoster(), fetchWork()
     ]);
     lessonJson = lesson;
+    /* A practical is handed in to be marked by hand, and the console's
+       button into it says Mark work, so the tab it opens on does too. */
+    if (lessonJson && lessonJson.practical) $("tabWork").textContent = "Mark work";
     roster = students.sort(byUsername);
     rows = work;
     if (!PRACTICE) await loadMarks();
@@ -1225,6 +1232,9 @@ function loadFeedback(row){
      given while marking can change them. */
   const now = checklistAuto(row) || {};
   lastAuto = { strength: now.strength || "", target: now.target || "" };
+  /* Feedback already saved for this student is shown as it was saved; the
+     questions are for writing it the first time, and a button away after. */
+  startAsk(row, !!(f.strength || f.target));
 }
 /* A line has been ticked or unticked in the work beside the boxes. The
    Strength and Target are worked out again, and replace what is there if it
@@ -1297,6 +1307,182 @@ function checklistAuto(row){
   }
   return { strength: strength, target: target };
 }
+/* ---------------- feedback by questions ----------------
+   Where the lesson has a bank, the boxes are written by answering questions
+   about the work rather than by reading the bank: Yes or No to each
+   strength in turn, then the first thing answered No becomes the target.
+   The boxes, and From your bank under them, are still there afterwards. */
+let ask = null;      // { row, items, answers, at, phase, target, targetChosen }
+
+/* One question per bank entry that says what doing it well looks like, in
+   the order the builder lists them. A checklist line comes with its own
+   answer already picked, read the way its tick is, so a teacher can press
+   straight through a practical the checklist has already judged. */
+function askItems(row){
+  if (PRACTICE || !lessonJson) return [];
+  const out = [];
+  const topics = lessonJson.topics || {};
+  Object.keys(topics).forEach(k => {
+    const t = topics[k] || {};
+    if (t.strength || t.target)
+      out.push({ topic: t.label || k, strength: t.strength || "", target: t.target || "" });
+  });
+  if (lessonJson.practical){
+    const data = (row && row.data) || {};
+    quantifiableTasks().forEach(t => {
+      if (t.type !== "ide" && t.type !== "web") return;
+      (t.block.checks || []).forEach((c, i) => {
+        const strength = String((c && c.strength) || "").trim(), target = String((c && c.target) || "").trim();
+        if (!strength && !target) return;
+        out.push({ topic: String(c.label || "Checklist").trim(), strength, target,
+                   met: window.progressMath.checkDone(c, i, data[t.id]) });
+      });
+    });
+  }
+  return out;
+}
+
+function showAsk(asking){
+  $("fbAsk").hidden = !asking;
+  ["fbStrengthWrap","fbTargetWrap","fbCommentWrap","saveFb"].forEach(id => { $(id).hidden = asking; });
+  const again = $("fbAskAgain");
+  again.innerHTML = "";
+  again.hidden = asking || !ask || !ask.items.length;
+  if (again.hidden) return;
+  const btn = el("button","bank-link","Answer the questions again");
+  btn.type = "button";
+  btn.addEventListener("click", () => { startAsk(ask.row, false); });
+  again.appendChild(btn);
+}
+
+function startAsk(row, saved){
+  const items = askItems(row);
+  ask = { row, items, answers: items.map(it => it.met === undefined ? null : it.met),
+          at: 0, phase: "strength", target: "", targetChosen: false };
+  if (!items.length || saved){ showAsk(false); return; }
+  $("fbMsg").textContent = "";
+  showAsk(true);
+  paintAsk();
+}
+
+/* What the answers add up to. A Strength from every Yes, after the level
+   reached where the practical has levels, the same opening checklistAuto
+   gives it; the Target from the first No that has one. */
+function askStrength(){
+  const lines = ask.items.filter((it, i) => ask.answers[i] === true && it.strength).map(it => it.strength);
+  let strength = lines.length ? joinSentences(lines) : (lessonJson.zeroStrength || "");
+  const data = (ask.row && ask.row.data) || {};
+  const lv = window.progressMath.levelReached ? window.progressMath.levelReached(lessonJson, data) : null;
+  if (lv && lv.reached){
+    const well = lv.next ? "Well done for reaching " + lv.reached.label + "."
+                         : "Well done for completing every level of the practical, right up to " + lv.reached.label + ".";
+    strength = strength ? well + " " + strength : well;
+  }
+  return strength;
+}
+function askFirstTarget(){
+  const i = ask.items.findIndex((it, k) => ask.answers[k] === false && it.target);
+  return i >= 0 ? ask.items[i].target : (lessonJson.perfectTarget || "");
+}
+
+function paintAsk(){
+  const box = $("fbAsk");
+  box.innerHTML = "";
+  const n = ask.items.length;
+  if (ask.phase === "strength"){
+    const it = ask.items[ask.at];
+    box.appendChild(el("p","bankhead","What has this student done well?"));
+    box.appendChild(el("p","fbask-count","Question " + (ask.at + 1) + " of " + n));
+    const card = el("div","fbask-card");
+    card.appendChild(el("b","", it.topic));
+    if (it.strength) card.appendChild(el("p","", it.strength));
+    if (it.met !== undefined)
+      card.appendChild(el("p","fbask-met", it.met ? "Their checklist says this is done." : "Their checklist says this is not done yet."));
+    box.appendChild(card);
+    const row = el("div","fbask-yesno");
+    [["Yes", true], ["No", false]].forEach(([word, value]) => {
+      const b = el("button", ask.answers[ask.at] === value ? "btn-primary" : "btn-ghost", word);
+      b.type = "button";
+      b.addEventListener("click", () => {
+        ask.answers[ask.at] = value;
+        ask.targetChosen = false;          // the first No may have moved
+        if (ask.at < n - 1) ask.at++; else ask.phase = "target";
+        paintAsk();
+      });
+      row.appendChild(b);
+    });
+    box.appendChild(row);
+    const foot = el("div","fbask-foot");
+    if (ask.at > 0){
+      const back = el("button","bank-link","Back");
+      back.type = "button";
+      back.addEventListener("click", () => { ask.at--; paintAsk(); });
+      foot.appendChild(back);
+    }
+    const skip = el("button","bank-link","Skip the questions");
+    skip.type = "button";
+    skip.addEventListener("click", () => showAsk(false));
+    foot.appendChild(skip);
+    box.appendChild(foot);
+    return;
+  }
+  if (!ask.targetChosen) ask.target = askFirstTarget();
+  box.appendChild(el("p","bankhead","What do they need to improve?"));
+  box.appendChild(el("p","fbask-count","This will be the student's target:"));
+  const card = el("div","fbask-card");
+  card.appendChild(el("p","", ask.target || "Nothing from the bank. You can write one in the Target box."));
+  box.appendChild(card);
+  const change = el("button","btn-ghost","Change target");
+  change.type = "button";
+  change.addEventListener("click", targetPopup);
+  const use = el("button","btn-primary","Use these");
+  use.type = "button";
+  use.addEventListener("click", () => {
+    $("fbStrength").value = askStrength();
+    $("fbTarget").value = ask.target;
+    showAsk(false);
+    paintFb("idle");
+    $("fbMsg").textContent = "Filled in from your answers. Change anything you like, then press Save feedback.";
+  });
+  const row = el("div","fbask-yesno");
+  row.appendChild(change); row.appendChild(use);
+  box.appendChild(row);
+  const foot = el("div","fbask-foot");
+  const back = el("button","bank-link","Back");
+  back.type = "button";
+  back.addEventListener("click", () => { ask.phase = "strength"; ask.at = n - 1; paintAsk(); });
+  foot.appendChild(back);
+  box.appendChild(foot);
+}
+
+/* Targets only, one to pick. Picking it replaces the one proposed. */
+function targetPopup(){
+  const seen = new Set(), lines = [];
+  const add = (topic, line) => { if (line && !seen.has(line)){ seen.add(line); lines.push({ topic, line }); } };
+  ask.items.forEach(it => add(it.topic, it.target));
+  add("Everything done", lessonJson.perfectTarget);
+  openModal(box => {
+    box.classList.add("narrow");
+    box.appendChild(el("h2","","Choose a target"));
+    const list = el("div","banklist");
+    lines.forEach(t => {
+      const b = el("button","fbask-pick" + (t.line === ask.target ? " on" : ""));
+      b.type = "button";
+      b.appendChild(el("b","", t.topic));
+      b.appendChild(el("span","", t.line));
+      b.addEventListener("click", () => {
+        ask.target = t.line; ask.targetChosen = true;
+        closeModal(); paintAsk();
+      });
+      list.appendChild(b);
+    });
+    box.appendChild(list);
+    const stay = el("button","btn-ghost modal-stay","Keep this target");
+    stay.addEventListener("click", closeModal);
+    box.appendChild(stay);
+  });
+}
+
 /* The sentences written in the builder, offered as a starting point. Picking
    one fills the box, which the teacher can then reword. */
 function bankFor(which){

@@ -4134,6 +4134,9 @@ async function fetchCatalogue(){
   assigns = cat.assignments || [];
 }
 const catOf = (id) => (cat.lessons || []).find(l => l.lesson_id === id) || { unit: "", published: 0, position: 0, version_of: "" };
+/* A practical is handed in to be marked by hand, so the way into its work
+   says so. Everything else is looked at, not marked, there. */
+const workLabel = (id) => catOf(id).practical ? "Mark work" : "View work";
 const titleOf = (id) => { const l = fileLessons.find(x => x.id === id); return l ? l.title : id; };
 async function catPost(payload){
   catLoaded = false;                 // whatever this changes, the copy we hold is stale
@@ -4513,9 +4516,9 @@ function paintLessonGrid(){
                     ["Remove from " + cls, () => removeFromClass(l)]];
     if (family.length > 1) extras.unshift(["Choose the version", () => pickVersionFor(l.lesson_id)]);
     if (isAssessment) extras.unshift(["Markbook", () => workBtn.click()]);
-    if (narrow()) extras.unshift(["View work", () => openWorkPage(l.lesson_id)]);
+    if (narrow()) extras.unshift([workLabel(l.lesson_id), () => openWorkPage(l.lesson_id)]);
     else {
-      const vw = el("button","btn-ghost","View work");
+      const vw = el("button","btn-ghost",workLabel(l.lesson_id));
       vw.addEventListener("click", () => openWorkPage(l.lesson_id));
       acts.appendChild(vw);
     }
@@ -4951,7 +4954,7 @@ function openManage(){
         }
       }catch(e){ say("Could not change that", e.message); }
     });
-    const workBtn = el("button","btn-ghost","View work");
+    const workBtn = el("button","btn-ghost",workLabel(lessonId));
     workBtn.addEventListener("click", () => openWorkPage(lessonId));
     bar.appendChild(pubBtn); bar.appendChild(workBtn);
     if (lessonJson && lessonJson.assessment){
