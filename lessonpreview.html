@@ -10,11 +10,11 @@
 <script src="teacher.js"></script>
 <script src="lessonfile.js"></script>
 </head>
-<body class="pvpage">
+<body class="lpvpage">
 
-<div class="homebar pv-bar">
+<div class="homebar lpv-bar">
   <div class="title" id="pvTitle">Preview</div>
-  <div class="subtabs worktabs pv-tabs" id="pvTabs">
+  <div class="subtabs worktabs lpv-tabs" id="pvTabs">
     <button data-tab="home">Home view</button>
     <button data-tab="lesson">Lesson view</button>
     <button data-tab="mark">Marking view</button>
@@ -24,8 +24,8 @@
   <button class="btn-ghost iconbtn" id="pvHelp" title="What is this page?" aria-label="What is this page?">?</button>
 </div>
 
-<div class="pv-stage" id="pvStage">
-  <div class="loading pv-wait" id="pvWait">
+<div class="lpv-stage" id="pvStage">
+  <div class="loading lpv-wait" id="pvWait">
     <div class="load-dots"><span></span><span></span><span></span></div>
     <p class="loadmsg" id="pvWaitMsg">Getting the lesson ready</p>
   </div>
@@ -288,7 +288,7 @@ let current = "";
 
 function makeFrame(tab, src){
   const f = document.createElement("iframe");
-  f.className = "pv-frame";
+  f.className = "lpv-frame";
   f.dataset.tab = tab;
   f.title = { home: "The student's home page", lesson: "The lesson, as the student sees it",
               mark: "View Work, as you see it" }[tab];
@@ -390,16 +390,16 @@ window.hubSandbox = {
    any of the three tabs in the bar closes it too. */
 function overlay(src, role){
   closeOverlay();
-  const back = el("div","pv-over");
+  const back = el("div","lpv-over");
   const f = document.createElement("iframe");
-  f.className = "pv-overframe";
+  f.className = "lpv-overframe";
   f.dataset.tab = "over";
   f.dataset.role = role;
   f.src = src;
   back.appendChild(f);
   $("pvStage").appendChild(back);
 }
-function closeOverlay(){ document.querySelectorAll(".pv-over").forEach(n => n.remove()); }
+function closeOverlay(){ document.querySelectorAll(".lpv-over").forEach(n => n.remove()); }
 
 /* Work in a lesson is saved to the browser as the student types and reaches
    the teacher when they press Save Work or Finish. In the preview the person
@@ -493,7 +493,7 @@ function explain(){
     box.appendChild(el("p","modal-text",
       "It shows this lesson exactly as a student sees it, using a pretend student called " +
       STUDENT.name + "."));
-    const list = el("ul","modal-steps pv-intro-list");
+    const list = el("ul","modal-steps lpv-intro-list");
     [ ["Home view", "their home page, with this lesson on it."],
       ["Lesson view", "the lesson itself. Try it as they would."],
       ["Marking view", "View Work, where you give feedback. Switch back to see how it reaches them."]

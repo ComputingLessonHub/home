@@ -6224,32 +6224,35 @@ body.scratch-fullpage{overflow:hidden}
   overflow:hidden; background:var(--panel-2)}
 
 /* ---------- the lesson Preview (lessonpreview.html) ----------
+   lpv-, never pv-: preview.html, the builder's preview, has its own pv-frame
+   in a style tag of its own, and a .pv-frame here hiding frames until they
+   are shown made the builder's preview invisible.
    A bar, and the three views filling the rest of the window. Each view is a
    frame laid over the others and only the one on show is visible: hidden with visibility rather than display, so
    a frame out of sight keeps its layout and does not draw itself at nought
    pixels wide when it is next shown. Nothing here is used by any other page,
    so being at the end of the file beats nothing it should not. */
-body.pvpage{height:100vh; height:100dvh; overflow:hidden; display:flex; flex-direction:column; margin:0}
-.pv-bar{flex:none; gap:14px; padding-top:10px; padding-bottom:10px; flex-wrap:wrap; row-gap:8px}
-.pv-bar .title{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.pv-tabs{margin:0}
-.pv-tabs button{padding:8px 16px; font-size:14.5px}
-.pv-bar select{width:auto; max-width:220px}
-.pv-stage{position:relative; flex:1; min-height:0}
-.pv-wait{position:absolute; inset:0}
-.pv-frame{position:absolute; inset:0; width:100%; height:100%; border:0; display:block;
+body.lpvpage{height:100vh; height:100dvh; overflow:hidden; display:flex; flex-direction:column; margin:0}
+.lpv-bar{flex:none; gap:14px; padding-top:10px; padding-bottom:10px; flex-wrap:wrap; row-gap:8px}
+.lpv-bar .title{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.lpv-tabs{margin:0}
+.lpv-tabs button{padding:8px 16px; font-size:14.5px}
+.lpv-bar select{width:auto; max-width:220px}
+.lpv-stage{position:relative; flex:1; min-height:0}
+.lpv-wait{position:absolute; inset:0}
+.lpv-frame{position:absolute; inset:0; width:100%; height:100%; border:0; display:block;
   background:var(--bg); visibility:hidden}
-.pv-frame.on{visibility:visible}
-.pv-over{position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; background:var(--bg)}
-.pv-overframe{flex:1; min-height:0; width:100%; border:0; display:block}
+.lpv-frame.on{visibility:visible}
+.lpv-over{position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; background:var(--bg)}
+.lpv-overframe{flex:1; min-height:0; width:100%; border:0; display:block}
 /* the three views, in the pop-up saying what the page is: a list reads down
    its left edge, not centred like the words around it */
-.pv-intro-list{text-align:left}
+.lpv-intro-list{text-align:left}
 @media (max-width:760px){
-  .pv-bar{padding-left:16px; padding-right:16px; gap:8px}
-  .pv-bar .title{flex:1 1 0}
-  .pv-tabs{order:3; width:100%}
-  .pv-tabs button{flex:1; padding:8px 6px; font-size:13.5px}
+  .lpv-bar{padding-left:16px; padding-right:16px; gap:8px}
+  .lpv-bar .title{flex:1 1 0}
+  .lpv-tabs{order:3; width:100%}
+  .lpv-tabs button{flex:1; padding:8px 6px; font-size:13.5px}
 }
 
 /* The Edit pop-up in the Lesson Hub: the original as the main button, the
