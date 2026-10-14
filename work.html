@@ -1297,15 +1297,10 @@ function loadFeedback(row){
   }
   $("fbComment").value = f.comment || "";
   commentOpen = false;
-  /* Offered only when there is nothing of theirs to see and the lesson has
-     words to give them, or when it was ticked and saved, so it is still
-     ticked when they are opened again. */
   notSaved = !!f.notSaved;
   notSavedWas = "";
+  listWas = null;
   $("notSaved").checked = notSaved;
-  const offer = !!lessonJson && !!window.progressMath.unsavedComment(lessonJson) &&
-                !window.progressMath.hasWork(lessonJson, row && row.data);
-  $("notSavedWrap").hidden = PRACTICE || (!notSaved && !offer);
   /* Nothing of theirs to mark, so no Level reached either, whether they
      were away or were there and lost it. A class rather than `hidden`,
      because paintMarking() owns that. */
@@ -1357,9 +1352,13 @@ function loadFeedback(row){
   const now = autoFor(row) || {};
   lastAuto = { strength: now.strength || "", target: now.target || "" };
   /* Feedback already saved for this student is shown as it was saved; the
-     questions are for writing it the first time, and a button away after. */
-  feedbackMode(row, !!(f.strength || f.target) || away || notSaved);
+     questions are for writing it the first time, and a button away after.
+     A saved "not saved properly" tick is not counted: the list waits behind
+     it at the start, so unticking it opens on the ticks rather than on a
+     Strength and Target nobody wrote. */
+  feedbackMode(row, !!(f.strength || f.target) || away);
   paintNotSaved();
+  paintNotSavedOffer(row);
 }
 /* ---------------- present, but nothing saved ----------------
    Nothing saved usually means away, and the boxes say so. Sometimes they
@@ -1369,6 +1368,7 @@ function loadFeedback(row){
 let notSaved = false;
 let notSavedWas = "";    // the comment box before the tick wrote over it
 let notSavedAway = false; // the boxes underneath say they were away
+let listWas = null;       // where the tick list stood when the tick was given
 const AWAY_MSG = "Nothing saved, so these say they were away.";
 function paintNotSaved(){
   $("workSide").classList.toggle("fbnotsaved", notSaved);
@@ -1390,15 +1390,44 @@ on("notSaved", "change", () => {
   }
   /* untick, and the away words are back in the boxes, so say so again */
   $("fbMsg").textContent = !notSaved && notSavedAway ? AWAY_MSG : "";
-  feedbackMode(row, true);
+  /* The tick list is left exactly where it was underneath, so unticking
+     goes back to the same level of the same step, not to the start. */
+  if (notSaved) listWas = Object.assign({}, listOpen);
+  if (!notSaved && listWas && !byQuestions() && listWas.user === ((row && row.username) || "")){
+    listOpen = listWas;
+    paintList(row);
+  } else feedbackMode(row, true);
+  if (!notSaved) listWas = null;
   paintNotSaved();
+  paintNotSavedOffer(row);
   paintFb("idle");
 });
+
+/* Whether the tick is offered. On the tick list it sits above the first
+   ticks and goes as soon as anything is ticked on any level, because a
+   student with something to tick did hand work in. Otherwise, as before,
+   only for a student with nothing saved. A lesson with no wording of its
+   own for lost work is never offered it. Once ticked it always shows, so
+   it can be taken back. */
+function notSavedOffered(row){
+  if (notSaved) return true;
+  if (PRACTICE || !lessonJson || !window.progressMath.unsavedComment(lessonJson)) return false;
+  const noWork = !window.progressMath.hasWork(lessonJson, row && row.data);
+  if (byQuestions()) return noWork;
+  const items = listItems(row).items;
+  if (!items.length) return noWork;
+  if (items.some(it => it.ticked)) return false;
+  return noWork || listOpen.phase === "levels";
+}
+function paintNotSavedOffer(row){
+  $("notSavedWrap").hidden = !notSavedOffered(row);
+}
 /* The list, or the questions when Settings asks for them. */
 function feedbackMode(row, saved){
   if (byQuestions()){
     $("fbList").hidden = true;
     startAsk(row, saved);
+    paintNotSavedOffer(row);
     return;
   }
   ask = null;
@@ -1924,6 +1953,7 @@ function paintList(row){
   const { ladder, items } = (PRACTICE || !lessonJson) ? { ladder: [], items: [] } : listItems(row);
   const user = (row && row.username) || "";
   if (listOpen.user !== user) listOpen = { user, at: null, phase: "levels" };
+  paintNotSavedOffer(row);
   const off = !items.length || byQuestions() || notSaved;
   box.hidden = off || listOpen.phase === "done";
   listBoxes(off || listOpen.phase === "done");
