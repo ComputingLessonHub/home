@@ -4549,7 +4549,7 @@ function canTickManual(){
    when a teacher finishes ticking. */
 const attachedLists = [];
 /* One per coding task with a checklist: ticks off what the code already does
-   without it being run. Done when the lesson is finished, so a student who
+   without it being run. Done when a lesson or an assessment is finished, so a student who
    wrote the print() and never pressed Run still has it ticked, for themselves,
    for the teacher marking it and for the Strength and Target worked out from
    those ticks. */
@@ -7842,6 +7842,10 @@ function keepResultLocally(res, st){
 async function assessmentFinish(){
   if (spectate){ renderAssessmentComplete(false); return; }
   finished = true;
+  /* Before anything reads the ticks: the save, the score added up from the
+     checklist marks, and the Strength and Target worked out from that score
+     here or, for a practical, from the ticks in Mark work. */
+  tickWrittenCode();
   save();
   /* A practical is marked by hand, so it never adds up a score, but how long
      it took is still worth recording. */
