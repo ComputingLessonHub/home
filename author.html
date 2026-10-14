@@ -6253,11 +6253,15 @@ on("moreBtn", "click", (e) => {
   e.stopPropagation();
   const m = $("moreMenu"), b = $("moreBtn");
   if (!m.hidden){ m.hidden = true; return; }
+  /* With a version open, Delete only ever removes that version, so it says
+     so. "Delete lesson" over a version read as the whole lesson going. */
+  const delWord = lesson.versionOf ? "Delete version" : "Delete lesson";
+  $("delLesson").textContent = delWord;
   const items = [["Save a copy", () => $("copyBtn").click()],
                  ["JSON", () => $("jsonBtn").click()],
                  ["Import a lesson", () => $("importLesson").click()],
                  ["Import a page", () => $("importPage").click()],
-                 ["Delete lesson", () => $("delLesson").click()]];
+                 [delWord, () => $("delLesson").click()]];
   if (window.openMenu) window.openMenu(b, m, "More", items);
   else m.hidden = false;
 });
@@ -7029,10 +7033,23 @@ on("delLesson", "click", () => {
   const API = (window.HUB && window.HUB.API) || "";
   const id = lesson.savedAs;
   if (!id) return;
+  /* A version has the same title as the lesson it came from, so asking to
+     delete it by title sounded like the whole lesson going. Only this one
+     id is ever deleted: the original and its other versions are untouched. */
+  const version = lesson.versionOf ? (lesson.versionName || "Version") : "";
+  const parent = version ? parentTitle() : "";
   openModal(box => {
-    box.appendChild(el("h2","","Delete \u201c" + (lesson.title || id) + "\u201d?"));
-    box.appendChild(el("p","modal-text","It goes from the hub and from every class, together with all the work students have done on it."));
-    const yes = el("button","btn-primary modal-cta","Continue");
+    if (version){
+      box.appendChild(el("h2","","Delete the \u201c" + version + "\u201d version?"));
+      box.appendChild(el("p","modal-text","Only this version goes. \u201c" + parent
+        + "\u201d and any other versions of it stay exactly as they are."));
+      box.appendChild(el("p","modal-text","Any class using this version loses it, along with the work "
+        + "students did on it. Move them onto another version first if you want to keep their work."));
+    } else {
+      box.appendChild(el("h2","","Delete \u201c" + (lesson.title || id) + "\u201d?"));
+      box.appendChild(el("p","modal-text","It goes from the hub and from every class, together with all the work students have done on it."));
+    }
+    const yes = el("button","btn-primary modal-cta", version ? "Delete this version" : "Continue");
     yes.style.background = "var(--red)";
     yes.addEventListener("click", () => {
       closeModal();
@@ -7059,7 +7076,9 @@ on("delLesson", "click", () => {
             showTitle(); paintPickers();
             $("delLesson").hidden = true;
             render(); refreshPreview();
-            say("Deleted", "The lesson has been removed from the site.");
+            say("Deleted", version
+              ? "The “" + version + "” version has gone. “" + parent + "” is still there."
+              : "The lesson has been removed from the site.");
           }catch(e){ msg.textContent = e.message; }
         });
         const no = el("button","btn-ghost modal-stay","Keep it");
