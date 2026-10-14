@@ -8271,10 +8271,18 @@ function renderResponses(container, targetTopic, statusEl){
       const built = R(b);
       const bb = (typeof built.brief === "function") ? built.brief() : built.brief;
       const task = el("div","resp-task");
-      /* a short answer draws its own code box, so only its words go up here */
-      task.appendChild(el("p","resp-q", stripTags(b.type === "short" ? bb.title
-                                                   : (b.prompt || b.title || bb.title))));
-      if (b.note) task.appendChild(el("p","resp-note", stripTags(b.note)));
+      /* a short answer draws its own code box, so only its words go up here.
+         A choice draws its own prompt, so it was said twice. A link's title
+         is the words on its button, so the button was named twice and what
+         the student was meant to do there, its heading and task, never
+         showed at all. */
+      const head = b.type === "short" ? bb.title
+                 : b.type === "choice" ? b.title
+                 : b.type === "link" ? (bb.title || b.title)
+                 : (b.prompt || b.title || bb.title);
+      if (stripTags(head || "").trim()) task.appendChild(el("p","resp-q", stripTags(head)));
+      if (b.type === "link" && bb.text) task.appendChild(el("p","resp-note", stripTags(bb.text)));
+      if (b.note && b.type !== "link") task.appendChild(el("p","resp-note", stripTags(b.note)));
       built.section.hidden = false;
       task.appendChild(built.section);
       wrap.appendChild(task);
