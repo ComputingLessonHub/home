@@ -1419,7 +1419,7 @@ EDITORS.mc = function(b, k){
   R("Question", "prompt", { rows:2 });
   listField("Options (tick the right one)", "options");
   settings(() => {
-    if (lesson.assessment) F("Topic tag", "topic", { help:"Used for Strength and Target feedback." });
+    if (topicTags()) F("Topic tag", "topic", { help:"Used for Strength and Target feedback." });
   });
 };
 
@@ -1430,7 +1430,7 @@ EDITORS.blanks = function(b, k){
     help:"Put the answers in double brackets: The [[cat]] sat on the [[mat]]." });
   F("Extra wrong words for the dropdowns", "distractors");
   settings(() => {
-    if (lesson.assessment) F("Topic tag", "topic");
+    if (topicTags()) F("Topic tag", "topic");
   });
 };
 
@@ -1439,7 +1439,7 @@ EDITORS.order = function(b, k){
   F("Instruction (optional)", "prompt");
   listField("Items in the CORRECT order", "items", "Students see them shuffled.");
   settings(() => {
-    if (lesson.assessment) F("Topic tag", "topic");
+    if (topicTags()) F("Topic tag", "topic");
   });
 };
 
@@ -1673,7 +1673,7 @@ EDITORS.label = function(b, k){
   add(w);
   /* Each label is a mark in an assessment, so it needs a topic for the
      Strength and Target the same as any other question. */
-  if (lesson.assessment) F("Topic tag", "topic");
+  if (topicTags()) F("Topic tag", "topic");
 };
 
 EDITORS.binary = EDITORS.binadd = function(b, k){
@@ -1774,7 +1774,7 @@ EDITORS.short = function(b, k){
   F("Model answer", "model", { area:true, rows:2,
     help:"Shown to a student who gets it wrong, and printed beside their work." });
   settings(() => {
-    if (lesson.assessment) F("Topic tag", "topic");
+    if (topicTags()) F("Topic tag", "topic");
   });
 };
 
@@ -1918,7 +1918,7 @@ EDITORS.table = function(b, k){
   w.appendChild(foot);
   add(w);
   /* Each box with an answer is a mark in an assessment. */
-  if (lesson.assessment) F("Topic tag", "topic");
+  if (topicTags()) F("Topic tag", "topic");
   if (specLevel()) specPicker(k.here(), b);
 };
 

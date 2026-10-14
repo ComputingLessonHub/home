@@ -125,6 +125,8 @@
   <button class="on" id="tabQuestions">Questions</button>
   <button id="tabTargets">Strength &amp; Target</button>
   <button id="tabResponses">Response tasks</button>
+  <!-- Instead of the two above, for an assessment with STAR feedback off -->
+  <button id="tabExtension" hidden>Extension tasks</button>
 </div>
 
 <div class="build">
@@ -858,6 +860,11 @@ function compile(){
     out.versionCode = lesson.versionCode || "";
   }
   if (lesson.perfectTarget) out.perfectTarget = lesson.perfectTarget;
+  /* Only the off ones are written down, and only on a standard assessment:
+     every assessment saved before this had STAR feedback. The topics and
+     response tasks are still saved with it, so turning it back on finds
+     them where they were. */
+  if (starOff()) out.star = false;
   /* For a student with nothing saved in a practical. Only written when
      the teacher wrote one; otherwise the site's own wording stands. */
   if (lesson.practical && String(lesson.absentStrength || "").trim()) out.absentStrength = lesson.absentStrength.trim();
@@ -1566,6 +1573,14 @@ function renderNow(){
     $("palAssess").hidden = !lesson.assessment || anyTask;
   }
   const list = $("list"); list.innerHTML = "";
+  /* With STAR feedback off the follow-up is one list for everyone, so the
+     tab opens straight onto it. Set here rather than only when the tab is
+     pressed, because several things clear respEditing on their way past. */
+  if (assessTab === "extension" && starOff()){
+    if (!lesson.extensions) lesson.extensions = [];
+    respEditing = "__ext";
+    $("palLesson").hidden = false; $("palAssess").hidden = true;
+  }
   /* an assessment is three pages: its questions, its feedback, its follow-up */
   if ((lesson.assessment || lesson.practical) && assessTab === "targets" && !respEditing){
     $("palLesson").hidden = true; $("palAssess").hidden = true;
@@ -1580,9 +1595,14 @@ function renderNow(){
                    : (lesson.topics[respEditing] && lesson.topics[respEditing].label) || respEditing;
     head.appendChild(el("h2","", respEditing === "__ext" ? "Extension tasks"
                                                         : "Response tasks \u2022 " + niceName));
-    const back = el("button","btn-ghost bmini2","Back to the list");
-    back.addEventListener("click", () => { respEditing = null; render(); schedulePreview(); });
-    head.appendChild(back);
+    if (assessTab === "extension"){
+      head.appendChild(el("p","hint",
+        "Everyone gets these at the bottom of their summary, behind a Finished early? tick box."));
+    } else {
+      const back = el("button","btn-ghost bmini2","Back to the list");
+      back.addEventListener("click", () => { respEditing = null; render(); schedulePreview(); });
+      head.appendChild(back);
+    }
     list.appendChild(head);
     const arr = respEditing === "__ext" ? (lesson.extensions || [])
                                         : (lesson.responses[respEditing] || []);
@@ -2459,14 +2479,9 @@ function setMode(assess, practical){
   $("palExtensionBtn").hidden = !!assess || !!practical;
   $("palAssess").hidden = !assess;
   /* Response tasks are handed out from the screen an assessment ends on,
-     practice ones included, so every kind has the tab. */
-  $("tabResponses").hidden = false;
-  ["tabQuestions","tabTargets","tabResponses"].forEach(id => {
-    const e = $(id);
-    if (e) e.classList.toggle("on", (id === "tabQuestions" && assessTab === "questions") ||
-                                    (id === "tabTargets" && assessTab === "targets") ||
-                                    (id === "tabResponses" && assessTab === "responses"));
-  });
+     practice ones included, so every kind has the tab, unless STAR feedback
+     is off, which paintAssessTabs decides. */
+  paintAssessTabs();
 
   saveDraft(); render(); schedulePreview();
   if (typeof paintBuildBar === "function") paintBuildBar();
@@ -2494,17 +2509,36 @@ on("modeHome", "click", () => {
 function setAssessTab(which){
   assessTab = which;
   respEditing = null;
-  ["tabQuestions","tabTargets","tabResponses"].forEach(id => {
-    const on2 = (id === "tabQuestions" && which === "questions") ||
-                (id === "tabTargets" && which === "targets") ||
-                (id === "tabResponses" && which === "responses");
-    const e = $(id); if (e) e.classList.toggle("on", on2);
-  });
+  paintAssessTabs();
   render();
+}
+/* An assessment can be given a mark and nothing more: no Strength and
+   Target, no response tasks, and in their place one set of extension tasks
+   that everyone gets on the summary. Only a standard assessment has the
+   choice. A practical's feedback is what it is marked with, and a lesson
+   has no feedback of this kind to turn off. */
+function starOff(){ return !!lesson.assessment && !lesson.practical && lesson.star === false; }
+/* The Topic tag on a question is there for the Strength and Target. */
+function topicTags(){ return !!lesson.assessment && !starOff(); }
+function paintAssessTabs(){
+  const off = starOff();
+  $("tabTargets").hidden = off;
+  $("tabResponses").hidden = off;
+  $("tabExtension").hidden = !off;
+  /* A tab that has just gone cannot be the one open. */
+  if ((off && (assessTab === "targets" || assessTab === "responses")) ||
+      (!off && assessTab === "extension")){
+    assessTab = "questions"; respEditing = null;
+  }
+  [["tabQuestions","questions"],["tabTargets","targets"],
+   ["tabResponses","responses"],["tabExtension","extension"]].forEach(([id, which]) => {
+    const e = $(id); if (e) e.classList.toggle("on", assessTab === which);
+  });
 }
 on("tabQuestions", "click", () => setAssessTab("questions"));
 on("tabTargets", "click", () => setAssessTab("targets"));
 on("tabResponses", "click", () => setAssessTab("responses"));
+on("tabExtension", "click", () => setAssessTab("extension"));
 
 /* ---------- the sentences behind Strength and Target ---------- */
 
@@ -3631,7 +3665,7 @@ function paintResponseTopics(into){
 let respEditing = null;
 /* The response list a practical gives every student, whatever their target. */
 const EVERYONE = "all";
-let assessTab = "questions";   // questions | targets | responses
+let assessTab = "questions";   // questions | targets | responses, or extension with STAR feedback off
 
 /* Every section starts folded away, so the palette is the same short list
    each time it is opened. It used to remember which ones were open, which
@@ -3774,6 +3808,31 @@ on("optionsBtn", "click", () => {
        + "twenty minutes is not twenty minutes at risk. Turned off, work only "
        + "reaches you when a student presses Finish or Save Work."]));
     w4.appendChild(row); box.appendChild(w4);
+
+    /* Only a standard assessment has STAR feedback to turn off, so nothing
+       else is shown the choice. */
+    if (lesson.assessment && !lesson.practical){
+      const w5 = el("div","bfield");
+      w5.appendChild(el("label","","STAR feedback"));
+      const row5 = el("div","brow");
+      const star = el("button","btn-ghost bmini2","");
+      const paintStar = () => {
+        star.textContent = "STAR feedback: " + (lesson.star !== false ? "on" : "off");
+        star.classList.toggle("right", lesson.star !== false);
+      };
+      star.addEventListener("click", () => {
+        lesson.star = lesson.star === false;
+        paintStar(); paintAssessTabs(); saveDraft(); render(); schedulePreview();
+      });
+      paintStar();
+      row5.appendChild(star);
+      row5.appendChild(helpDot(
+        ["On: each student gets a Strength and Target from the topics their questions are tagged "
+         + "with, and response tasks chosen from their target.",
+         "Off: they get their mark and nothing more, and the same extension tasks for everyone at "
+         + "the bottom of their summary. The tabs above change to Questions and Extension tasks."]));
+      w5.appendChild(row5); box.appendChild(w5);
+    }
 
     box.appendChild(versionField());
 
@@ -7134,6 +7193,7 @@ function fromCompiled(data, meta){
                 perfectTarget: data.perfectTarget || "", zeroStrength: data.zeroStrength || "",
                 absentStrength: data.absentStrength || "", absentTarget: data.absentTarget || "",
                 linger: data.linger !== false,
+                star: data.star !== false,
                 versionOf: data.versionOf || "", versionName: data.versionName || "",
                 versionNote: data.versionNote || "", versionCode: data.versionCode || "",
                 marking: data.marking || "score", outOf: data.outOf || 20,

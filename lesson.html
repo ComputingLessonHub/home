@@ -1684,7 +1684,7 @@ function arrangeAssessment(){
 
   const n = items.length;
   const rules = el("div","pg-item assess-rules");
-  rules.appendChild(el("h3","pg-h","Before you start"));
+  rules.appendChild(el("h3","pg-h","Reminders"));
   const list = el("ul");
   [ n === 1 ? "There is 1 question, on the next page."
             : "There are " + n + " questions, all on the next page, one after another.",
@@ -3374,7 +3374,7 @@ const TICK_HASH = 1344109433;
    early. Only its hash is here, for the same reason as the ticking code:
    the code itself is in CREATE-A-LESSON.md. A student who learned it could
    read the marked answers and then go back and change their own. */
-const REOPEN_HASH = 172224993;
+const REOPEN_HASH = 2089402103;
 const TICK_IDLE_MS = 180000;
 let teacherTicking = false, tickIdle = null, tickBar = null;
 function startTeacherTicking(){
@@ -8299,7 +8299,7 @@ async function assessmentFinish(){
     return;
   }
   const res = computeAssessment();
-  const st = computeST(res.byTopic);
+  const st = starOn() ? computeST(res.byTopic) : NO_STAR;
   if (OFFLINE) keepResultLocally(res, st);
 
   const sendMark = async () => {
@@ -8435,7 +8435,7 @@ function renderAssessmentComplete(justFinished, res, st, sent){
     return;
   }
   if (!res){ res = computeAssessment(); }
-  if (!st){ st = computeST(res.byTopic); }
+  if (!st){ st = starOn() ? computeST(res.byTopic) : NO_STAR; }
   const pct = Math.round(100*res.score/Math.max(1,res.outOf));
   const heading = resultHeading(pct);
   const box = doneShell(heading);
@@ -8555,6 +8555,8 @@ function renderAssessmentComplete(justFinished, res, st, sent){
   });
   /* the review lives inside the pop-up now, not on the page */
 
+  if (!starOn()){ markOnlySummary({ box, layout, cards, res, rev, seeBtn, justFinished }); return; }
+
   // what each question scored
   /* one card for the feedback, one for what to do next */
   // strength and target, in the first card
@@ -8627,6 +8629,78 @@ function renderAssessmentComplete(justFinished, res, st, sent){
       setTimeout(() => respHolder.classList.add("in"), 2750);
     }, 950);
   }
+}
+
+/* Whether this assessment gives STAR feedback. A teacher can switch it off
+   on a standard assessment in Lesson options: it is then given a mark and
+   nothing more, with no Strength and Target and no response tasks. */
+function starOn(){
+  return !(lesson && lesson.assessment && !lesson.practical && lesson.star === false);
+}
+const NO_STAR = { strength: "", target: "", targetTopic: null };
+
+/* The summary of an assessment with STAR feedback off: the mark, a way into
+   the marked work, anything a teacher has written, and then the extension
+   tasks. */
+function markOnlySummary(o){
+  const tn = teacherNote || {};
+  const teacherCard = feedbackCard({ comment: tn.comment });
+  if (teacherCard) o.cards.appendChild(teacherCard);
+  /* Nothing to put beside the mark, so it sits alone, as a practical does. */
+  else { o.cards.remove(); o.layout.classList.add("alone"); }
+  if (teacherTools) o.box.appendChild(markEditor(o.res));
+  const review = marksButton(o.res, o.rev);
+  o.seeBtn.addEventListener("click", () => review.open());
+  const holder = el("div","fadelast");
+  o.box.appendChild(holder);
+  assessmentExtension(holder);
+  const showAll = () => {
+    Array.from(o.cards.children).forEach(c => c.classList.add("in"));
+    o.box.querySelectorAll(".fadein").forEach(n => n.classList.add("in"));
+    holder.classList.add("in");
+  };
+  /* The mark lands first, then the rest, as with STAR feedback on. */
+  if (o.justFinished) setTimeout(showAll, 950); else showAll();
+}
+/* The same extension tasks for everyone, at the bottom of the summary behind
+   Finished early?, the way a lesson's are. Nothing chooses them: with no
+   target there is nothing to choose by. */
+function assessmentExtension(holder){
+  const tasks = (lesson && lesson.extensions) || [];
+  if (!tasks.length) return;
+  if (markingLocked && !spectate){
+    holder.appendChild(el("p","resp-waiting",
+      "Your extension tasks will open here once your teacher has finished marking."));
+    return;
+  }
+  const b = { type:"extension", id:"__assess_ext", title:"Extension tasks",
+              task:"Have a go at these while everyone else finishes.", blocks: tasks };
+  /* The summary is drawn again when they come back to it, and each drawing
+     builds these afresh. What is on screen now wins over what was saved when
+     the page opened, or the second drawing would put back an older answer. */
+  const ids = [];
+  const walk = (x) => { if (!x) return; if (x.id) ids.push(x.id); (x.blocks || []).forEach(walk);
+                         (x.options || []).forEach(op => (op.blocks || []).forEach(walk)); };
+  walk(b);
+  const keep = {};
+  ids.forEach(id => { if (fields[id]){ try{ keep[id] = fields[id].get(); }catch(e){} } });
+  const built = rExtension(b);
+  ids.forEach(id => {
+    const v = keep[id] !== undefined ? keep[id] : (restoredData ? restoredData[id] : undefined);
+    if (v !== undefined && fields[id]){ try{ fields[id].set(v); }catch(e){} }
+  });
+  const wrap = el("div","responses assess-ext");
+  built.section.hidden = false;
+  wrap.appendChild(built.section);
+  /* Offline nothing reaches the teacher until it is handed over, so the
+     buttons that do that come with them, as they do under response tasks. */
+  if (!spectate && OFFLINE){
+    const status = el("p","handin");
+    wrap.appendChild(status);
+    wrap.appendChild(saveButton(status));
+    if (linkPossible()) wrap.appendChild(pdfButton(status, false));
+  }
+  holder.appendChild(wrap);
 }
 
 /* A table in the review, drawn as the table it was, with each box showing
@@ -8717,7 +8791,7 @@ function reviewLabels(b, q){
    than write from nothing. Done on load, not when the summary is drawn, or a
    teacher would have to go and find the summary before the boxes filled. */
 function sendStrengthAndTarget(){
-  if (!lesson || !lesson.assessment || lesson.practical) return;
+  if (!lesson || !lesson.assessment || lesson.practical || !starOn()) return;
   if (!window.parent || window.parent === window) return;
   try{
     const st = computeST(computeAssessment().byTopic);

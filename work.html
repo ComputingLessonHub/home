@@ -1256,6 +1256,11 @@ function loadFeedback(row){
   $("fbStrength").value = f.strength || auto.strength || (awayWords ? awayWords.strength : fromList ? fromList.strength : "");
   $("fbTarget").value = f.target || auto.target || (awayWords ? awayWords.target : fromList ? fromList.target : "");
   paintBank("Strength"); paintBank("Target");
+  /* An assessment with STAR feedback switched off in the builder is given
+     a mark and nothing more, so there is no Strength or Target to write.
+     A comment still has its box. */
+  const noStar = !!(lessonJson && lessonJson.assessment && !lessonJson.practical && lessonJson.star === false);
+  ["fbStrengthWrap","fbTargetWrap"].forEach(id => { $(id).hidden = noStar; });
   $("fbMsg").textContent = away
     ? "Nothing is saved in this practical for this student, so these say they were not here. Change them if that is not right, then press Save."
     : fromList && (fromList.strength || fromList.target)
