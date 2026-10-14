@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview</title>
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+<script src="teacher.js"></script>
+<script src="lessonfile.js"></script>
+</head>
+<body class="pvpage">
+
+<div class="homebar pv-bar">
+  <div class="title" id="pvTitle">Preview</div>
+  <div class="subtabs worktabs pv-tabs" id="pvTabs">
+    <button data-tab="home">Home view</button>
+    <button data-tab="lesson">Lesson view</button>
+    <button data-tab="mark">Marking view</button>
+  </div>
+  <select id="pvVersion" title="Which version to preview" hidden></select>
+  <button class="btn-ghost" id="pvReset" title="Clear the pretend student's work and your feedback">Start again</button>
+</div>
+<p class="pv-note" id="pvNote">Sam Example is a pretend student. Nothing here reaches a class, and it is all gone when this tab is closed.</p>
+
+<div class="pv-stage" id="pvStage">
+  <div class="loading pv-wait" id="pvWait">
+    <div class="load-dots"><span></span><span></span><span></span></div>
+    <p class="loadmsg" id="pvWaitMsg">Getting the lesson ready</p>
+  </div>
+</div>
+
+<div class="modal-back" id="mBack" hidden><div class="modal" id="mBox"></div></div>
+
+<script>
+/* A lesson as a student meets it, and as a teacher marks it, without a real
+   student or a real class anywhere near it.
+
+   Not to be confused with preview.html, which is the builder's live preview
+   of one lesson page. This one runs three of the site's real pages side by
+   side, each in a frame of its own:
+
+     Home view     index.html, signed in as a pretend student who has been
+                   given this one lesson and nothing else
+     Lesson view   lesson.html, as that student
+     Marking view  work.html, View Work for a class of one
+
+   They are the real pages, not copies of them, so what is shown is exactly
+   what a class would see, and nothing here has to be kept in step with them.
+
+   What makes that safe is config.js. Every page loads it first, and inside a
+   frame of this page it calls hubSandbox.enter() below, which gives the page
+   storage of its own and answers its calls to the server from here. So:
+
+   - The pretend student's work never goes near the database, and a real
+     student's work left in this browser is never read or overwritten.
+   - The pretend server below holds one student's work, feedback and mark, so
+     feedback written in the Marking view is what the Home and Lesson views
+     show when they are next opened, which is the whole point of the page.
+   - Everything is held in this tab and goes when it is closed.
+
+   Only the lesson itself is real. It is fetched once, with the teacher's own
+   sign-in, from the database (or from the lessons folder when offline), and
+   handed to the frames whenever they ask for it. */
+"use strict";
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+
+const OFFLINE = !!(window.HUB && window.HUB.OFFLINE);
+const API = (window.HUB && window.HUB.API) || "";
+/* The address the frames believe the server is at. The real one where there
+   is one, so pictures in a lesson, which are fetched by an <img> and not by
+   anything this page can answer, still arrive. Every call a frame makes to
+   it by fetch is answered here, and never reaches it. Offline there is no
+   server at all, so it is an address that cannot exist. */
+const SERVER = (function(){
+  const real = (window.HUB && window.HUB.API) || "";
+  try{ return new URL(real || "https://preview.invalid").origin; }catch(e){ return "https://preview.invalid"; }
+})();
+
+const qs = new URLSearchParams(location.search);
+const lessonId = qs.get("id") || "";
+const STUDENT = { username: "sam.example", name: "Sam Example", group: "Preview class" };
+
+/* ---------------- what the pretend server holds ----------------
+   Kept as text, never as objects, so nothing a frame is handed is the same
+   object another frame or this page is holding. A frame changing its copy
+   would otherwise change everybody's. */
+let lessonText = "";       // the lesson, as JSON
+let meta = null;           // its catalogue row, for the home page's list
+let unitRow = null, yearRow = null;
+const work = new Map();    // lesson id -> { data, feedback, updated_at }
+const results = new Map(); // lesson id -> the results row
+/* Bumped by every write, so a frame can tell whether anything has changed
+   since it was drawn. Kept apart by who wrote it: the Lesson view starting
+   again because the student saved in it would throw away where they were. */
+const changed = { student: 0, teacher: 0 };
+
+function stamp(){ return new Date().toISOString().slice(0, 19).replace("T", " "); }
+
+/* ---------------- storage for each frame ----------------
+   One for the student and one for the teacher. The Home and Lesson views
+   share the student's, as two tabs of one student's browser would: the work
+   saved as they type is how a lesson opened from the home page finds it.
+   work.html and the lesson page inside it share the teacher's, because that
+   is how work.html hands the work to it. */
+function memoryStorage(seed){
+  const map = new Map(Object.entries(seed || {}));
+  return {
+    getItem(k){ k = String(k); return map.has(k) ? map.get(k) : null; },
+    setItem(k, v){ map.set(String(k), String(v)); },
+    removeItem(k){ map.delete(String(k)); },
+    clear(){ map.clear(); },
+    key(i){ const keys = Array.from(map.keys()); return i >= 0 && i < keys.length ? keys[i] : null; },
+    get length(){ return map.size; }
+  };
+}
+/* Only the display settings come across from the real browser, so the
+   preview has the background and font the teacher has chosen. */
+function realPrefs(){
+  const out = {};
+  try{ const p = localStorage.getItem("hub_prefs"); if (p) out.hub_prefs = p; }catch(e){}
+  return out;
+}
+let stores = null;
+function freshStores(){
+  stores = {
+    student: {
+      local: memoryStorage(Object.assign(realPrefs(), {
+        hub_token: "preview", hub_name: STUDENT.name, hub_group: STUDENT.group, hub_user: STUDENT.username
+      })),
+      session: memoryStorage()
+    },
+    teacher: {
+      local: memoryStorage(realPrefs()),
+      /* work.html only asks whether there is a sign-in; the pretend server
+         takes anything. */
+      session: memoryStorage({ hub_ttoken: "preview" })
+    }
+  };
+}
+
+/* ---------------- the pretend server ----------------
+   Answers what the home page, the lesson page and View Work ask of the real
+   one, in the same shapes. backend/api is what these are copied from; a page
+   that starts asking for something new gets a plain refusal, said in the
+   console, rather than a guess. */
+function catalogueFor(role){
+  const row = Object.assign({
+    lesson_id: lessonId, unit: unitRow.name, position: 0, published: 1,
+    title: meta.title, description: meta.description || "",
+    assessment: meta.assessment ? 1 : 0, close_on: "", subunit: meta.subunit || "",
+    point: "", version_of: "", version_name: "", version_note: "", version_code: ""
+  });
+  let l = {};
+  try{ l = JSON.parse(lessonText); }catch(e){}
+  row.practical = !!(l.assessment && l.practical);
+  row.practice = !!(row.practical && l.practiceAssessment);
+  const out = { units: [unitRow], years: [yearRow], lessons: [row] };
+  if (role === "teacher"){
+    out.assignments = [{ lesson_id: lessonId, group_name: STUDENT.group, published: 1, release_at: "", close_on: "" }];
+    out.points = [];
+  }
+  return out;
+}
+function workRow(id){ return work.get(id) || null; }
+function route(role, method, path, q, b){
+  const id = q.get("lesson") || "";
+  if (method === "GET"){
+    if (path === "/api/catalog"){
+      if (id) return id === lessonId ? [200, { lesson: JSON.parse(lessonText) }] : [404, { error: "No such lesson." }];
+      return [200, catalogueFor(role)];
+    }
+    if (path === "/api/release"){
+      if (q.get("all") === "1") return [200, { rows: [] }];
+      /* Every page open, as though the teacher had opened the lot from
+         Manage. A class nobody has managed yet starts with the pages after
+         the first task shut, and the summary with them, so the pretend
+         student could never finish and the feedback on the summary could
+         never be seen. */
+      return [200, { locks: [], released: 9999, managed: true, lessonLocked: false, markingLocked: false }];
+    }
+    if (path === "/api/work"){
+      if (q.get("done") === "1"){
+        const done = [];
+        work.forEach((w, k) => { try{ if (JSON.parse(w.data).__done) done.push(k); }catch(e){} });
+        return [200, { done }];
+      }
+      if (q.get("feedback") === "1"){
+        const feedback = [];
+        work.forEach((w, k) => {
+          if (w.feedback && k !== "__practice_sandbox")
+            feedback.push({ lesson_id: k, feedback: w.feedback, updated_at: w.updated_at });
+        });
+        return [200, { feedback }];
+      }
+      const w = workRow(id);
+      return [200, w ? { data: JSON.parse(w.data), feedback: w.feedback || "", updatedAt: w.updated_at }
+                     : { data: null, feedback: "" }];
+    }
+    if (path === "/api/results"){
+      const rows = [];
+      results.forEach((r, k) => rows.push({ lesson_id: k, score: r.score, out_of: r.out_of,
+        strength: r.strength, target: r.target, grade: r.grade, kind: r.kind, updated_at: r.updated_at }));
+      return [200, { results: rows }];
+    }
+    if (path === "/api/teacher/students")
+      return [200, { students: [{ id: 1, username: STUDENT.username, display_name: STUDENT.name, pw_set: 1, reset_req: "" }] }];
+    if (path === "/api/teacher/work"){
+      const w = workRow(id);
+      return [200, { rows: w ? [{ group_name: STUDENT.group, display_name: STUDENT.name, username: STUDENT.username,
+                                   data: JSON.parse(w.data), feedback: w.feedback || "", updated_at: w.updated_at }] : [] }];
+    }
+    if (path === "/api/teacher/results"){
+      const r = results.get(id);
+      return [200, { rows: r ? [Object.assign({ group_name: STUDENT.group, display_name: STUDENT.name }, r)] : [] }];
+    }
+    if (path === "/api/teacher/teachers") return [200, { teachers: [] }];
+  }
+  if (method === "POST"){
+    if (path === "/api/login")
+      return [200, { token: "preview", name: STUDENT.name, group: STUDENT.group }];
+    if (path === "/api/submit"){
+      const lesson = String(b.lesson || "");
+      if (!lesson || !b.data || typeof b.data !== "object") return [400, { error: "Nothing to hand in." }];
+      const had = workRow(lesson) || {};
+      work.set(lesson, { data: JSON.stringify(b.data), feedback: had.feedback || "", updated_at: stamp() });
+      changed.student++;
+      return [200, { ok: true }];
+    }
+    if (path === "/api/assessment"){
+      const lesson = String(b.lesson || "");
+      const had = results.get(lesson) || {};
+      results.set(lesson, {
+        score: parseInt(b.score, 10) || 0, out_of: parseInt(b.outOf, 10) || 1,
+        breakdown: JSON.stringify(b.breakdown || {}),
+        strength: String(b.strength || ""), target: String(b.target || ""),
+        seconds: parseInt(b.seconds, 10) || 0, kind: b.kind === "exam" ? "exam" : "",
+        overrides: had.overrides || "", grade: had.grade || "", updated_at: stamp()
+      });
+      changed.student++;
+      return [200, { ok: true }];
+    }
+    if (path === "/api/teacher/feedback"){
+      const lesson = String(b.lesson || "");
+      const note = { strength: String(b.strength || ""), target: String(b.target || ""),
+                     comment: String(b.text || b.comment || "") };
+      if (b.ticks && typeof b.ticks === "object" && Object.keys(b.ticks).length) note.ticks = b.ticks;
+      const had = workRow(lesson) || { data: "{}" };
+      work.set(lesson, { data: had.data, feedback: JSON.stringify(note), updated_at: stamp() });
+      changed.teacher++;
+      return [200, { ok: true }];
+    }
+    if (path === "/api/teacher/set-mark"){
+      const lesson = String(b.lesson || "");
+      const had = results.get(lesson) || { breakdown: "", seconds: 0, kind: "", strength: "", target: "" };
+      const score = Math.max(0, parseInt(b.score, 10) || 0);
+      const outOf = Math.max(1, parseInt(b.outOf, 10) || 1);
+      const grade = String(b.grade || "");
+      /* As the server does: a Strength or Target left empty here keeps the
+         one already there. */
+      results.set(lesson, Object.assign({}, had, {
+        score: score, out_of: outOf, grade: grade, overrides: JSON.stringify(b.overrides || {}),
+        strength: b.strength ? String(b.strength) : had.strength,
+        target: b.target ? String(b.target) : had.target,
+        updated_at: stamp()
+      }));
+      changed.teacher++;
+      return [200, { ok: true, score: score, outOf: outOf, grade: grade }];
+    }
+  }
+  console.info("Preview: nothing answers " + method + " " + path + " here.");
+  return [404, { error: "That is not part of the preview." }];
+}
+
+/* ---------------- the frames ----------------
+   Made the first time their tab is opened, and kept after that, so moving
+   between tabs does not lose a student's place or a half written Strength. */
+const START = {
+  home:   () => "index.html",
+  lesson: () => "lesson.html?id=" + encodeURIComponent(lessonId),
+  mark:   () => "work.html?lesson=" + encodeURIComponent(lessonId) + "&group=" + encodeURIComponent(STUDENT.group)
+};
+const ROLE = { home: "student", lesson: "student", mark: "teacher" };
+const frames = {};
+let current = "";
+
+function makeFrame(tab, src){
+  const f = document.createElement("iframe");
+  f.className = "pv-frame";
+  f.dataset.tab = tab;
+  f.title = { home: "The student's home page", lesson: "The lesson, as the student sees it",
+              mark: "View Work, as you see it" }[tab];
+  f.setAttribute("allow", "fullscreen");
+  f.src = src || START[tab]();
+  $("pvStage").appendChild(f);
+  frames[tab] = f;
+  return f;
+}
+/* The top frame of this page that a window is in: itself, or the frame
+   holding it, for the lesson page inside View Work. */
+function frameOf(win){
+  let w = win;
+  try{ while (w.parent && w.parent !== window && w.parent !== w) w = w.parent; }catch(e){ return null; }
+  return w.parent === window ? w.frameElement : null;
+}
+
+window.hubSandbox = {
+  enter(win){
+    const frame = frameOf(win);
+    if (!frame || !frame.dataset.tab) return;
+    const tab = frame.dataset.tab;
+    const role = frame.dataset.role || ROLE[tab];
+    const box = stores[role];
+    try{
+      Object.defineProperty(win, "localStorage", { value: box.local, configurable: true });
+      Object.defineProperty(win, "sessionStorage", { value: box.session, configurable: true });
+    }catch(e){ console.error("Preview could not give the page storage of its own.", e); }
+
+    const realFetch = win.fetch.bind(win);
+    win.fetch = function(input, init){
+      init = init || {};
+      let url = null;
+      try{ url = new URL((input && typeof input === "object" && input.url) ? input.url : String(input), win.location.href); }catch(e){}
+      if (!url || url.origin !== SERVER) return realFetch(input, init);
+      const method = String(init.method || "GET").toUpperCase();
+      let body = {};
+      try{ if (init.body) body = JSON.parse(init.body); }catch(e){}
+      let answer;
+      try{ answer = route(role, method, url.pathname, url.searchParams, body || {}); }
+      catch(e){ console.error(e); answer = [500, { error: "The preview could not answer that." }]; }
+      return Promise.resolve(new win.Response(JSON.stringify(answer[1]),
+        { status: answer[0], headers: { "Content-Type": "application/json" } }));
+    };
+    win.HUB.OFFLINE = false;
+    win.HUB.API = SERVER;
+
+    /* Leaving with unsaved work asks the browser to check first. Here the
+       work is in this tab whatever happens, and the question would come up
+       every time a tab is switched to and starts again. */
+    const realAdd = win.addEventListener.bind(win);
+    win.addEventListener = function(type){
+      if (type === "beforeunload") return;
+      return realAdd.apply(null, arguments);
+    };
+    /* View Work's PDF button opens a tab of its own. That tab would be
+       outside the preview and read whatever the real browser holds, so it is
+       opened over the frames here instead, as the same person. */
+    const realOpen = win.open ? win.open.bind(win) : null;
+    win.open = function(url, name, features){
+      let u = null;
+      try{ u = new URL(String(url || ""), win.location.href); }catch(e){}
+      if (u && u.origin === location.origin){ overlay(u.pathname.split("/").pop() + u.search + u.hash, role); return null; }
+      return realOpen ? realOpen(url, name, features) : null;
+    };
+
+    if (tab === "over" && win === frame.contentWindow){
+      win.close = closeOverlay;
+      const page = win.location.pathname.split("/").pop();
+      if (page === "admin.html" || page === "author.html") setTimeout(closeOverlay, 0);
+    }
+    if (win !== frame.contentWindow || tab === "over") return;
+    frame.dataset.seen = JSON.stringify(changed);
+    /* The pages link to each other, and in the preview each lives on its
+       own tab. A lesson opened from the home page opens in the Lesson view,
+       and the lesson's way back home goes to the Home view, so each tab
+       keeps the page its name promises. The builder and the console are
+       not part of the preview at all. */
+    const page = win.location.pathname.split("/").pop();
+    const there = page + win.location.search;
+    setTimeout(() => {
+      if (tab === "home" && page === "lesson.html"){
+        if (frames.lesson) frames.lesson.src = there; else makeFrame("lesson", there);
+        frame.src = START.home();
+        show("lesson", true);
+      } else if (tab === "lesson" && page === "index.html"){
+        frame.src = START.lesson();
+        show("home");
+      } else if (page === "admin.html" || page === "author.html"){
+        frame.src = START[tab]();
+      }
+    }, 0);
+  }
+};
+
+/* A page asked for a tab of its own. Shown over the frames. The PDF view
+   has a Close of its own, which closes the tab it thinks it is in and then
+   goes to the console; both of those close this instead (see enter), and
+   any of the three tabs in the bar closes it too. */
+function overlay(src, role){
+  closeOverlay();
+  const back = el("div","pv-over");
+  const f = document.createElement("iframe");
+  f.className = "pv-overframe";
+  f.dataset.tab = "over";
+  f.dataset.role = role;
+  f.src = src;
+  back.appendChild(f);
+  $("pvStage").appendChild(back);
+}
+function closeOverlay(){ document.querySelectorAll(".pv-over").forEach(n => n.remove()); }
+
+/* Work in a lesson is saved to the browser as the student types and reaches
+   the teacher when they press Save Work or Finish. In the preview the person
+   who typed it is the one now looking at it, and an empty View Work after
+   ten minutes of trying the lesson out reads as broken, so what the student
+   has typed is carried across before the Marking view opens, as though they
+   had just pressed Save Work. */
+function carryWorkAcross(){
+  const typed = stores.student.local.getItem("hub_work_" + lessonId);
+  if (!typed) return;
+  const had = workRow(lessonId);
+  if (had && had.data === typed) return;
+  work.set(lessonId, { data: typed, feedback: had ? had.feedback : "", updated_at: stamp() });
+  changed.student++;
+}
+
+function stale(frame, since){
+  let seen = {};
+  try{ seen = JSON.parse(frame.dataset.seen || "{}"); }catch(e){}
+  return since.some(k => (seen[k] || 0) !== changed[k]);
+}
+function reload(frame){ try{ frame.contentWindow.location.reload(); }catch(e){ frame.src = frame.src; } }
+
+/* Opening a tab brings it up to date with whatever the other two have done.
+   The home page is cheap to draw again and always is. The lesson starts
+   again only when the teacher has written something it would show, and the
+   marking screen only when the student has done something new: starting
+   either of them again otherwise would lose a place for nothing.
+   `fresh` is a page that has just been sent there and is loading already. */
+function show(tab, fresh){
+  closeOverlay();
+  if (tab === "mark") carryWorkAcross();
+  const f = frames[tab];
+  if (!f) makeFrame(tab);
+  else if (!fresh){
+    if (tab === "home" && current !== "home") reload(f);
+    else if (tab === "lesson" && stale(f, ["teacher"])) reload(f);
+    else if (tab === "mark" && stale(f, ["student"])) reload(f);
+  }
+  current = tab;
+  Object.keys(frames).forEach(k => frames[k].classList.toggle("on", k === tab));
+  document.querySelectorAll("#pvTabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  try{ sessionStorage.setItem("hub_pv_tab", tab); }catch(e){}
+}
+document.querySelectorAll("#pvTabs button").forEach(b =>
+  b.addEventListener("click", () => show(b.dataset.tab)));
+
+$("pvReset").addEventListener("click", () => {
+  work.clear(); results.clear();
+  changed.student++; changed.teacher++;
+  freshStores();
+  closeOverlay();
+  Object.keys(frames).forEach(k => { frames[k].remove(); delete frames[k]; });
+  show(current || "home");
+});
+
+/* ---------------- the pop-up, for signing in ---------------- */
+function openModal(build){
+  const box = $("mBox");
+  box.className = "modal";
+  box.innerHTML = "";
+  build(box);
+  $("mBack").hidden = false;
+}
+function closeModal(){ $("mBack").hidden = true; }
+
+/* ---------------- getting the lesson ---------------- */
+function waitSay(text, dots){
+  $("pvWait").hidden = false;
+  $("pvWaitMsg").textContent = text;
+  $("pvWait").querySelector(".load-dots").hidden = !dots;
+}
+
+/* The teacher's catalogue: which unit and year the lesson is filed in, for
+   the home page's list, and the versions of it, for the picker in the bar. */
+async function teacherCatalogue(){
+  if (OFFLINE){
+    const file = await window.lessonFile.load();
+    return {
+      units: file.units.map(u => ({ name: u.name, year: u.year })),
+      years: [],
+      lessons: file.lessons.map(l => ({
+        lesson_id: l.id, title: l.title, description: l.description, unit: l.unit, year: l.year,
+        assessment: l.assessment, version_of: l.versionOf, version_name: l.versionName
+      }))
+    };
+  }
+  const r = await fetch(API + "/api/catalog", { headers: window.teacherAuth.headers(), cache: "no-store" });
+  if (window.teacherAuth.rejected(r.status)){ const e = new Error("signin"); e.signIn = true; throw e; }
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || "Could not reach the lessons.");
+  return d;
+}
+async function fetchLesson(){
+  if (OFFLINE){
+    const r = await fetch("lessons/" + encodeURIComponent(lessonId) + ".json", { cache: "no-store" });
+    if (!r.ok) throw new Error("There is no lessons/" + lessonId + ".json.");
+    return await r.text();
+  }
+  const r = await fetch(API + "/api/catalog?lesson=" + encodeURIComponent(lessonId),
+                        { headers: window.teacherAuth.headers(), cache: "no-store" });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || "Could not open that lesson.");
+  return JSON.stringify(d.lesson);
+}
+
+function versionPicker(cat){
+  const all = cat.lessons || [];
+  const root = (meta && meta.version_of) || lessonId;
+  const family = all.filter(l => l.lesson_id === root).concat(all.filter(l => (l.version_of || "") === root));
+  if (family.length < 2) return;
+  const sel = $("pvVersion");
+  family.forEach(l => {
+    const o = document.createElement("option");
+    o.value = l.lesson_id;
+    o.textContent = l.version_of ? (l.version_name || "Version") : "The original";
+    sel.appendChild(o);
+  });
+  sel.value = lessonId;
+  sel.hidden = false;
+  /* A different version is a different lesson, with nothing of this one's
+     work in it, so it starts the whole page again. */
+  sel.addEventListener("change", () => {
+    location.replace("lessonpreview.html?id=" + encodeURIComponent(sel.value));
+  });
+}
+
+/* Opened straight from a bookmark, or from a console whose sign-in has
+   since run out. Asking is better than a page that says nothing. */
+function askToSignIn(){
+  waitSay("Sign in to preview this lesson.", false);
+  openModal(box => window.teacherAuth.form(box, { close: closeModal, then: boot,
+    why: "Sign in to preview this lesson." }));
+}
+
+async function boot(){
+  if (!lessonId){ waitSay("Open a lesson's Preview from the Lesson Hub.", false); return; }
+  if (!OFFLINE && !API){ waitSay("This copy of the site has no server address in config.js.", false); return; }
+  if (!OFFLINE && !window.teacherAuth.have()){
+    const kept = window.teacherAuth.kept();
+    if (kept){ try{ sessionStorage.setItem("hub_ttoken", kept); }catch(e){} }
+  }
+  if (!OFFLINE && !window.teacherAuth.have()) return askToSignIn();
+  waitSay("Getting the lesson ready", true);
+  let cat;
+  try{
+    [cat, lessonText] = await Promise.all([teacherCatalogue(), fetchLesson()]);
+  }catch(e){
+    if (e.signIn){
+      /* What it was holding was refused, so it is no use trying again */
+      window.teacherAuth.forget();
+      return askToSignIn();
+    }
+    waitSay(e.message === "Failed to fetch" ? "Could not reach the server." : e.message, false);
+    return;
+  }
+  let lesson = {};
+  try{ lesson = JSON.parse(lessonText); }catch(e){ waitSay("That lesson is damaged.", false); return; }
+  meta = (cat.lessons || []).find(l => l.lesson_id === lessonId) ||
+         { lesson_id: lessonId, title: lesson.title || lessonId, unit: "" };
+  if (!meta.title) meta.title = lesson.title || lessonId;
+  if (meta.assessment === undefined) meta.assessment = !!lesson.assessment;
+  /* A lesson filed nowhere still has to sit under a heading on the home
+     page, so it is given one. */
+  const unitName = meta.unit || "Lessons";
+  const unit = (cat.units || []).find(u => u.name === unitName) || { name: unitName, year: meta.year || "" };
+  unitRow = { name: unit.name, year: unit.year || "", position: 0 };
+  const year = (cat.years || []).find(y => y.name === unitRow.year);
+  yearRow = { name: unitRow.year, position: 0, level: (year && year.level) || "KS3" };
+
+  document.title = "Preview · " + meta.title;
+  $("pvTitle").textContent = "Preview • " + meta.title;
+  versionPicker(cat);
+  freshStores();
+  $("pvWait").hidden = true;
+  let start = "home";
+  try{ start = sessionStorage.getItem("hub_pv_tab") || "home"; }catch(e){}
+  show(START[start] ? start : "home");
+}
+boot();
+</script>
+</body>
+</html>
