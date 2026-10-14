@@ -4727,22 +4727,8 @@ html[data-arrive=off] body > *:not(script):not(.modal-back):not(#hubTint):not(.c
 
 /* ---------- versions of a lesson ----------
    All new names, so nothing above is overridden and the mobile rules in the
-   middle of this file still win where they apply. What these do need is their
-   own answer for a narrow screen, which is at the bottom of this block rather
-   than back up there. */
+   middle of this file still win where they apply. */
 .verlist{display:flex; flex-direction:column; gap:10px; margin:6px 0 12px}
-.vercard{
-  background:var(--panel-2); border:1.5px solid var(--line);
-  border-radius:var(--rad-md); padding:14px 16px;
-  /* A list, not a notice: a pop-up centres its words and a column of version
-     names and notes reads as a poem that way. */
-  text-align:left;
-}
-.ver-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
-.ver-head b{font-size:var(--text-lg)}
-.ver-note{margin:6px 0 0; font-size:var(--text-md); color:var(--muted); line-height:1.5}
-.ver-who{margin:6px 0 0; font-size:var(--text-base); color:var(--amber-dark); font-weight:700}
-.vercard .lp-acts{margin-top:12px}
 
 /* What this lesson is a version of, in the builder's Lesson options. */
 .vernow{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 6px; font-size:var(--text-md)}
@@ -4758,11 +4744,6 @@ html[data-arrive=off] body > *:not(script):not(.modal-back):not(#hubTint):not(.c
 .ov-row.vrow.on{border-color:var(--mint); background:color-mix(in srgb, var(--mint) 8%, transparent)}
 .ov-row.vrow .pick-unit{white-space:normal; line-height:1.4}
 
-@media (max-width:560px){
-  .vercard{padding:12px 13px}
-  .ver-head b{font-size:var(--text-lg)}
-  .ver-note,.ver-who{font-size:var(--text-base)}
-}
 
 
 /* ---------- Practice, and the sandbox ----------
@@ -6241,3 +6222,39 @@ body.scratch-fullpage{overflow:hidden}
 .scratch-starter-err{margin:0; color:var(--red); font-weight:700; font-size:var(--text-md)}
 .scratch-starter-box{flex:1; min-height:0; border:1.5px solid var(--line-2); border-radius:var(--rad-md);
   overflow:hidden; background:var(--panel-2)}
+
+/* ---------- the lesson Preview (lessonpreview.html) ----------
+   A bar, one line saying the student is pretend, and the three views filling
+   the rest of the window. Each view is a frame laid over the others and only
+   the one on show is visible: hidden with visibility rather than display, so
+   a frame out of sight keeps its layout and does not draw itself at nought
+   pixels wide when it is next shown. Nothing here is used by any other page,
+   so being at the end of the file beats nothing it should not. */
+body.pvpage{height:100vh; height:100dvh; overflow:hidden; display:flex; flex-direction:column; margin:0}
+.pv-bar{flex:none; gap:14px; padding-top:10px; padding-bottom:10px; flex-wrap:wrap; row-gap:8px}
+.pv-bar .title{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.pv-tabs{margin:0}
+.pv-tabs button{padding:8px 16px; font-size:14.5px}
+.pv-bar select{width:auto; max-width:220px}
+.pv-note{flex:none; margin:0; padding:6px 24px; font-size:14px; color:var(--muted);
+  border-bottom:1px solid var(--line); background:var(--panel-2)}
+.pv-stage{position:relative; flex:1; min-height:0}
+.pv-wait{position:absolute; inset:0}
+.pv-frame{position:absolute; inset:0; width:100%; height:100%; border:0; display:block;
+  background:var(--bg); visibility:hidden}
+.pv-frame.on{visibility:visible}
+.pv-over{position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; background:var(--bg)}
+.pv-overframe{flex:1; min-height:0; width:100%; border:0; display:block}
+@media (max-width:760px){
+  .pv-bar{padding-left:16px; padding-right:16px; gap:8px}
+  .pv-bar .title{flex:1 1 0}
+  .pv-tabs{order:3; width:100%}
+  .pv-tabs button{flex:1; padding:8px 6px; font-size:13.5px}
+  .pv-note{padding:6px 16px; font-size:13px}
+}
+
+/* The Edit pop-up in the Lesson Hub: the original as the main button, the
+   versions listed under it, and a new version as a quieter button so it
+   reads as something else rather than one more version. */
+.edit-original{display:block; width:100%; margin:6px 0 12px; padding:13px 18px; font-size:16px}
+.edit-newversion{display:block; margin:0 auto 10px; font-size:14.5px}

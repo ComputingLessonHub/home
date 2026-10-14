@@ -1934,70 +1934,6 @@ const versionNote = (l) => l.version_of
   ? (l.version_note || "Nothing written down about what has changed.")
   : "The lesson as it was written.";
 
-/* How many classes hold one particular version. Counted off the same list the
-   lesson cards use, so the two can never disagree. */
-function classCount(id){
-  const n = classChoices(id).filter(c => c.given).length;
-  return n ? n + " class" + (n === 1 ? "" : "es") : "No classes yet";
-}
-
-/* Everything that exists of one lesson. Versions are made in the builder, so
-   this lists them and says how: a Make button here would open the builder
-   with an empty lesson in it, which is not how anybody wants to start. */
-function versionsPopup(id){
-  const root = rootOf(id);
-  openModal(box => {
-    /* Roomy rather than wide: a list of versions and what changed in each
-       needs the width, but wide also left-aligns the heading, which on a phone
-       runs a two line title underneath the cross in the corner. */
-    box.classList.add("roomy");
-    const x = el("button","btn-ghost iconbtn modal-x","✕");
-    x.title = "Close";
-    x.addEventListener("click", closeModal);
-    box.appendChild(x);
-    modalTitle(box, "Versions of “" + titleOf(root) + "”");
-    const list = el("div","verlist");
-    familyOf(root).forEach(l => {
-      const card = el("div","vercard");
-      const head = el("div","ver-head");
-      head.appendChild(el("b","", versionName(l)));
-      if (l.version_code) head.appendChild(el("span","statechip shut", l.version_code));
-      card.appendChild(head);
-      card.appendChild(el("p","ver-note", versionNote(l)));
-      if (!OFFLINE) card.appendChild(el("p","ver-who", classCount(l.lesson_id)));
-      const acts = el("div","lp-acts");
-      const give = el("button","btn-ghost", OFFLINE ? "Get link" : "Give to classes");
-      give.addEventListener("click", () => OFFLINE ? shareLink(l.lesson_id) : distribute(l.lesson_id));
-      const edit = el("button","btn-ghost","Edit");
-      edit.title = "Open this one in the builder";
-      edit.addEventListener("click", () => window.open("author.html?edit=" + encodeURIComponent(l.lesson_id), "_blank"));
-      const mk = el("button","btn-ghost","New version");
-      mk.title = "Start from this one and save it as another version";
-      mk.addEventListener("click", () => { closeModal(); newVersionPopup(l.lesson_id); });
-      acts.appendChild(give); acts.appendChild(edit); acts.appendChild(mk);
-      /* Buttons rather than a menu behind the dots. A menu inside a pop-up is
-         drawn inside the part that scrolls, so a wide one runs off the left of
-         the card and is cut off with no way to reach the rest of it. There is
-         room for all four out here now. Deleting the original is done from its
-         own card in the hub, so only a version offers it. */
-      if (l.version_of){
-        const del = el("button","btn-ghost","Delete");
-        del.addEventListener("click", () => { closeModal(); deleteLesson(l.lesson_id); });
-        acts.appendChild(del);
-      }
-      card.appendChild(acts);
-      list.appendChild(card);
-    });
-    box.appendChild(list);
-    box.appendChild(el("p","hint",
-      "New version starts from the one beside it. Whichever you start from, what you save is "
-      + "another version of “" + titleOf(root) + "”."));
-    scrollBody(box);
-  });
-}
-
-
-
 /* The name, what has changed and whose it is, asked here rather than once the
    builder has opened. Two reasons for it being this way round. The console
    already knows the teachers and the other versions, so it can offer the one
@@ -2006,21 +1942,38 @@ function versionsPopup(id){
    a tab they now have to go and close.
 
    What is filled in rides along on the address, and the builder saves it as a
-   version of its own as soon as the lesson is on the screen. */
+   version of its own as soon as the lesson is on the screen.
+
+   Where there are versions already, it asks which one to start from. That
+   used to be a New version button beside each one in the Versions pop-up,
+   which has gone into Edit; the choice it gave had to come with it. */
 function newVersionPopup(fromId){
   const root = rootOf(fromId);
-  const startsFrom = catOf(fromId).version_of
-    ? "“" + versionOfId(fromId) + "”"
-    : "the lesson as it is now";
+  const family = familyOf(root);
   const taken = versionsOf(root).map(v => (v.version_name || "").trim().toLowerCase());
   openModal(box => {
     modalTitle(box, "A new version of “" + titleOf(root) + "”");
     box.appendChild(el("p","modal-text",
-      "It starts from " + startsFrom + " and opens in the lesson builder as a version of its "
-      + "own. Nothing that exists is changed."));
+      "It opens in the lesson builder as a version of its own. Nothing that exists is changed."));
 
     const nameIn = fieldRow(box, "What is this version called?", "text", "");
     nameIn.placeholder = "Lower ability";
+
+    let fromSel = null;
+    if (family.length > 1){
+      const fromWrap = el("div","field");
+      fromWrap.appendChild(el("label","","Start from"));
+      fromSel = document.createElement("select");
+      family.forEach(l => {
+        const o = document.createElement("option");
+        o.value = l.lesson_id;
+        o.textContent = l.version_of ? versionName(l) : "The original";
+        fromSel.appendChild(o);
+      });
+      fromSel.value = fromId;
+      fromWrap.appendChild(fromSel);
+      box.appendChild(fromWrap);
+    }
 
     const noteWrap = el("div","field");
     noteWrap.appendChild(el("label","","What has changed?"));
@@ -2056,7 +2009,8 @@ function newVersionPopup(fromId){
         return;
       }
       closeModal();
-      window.open("author.html?edit=" + encodeURIComponent(fromId) + "&version=new" +
+      const from = fromSel ? fromSel.value : fromId;
+      window.open("author.html?edit=" + encodeURIComponent(from) + "&version=new" +
                   "&vname=" + encodeURIComponent(name) +
                   "&vnote=" + encodeURIComponent(noteIn.value.trim().slice(0, 300)) +
                   "&vcode=" + encodeURIComponent(codeSel.value), "_blank");
@@ -2072,64 +2026,58 @@ function newVersionPopup(fromId){
   });
 }
 
-/* Edit is a decision now rather than a default. Opening the original when a
+/* Edit is a decision rather than a default. Opening the original when a
    version was meant, or the other way round, changes the lesson a class is
-   actually doing, and Save writes over it with nothing to undo it with. So
-   the choice is put in front of whoever is making it, worded by what each one
-   changes rather than by which file it opens.
+   actually doing, and Save writes over it with nothing to undo it with.
 
-   A new version opens the builder with version=new on the address, which is
-   what makes it offer the name, what has changed and whose it is as soon as
-   the lesson is on the screen. */
+   It also stands in for the Versions pop-up that used to sit beside it: every
+   version is listed here as one button, so finding a version and opening it
+   is the same press. It used to explain what each choice would change in a
+   sentence apiece, which nobody read; one line under the list says it once.
+
+   Opened from a class's card on a version, that version is picked out, so
+   the one the class is doing is the one the eye lands on. */
 function editLesson(id){
-  const version = catOf(id).version_of ? (cat.lessons || []).find(l => l.lesson_id === id) : null;
   const root = rootOf(id);
-  const others = versionsOf(root);
-  /* Offline there are no classes, so what changes is what anybody opening
-     the link sees. */
-  const sees = (what) => OFFLINE ? "Anyone opening " + what + " sees the change."
-                                 : "Every class on " + what + " sees the change.";
   const open = (which) => {
     closeModal();
     window.open("author.html?edit=" + encodeURIComponent(which), "_blank");
   };
-  /* A new version asks what it is called before anything opens, so the builder
-     arrives already knowing and nothing has to be filled in twice. */
-  const newVersion = (from) => { closeModal(); newVersionPopup(from); };
   openModal(box => {
     box.classList.add("roomy");
     modalTitle(box, "Edit “" + titleOf(root) + "”");
-    const list = el("div","verlist");
-    const choice = (title, note, go) => {
-      const row = el("button","ov-row vrow");
-      const words = el("span","pick-lesson");
-      words.appendChild(el("span","t", title));
-      words.appendChild(el("span","pick-unit", note));
-      row.appendChild(words);
-      row.appendChild(el("span","edit","Open →"));
-      row.addEventListener("click", go);
-      list.appendChild(row);
-    };
-    if (version){
-      choice("This version · " + versionName(version),
-             sees("it") + " The original is left as it is.",
-             () => open(id));
-      choice("The original",
-             sees("the original") + " No version is touched.",
-             () => open(root));
-      choice("A new version",
-             "Starts from this version and is saved as another version of “" +
-             titleOf(root) + "”. Nothing that exists is changed.",
-             () => newVersion(id));
-    } else {
-      choice("This lesson",
-             sees("it") + (others.length ? " Its versions are not touched." : ""),
-             () => open(id));
-      choice("A new version",
-             "Starts from this lesson and is saved as a version of its own. This lesson is left as it is.",
-             () => newVersion(id));
+    box.appendChild(el("p","modal-text","Do you want to edit:"));
+    /* The original is what most edits are for, so it is the big button.
+       The versions are a list under it, and a new version is a quiet
+       button at the bottom, so it is not mistaken for one more of them. */
+    const original = el("button","btn-primary edit-original",
+      catOf(root).assessment ? "The original assessment" : "The original lesson");
+    original.addEventListener("click", () => open(root));
+    box.appendChild(original);
+    const versions = versionsOf(root);
+    if (versions.length){
+      const list = el("div","verlist");
+      versions.forEach(v => {
+        const row = el("button","ov-row vrow");
+        const words = el("span","pick-lesson");
+        words.appendChild(el("span","t", versionName(v)));
+        if (v.version_code) words.appendChild(el("span","pick-unit", v.version_code));
+        row.appendChild(words);
+        row.appendChild(el("span","edit","→"));
+        if (v.lesson_id === id) row.classList.add("on");
+        row.addEventListener("click", () => open(v.lesson_id));
+        list.appendChild(row);
+      });
+      box.appendChild(list);
     }
-    box.appendChild(list);
+    /* A new version asks what it is called before anything opens, so the
+       builder arrives already knowing and nothing has to be filled in twice. */
+    const fresh = el("button","btn-ghost edit-newversion","+ A new version");
+    fresh.addEventListener("click", () => { closeModal(); newVersionPopup(id); });
+    box.appendChild(fresh);
+    box.appendChild(el("p","hint", OFFLINE
+      ? "Anyone opening the one you edit sees the change."
+      : "Every class on the one you edit sees the change."));
     const no = el("button","btn-ghost modal-stay","Cancel");
     no.addEventListener("click", closeModal);
     box.appendChild(no);
@@ -2156,6 +2104,23 @@ function versionChoice(box, family, holding, pick){
     list.appendChild(row);
   });
   box.appendChild(list);
+}
+
+/* Give to classes and Delete on a hub card, for a lesson with versions. The
+   Versions pop-up used to be the only way to give out or delete a version,
+   and it has gone, so these ask which one first. A lesson with no versions
+   goes straight on: a pop-up offering one option is a press for nothing. */
+function whichVersion(id, question, then){
+  const family = familyOf(id);
+  if (family.length < 2) return then(id);
+  openModal(box => {
+    modalTitle(box, question);
+    versionChoice(box, family, "", (chosen) => { closeModal(); then(chosen); });
+    const no = el("button","btn-ghost modal-stay","Cancel");
+    no.addEventListener("click", closeModal);
+    box.appendChild(no);
+    scrollBody(box);
+  });
 }
 
 /* Giving a lesson to this class, asking first where there is a choice to be
@@ -2530,20 +2495,25 @@ function lessonCards(list, box){
         : "Not given to any class yet"));
     }
     const acts = el("div","lp-acts");
+    const giveIt = () => whichVersion(l.lesson_id, "Which one do you want to give out?",
+      (v) => OFFLINE ? shareLink(v) : distribute(v));
+    const deleteIt = () => whichVersion(l.lesson_id, "Which one do you want to delete?",
+      (v) => deleteLesson(v));
+    const previewIt = () => window.open("lessonpreview.html?id=" + encodeURIComponent(l.lesson_id), "_blank");
     const give = el("button","btn-primary", OFFLINE ? "Get link" : "Give to classes");
-    give.addEventListener("click", () => OFFLINE ? shareLink(l.lesson_id) : distribute(l.lesson_id));
+    give.addEventListener("click", giveIt);
+    const pv = el("button","btn-ghost","Preview");
+    pv.title = "See it as a student does, and try marking it";
+    pv.addEventListener("click", previewIt);
     const edit = el("button","btn-ghost","Edit");
     edit.addEventListener("click", () => editLesson(l.lesson_id));
     const del = el("button","btn-ghost","Delete");
-    del.addEventListener("click", () => deleteLesson(l.lesson_id));
-    const vers = el("button","btn-ghost","Versions");
-    vers.title = "The versions of this lesson, and what has changed in each";
-    vers.addEventListener("click", () => versionsPopup(l.lesson_id));
+    del.addEventListener("click", deleteIt);
     acts.appendChild(give);
-    if (narrow()) acts.appendChild(overflowMenu([["Versions", () => versionsPopup(l.lesson_id)],
+    if (narrow()) acts.appendChild(overflowMenu([["Preview", previewIt],
                                                  ["Edit", () => editLesson(l.lesson_id)],
-                                                 ["Delete", () => deleteLesson(l.lesson_id)]]));
-    else { acts.appendChild(vers); acts.appendChild(edit); acts.appendChild(del); }
+                                                 ["Delete", deleteIt]]));
+    else { acts.appendChild(pv); acts.appendChild(edit); acts.appendChild(del); }
     card.appendChild(acts);
     grid.appendChild(card);
   });
