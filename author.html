@@ -948,6 +948,17 @@ function answerLines(b){
   const n = Math.round(Number(b && b.lines));
   return n >= 1 ? Math.min(30, n) : 4;
 }
+/* A coding task's checklist as it is saved. Copied, conditions and all,
+   because settleCheck fills in a missing kind and compiling should not
+   change the lesson being edited. Done in the checklist pop-up does the
+   same, but a lesson can be saved without that pop-up ever being opened. */
+function savedChecks(checks, kinds){
+  return checks.filter(c => (c.label || "").trim())
+    .map(c => settleCheck(Object.assign({}, c,
+      Array.isArray(c.more) ? { more: c.more.map(m => Object.assign({}, m)) } : {},
+      c.marks === undefined ? {} : { marks: Math.max(0, parseInt(c.marks, 10) || 0) }), kinds));
+}
+
 function compileOne(b, id, target){
   id = blockId(b, id);
   noteCompiledId(b, id);
@@ -1052,11 +1063,7 @@ function compileOne(b, id, target){
         const keys = earlierCodeTasks(b).map(e => e.task.key).filter(Boolean);
         if (keys.length) blk.checksFrom = keys;
       }
-      if (Array.isArray(b.checks) && b.checks.length){
-        blk.checks = b.checks.filter(c => (c.label || "").trim())
-                             .map(c => Object.assign({}, c,
-                               c.marks === undefined ? {} : { marks: Math.max(0, parseInt(c.marks, 10) || 0) }));
-      }
+      if (Array.isArray(b.checks) && b.checks.length) blk.checks = savedChecks(b.checks, PY_CHECKS);
       if (b.title) blk.title = b.title;              // headings stay optional
       if (b.task) blk.task = b.task;
       if (b.turtle) blk.turtle = true;
@@ -1113,11 +1120,7 @@ function compileOne(b, id, target){
       const blk = { type:"web", id, html: b.html || "", css: b.css || "", js: b.js || "",
                     files: (b.files && b.files.length) ? b.files : ["html","css","js"] };
       if (b.addFiles === true) blk.addFiles = true;
-      if (Array.isArray(b.checks) && b.checks.length){
-        blk.checks = b.checks.filter(c => (c.label || "").trim())
-                             .map(c => Object.assign({}, c,
-                               c.marks === undefined ? {} : { marks: Math.max(0, parseInt(c.marks, 10) || 0) }));
-      }
+      if (Array.isArray(b.checks) && b.checks.length) blk.checks = savedChecks(b.checks, WEB_CHECKS);
       if (b.title) blk.title = b.title;
       if (b.task) blk.task = b.task;
       if (b.expect) blk.expect = b.expect;
@@ -2834,6 +2837,48 @@ function settleKind(c, scratch){
     c.count = "1";
 }
 
+/* The kind a condition starts as. "The code contains" is the Python one;
+   a web task has no such kind, and a condition made as one there could
+   never be run, so the line it was on could never tick. */
+function condKind(kinds){
+  return kinds.some(k => k[0] === "codeHas") ? "codeHas" : "fileHas";
+}
+
+/* Every line the page works out has to say what kind of check it is. The
+   dropdown shows the first kind when there is none, but the page does not
+   guess: a line with no kind is reported as broken, every student sees "!"
+   and it can never tick. A line switched over from Teacher arrives like
+   that, because a teacher-checked line has no kind to keep. So whatever
+   the dropdown would show is written down, here, before it is shown.
+
+   The exception is a line that already has words in it the first kind
+   cannot use: "high_score=0" as "Uses a..." is broken too, and so is any
+   text as "Has this tag..." with no tag. "The code contains...", or "A file
+   contains..." on a web task, is what those words were asking for. */
+function settleCheck(c, kinds){
+  if (!c || c.manual === true) return c;
+  if (!c.kind){
+    let kind = kinds[0][0];
+    const said = String(c.value || "").trim().toLowerCase();
+    if (said && ((picksFromList(kind) && USES_OPTIONS.indexOf(said) < 0) ||
+                 (kind === "tag" && !String(c.selector || "").trim())))
+      kind = condKind(kinds);
+    c.kind = kind;
+  }
+  settleKind(c);
+  /* A condition with no kind is the same broken line. So is a web task's
+     "The code contains...", which every condition on one used to be made
+     as; "A file contains..." is the web task's word for it, and a value
+     already typed into it still means the same thing there. */
+  const webOnly = !kinds.some(k => k[0] === "codeHas");
+  (Array.isArray(c.more) ? c.more : []).forEach(m => {
+    if (!m) return;
+    if (!m.kind || (webOnly && m.kind === "codeHas")) m.kind = condKind(kinds);
+    settleKind(m);
+  });
+  return c;
+}
+
 /* ---------- what the conditions add up to ----------
    Written out in letters rather than in the conditions themselves, which
    would be a paragraph. A is the line's own check and the rest follow it down
@@ -2935,6 +2980,9 @@ function checklistPopup(block, isWeb){
       if (!block.checks.length)
         list.appendChild(el("p","hint","Nothing yet, press \u201c+ New check\u201d."));
       block.checks.forEach((c, i) => {
+        /* so the kind the card shows is the kind the line has, including on
+           a lesson that was saved without one */
+        settleCheck(c, kinds);
         const shut = !open.has(c);
         const card = el("div","qsub checkcard");
         const head = el("div","qsub-head checkhead");
@@ -3052,7 +3100,12 @@ function checklistPopup(block, isWeb){
         mbtn.type = "button";
         mbtn.title = manual ? "You tick this off when you look at their work"
                             : "The page works this one out on its own";
-        mbtn.addEventListener("click", () => { c.manual = !manual; saveDraft(); paint(); });
+        /* Coming back from Teacher, the line has no kind of its own. */
+        mbtn.addEventListener("click", () => {
+          c.manual = !manual;
+          settleCheck(c, kinds);
+          saveDraft(); paint();
+        });
         whoField.appendChild(mbtn);
         topRow.appendChild(whoField);
         /* Nothing to look for when a person is doing the looking. The card has
@@ -3163,7 +3216,7 @@ function checklistPopup(block, isWeb){
             o.value = k[0]; o.textContent = k[1];
             kindSel.appendChild(o);
           });
-          kindSel.value = m.kind || "codeHas";
+          kindSel.value = m.kind || condKind(kinds);
           kindSel.addEventListener("change", () => {
             m.kind = kindSel.value; settleKind(m); saveDraft(); paint();
           });
@@ -3179,7 +3232,7 @@ function checklistPopup(block, isWeb){
           scopeSel.addEventListener("change", () => { m.scope = scopeSel.value; saveDraft(); });
           /* the output and the number of runs are not in the code, so
              narrowing to lines found earlier would look in the wrong place */
-          scopeSel.disabled = !readsCode(m.kind || "codeHas");
+          scopeSel.disabled = !readsCode(m.kind || condKind(kinds));
           top.appendChild(scopeSel);
 
           const del = el("button","btn-ghost bmini","\u00D7");
@@ -3197,7 +3250,7 @@ function checklistPopup(block, isWeb){
         });
         const addMore = el("button","btn-ghost bmini2 addcond","Add another condition");
         addMore.addEventListener("click", () => {
-          c.more.push({ join:"and", kind:"codeHas", value:"", scope:"all" });
+          c.more.push({ join:"and", kind:condKind(kinds), value:"", scope:"all" });
           open.add(c);
           saveDraft(); paint();
         });
@@ -3273,11 +3326,10 @@ function checklistPopup(block, isWeb){
     done.addEventListener("click", () => {
       block.checks = block.checks.filter(c => (c.label || "").trim());
       block.checks.forEach(c => {
-        settleKind(c);
+        settleCheck(c, kinds);
         /* styling that has been taken back off is not worth saving, and an
            empty one would beat the plain wording when the line is drawn */
         if (!plainWords(c.labelHtml)) delete c.labelHtml;
-        (Array.isArray(c.more) ? c.more : []).forEach(settleKind);
       });
       closeModal(); render(); schedulePreview();
     });
@@ -7093,6 +7145,11 @@ function fromCompiled(data, meta){
     if (made && b && b.fromTask) made.fromTask = b.fromTask;
     if (made && b && b.required === false) made.required = false;
     if (made && b && ["attempted","partial","full"].includes(b.gate)) made.gate = b.gate;
+    /* A checklist line saved with no kind (switched over from Teacher before
+       that was put right) is repaired as it opens, so the lesson is fixed by
+       opening it and saving it again. */
+    if (made && (made.type === "ide" || made.type === "web") && Array.isArray(made.checks))
+      made.checks.forEach(c => settleCheck(c, made.type === "web" ? WEB_CHECKS : PY_CHECKS));
     return made;
   };
   const backOne = (b) => {
