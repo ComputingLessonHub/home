@@ -869,6 +869,7 @@ function compile(){
        because there the rubric is the levels a student can aim for, and a
        teacher can say which one they reached without it being a grade. */
     if (out.marking !== "score" || practiceRun) out.rubric = (lesson.rubric || []).filter(g => g.name);
+    if (out.rubric && String(lesson.rubricNote || "").trim()) out.rubricNote = lesson.rubricNote.trim();
     out.practical = true;
     out.assessment = true;      // students and teachers treat it as an assessment
     if (practiceRun) out.practiceAssessment = true;
@@ -2484,6 +2485,21 @@ on("tabResponses", "click", () => setAssessTab("responses"));
 /* one row per task: click it to edit, arrows to move, cross to remove */
 /* Strength and Target, on its own page */
 /* How a practical is marked: out of a number, or against a rubric. */
+/* A rubric written before it could be styled is plain text with a line per
+   thing it asks for. Each line becomes a line, not one run-on paragraph. */
+function rubricStyled(text){
+  return String(text || "").split("\n").map(asStyled).join("<br>");
+}
+/* The plain lines a styled description says, one per bullet or paragraph,
+   for the places that can only show text. */
+function rubricPlain(html){
+  const d = document.createElement("div");
+  d.innerHTML = String(html || "");
+  d.querySelectorAll("br").forEach(n => n.replaceWith("\n"));
+  d.querySelectorAll("li, p, div").forEach(n => n.append("\n"));
+  return (d.textContent || "").split("\n").map(s => s.replace(/\s+/g, " ").trim())
+                              .filter(Boolean).join("\n");
+}
 /* The grades a practical can be given, each with what earns it. */
 function rubricPopup(){
   if (!lesson.rubric) lesson.rubric = [];
@@ -2495,6 +2511,16 @@ function rubricPopup(){
     box.appendChild(el("p","modal-text", lv
       ? "Put the highest level first. Students can read these while they work, and you can pick the one they reached when you mark."
       : "Put the best grade first. Teachers pick one of these when marking."));
+    /* What students are told before the levels themselves, which is how this
+       practical in particular is meant to be worked through. Left empty, the
+       rubric opens with no line under its heading at all. */
+    const noteField = el("div","bfield");
+    noteField.appendChild(el("label","","A line for students under the heading"));
+    const noteIn = el("textarea"); noteIn.rows = 2; noteIn.value = lesson.rubricNote || "";
+    noteIn.placeholder = "e.g. Work through the levels in order. Follow the checklist on the page.";
+    noteIn.addEventListener("input", () => { lesson.rubricNote = noteIn.value; saveDraft(); });
+    noteField.appendChild(noteIn);
+    box.appendChild(noteField);
     const list = el("div");
     box.appendChild(list);
     function paint(){
@@ -2534,8 +2560,18 @@ function rubricPopup(){
         card.appendChild(head);
         const d = el("div","bfield");
         d.appendChild(el("label","", lv ? "What is needed for this level" : "What is needed for this grade"));
-        const desc = el("textarea"); desc.rows = 2; desc.value = g.description || "";
-        desc.addEventListener("input", () => { g.description = desc.value; saveDraft(); });
+        /* Styled, with lists, so each thing a level asks for can be its own
+           bullet. description is kept in step as plain lines because the
+           marking screen shows it under the grade picker, which is a line of
+           text and not somewhere to draw HTML. */
+        const desc = window.richText(g.descriptionHtml || rubricStyled(g.description),
+          (html) => {
+            g.descriptionHtml = html;
+            g.description = rubricPlain(html);
+            saveDraft();
+          },
+          { pictures:false, code:"inline",
+            placeholder: lv ? "What is needed for this level" : "What is needed for this grade" });
         d.appendChild(desc);
         card.appendChild(d);
         list.appendChild(card);
@@ -6966,6 +7002,7 @@ function fromCompiled(data, meta){
                 versionOf: data.versionOf || "", versionName: data.versionName || "",
                 versionNote: data.versionNote || "", versionCode: data.versionCode || "",
                 marking: data.marking || "score", outOf: data.outOf || 20, rubric: data.rubric || [],
+                rubricNote: data.rubricNote || "",
                 topics: data.topics || {}, responses: {}, extensions: [], blocks: [] };
   /* Two things belong to every task whatever kind it is, and every branch
      below that builds a fresh object was dropping both.

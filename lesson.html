@@ -243,6 +243,15 @@ function applyHandedIn(box){
 }
 /* the card shown on the finished screen, matching an assessment's */
 /* Everything they did, on one scrollable page, in a pop-up. */
+/* What one grade or level asks for. The styled version is HTML a teacher
+   wrote, so it goes through the same cleaner as every other formatting box;
+   one written before styling existed is plain lines, kept as lines. */
+function rubricWords(g, cls){
+  const box = el("div", cls);
+  if (g.descriptionHtml && window.cleanRichText) box.innerHTML = window.cleanRichText(g.descriptionHtml);
+  else { box.textContent = g.description || ""; box.classList.add("plain"); }
+  return box;
+}
 /* All the grades and what each one needs, side by side. */
 function showRubric(){
   {
@@ -252,11 +261,15 @@ function showRubric(){
     x.addEventListener("click", () => back.remove());
     box.appendChild(x);
     box.appendChild(el("h2","","Rubric"));
+    /* How this practical is meant to be worked through, written by the
+       teacher for this one lesson. */
+    const note = String((lesson && lesson.rubricNote) || "").trim();
+    if (note) box.appendChild(el("p","rubric-note", note));
     const strip = el("div","rubricstrip");
     ((lesson && lesson.rubric) || []).forEach(g => {
       const col = el("div","rubriccol" + (myResult && myResult.grade === g.name ? " mine" : ""));
       col.appendChild(el("b","", g.name));
-      col.appendChild(el("p","", g.description || ""));
+      col.appendChild(rubricWords(g, "rubric-desc"));
       /* A practice one is not graded, so what a teacher picks is a level */
       if (myResult && myResult.grade === g.name)
         col.appendChild(el("span","rubricmine", lesson.practiceAssessment ? "Your level" : "Your grade"));
@@ -3135,6 +3148,125 @@ function gateWords(b){
   return "Get the task above right to open it.";
 }
 
+/* ---------- levelling up ----------
+   A coding task that carries on from the one above it, and is held back until
+   that one is done, is the next level of the same program: a practical built
+   up Warm Up, Level Up, Power Up, Go for Gold. Opening it is the moment a
+   student has earned something, so it gets more than the line under the task
+   vanishing. Nothing a teacher switches on: the carry-over and the hold are
+   what make it a level.
+
+   It never asks anything of the student. It cannot be clicked, it goes on
+   its own, and the page under it works the whole time. */
+function nextLevelOf(items, i){
+  const from = items[i - 1], to = items[i];
+  if (!from || !to || !from.block || !to.block) return false;
+  return from.block.type === "ide" && to.block.type === "ide"
+      && !!to.block.startFrom && to.block.startFrom === from.block.key
+      && GATE_LEVELS.includes(from.block.gate);
+}
+/* Every level of the program on this page, first to last, so the track can
+   show where this one sits in all of them. */
+function levelChain(items, i){
+  const codes = items.filter(e => e.block && e.block.type === "ide" && e.block.key);
+  const byKey = (k) => codes.find(e => e.block.key === k);
+  let first = items[i - 1];
+  const seen = new Set([first]);
+  while (first.block.startFrom && byKey(first.block.startFrom) && !seen.has(byKey(first.block.startFrom))){
+    first = byKey(first.block.startFrom);
+    seen.add(first);
+  }
+  const chain = [first];
+  for (;;){
+    const last = chain[chain.length - 1];
+    const next = codes.find(e => e.block.startFrom === last.block.key && chain.indexOf(e) < 0);
+    if (!next) break;
+    chain.push(next);
+  }
+  return chain;
+}
+/* "Level 2: Level Up" is level 2, called Level Up. A title that does not
+   say its own number is named by where it sits. */
+function levelName(entry, n){
+  const title = String((entry.block && entry.block.title) || entry.name || "").trim();
+  const m = title.match(/^(?:level|step|stage|part)\s*\d+\s*[:.\-–]\s*(.+)$/i);
+  return m ? m[1].trim() : (title || "Level " + n);
+}
+/* How long it takes, slowly, because it is the one thing on the page that
+   says the work has moved on. The level opens behind it as it fades. */
+const LEVELUP_SHOWN = 6000, LEVELUP_FADE = 650;
+function startLevelUp(items, i, open){
+  let started = false, opened = false;
+  const reveal = () => { if (opened) return; opened = true; open(); };
+  const play = () => {
+    if (started) return;
+    started = true;
+    playLevelUp(levelChain(items, i), items[i - 1], items[i], reveal);
+  };
+  items[i - 1].built.whenSettled(play);
+  /* The tick it waits for is all timers and should always land. If it ever
+     does not, the level still opens: a child left with nothing to do next is
+     the one outcome this must never have. */
+  setTimeout(play, 7000);
+  setTimeout(reveal, 7000 + LEVELUP_SHOWN + 1000);
+}
+let levelUpShowing = null;
+function playLevelUp(chain, from, to, reveal){
+  if (levelUpShowing) levelUpShowing.remove();
+  const at = chain.indexOf(from), next = chain.indexOf(to);
+  const back = el("div","lvlup");
+  back.setAttribute("role","status");
+  back.setAttribute("aria-live","polite");
+  const card = el("div","lvlup-card");
+  card.appendChild(tel("p","lvlup-kicker", "✓ " + levelName(from, at + 1) + " complete"));
+
+  const track = el("div","lvlup-track");
+  chain.forEach((entry, k) => {
+    if (k > 0){
+      const bar = el("span","lvlup-bar" + (k <= at ? " full" : k === next ? " filling" : ""));
+      bar.appendChild(el("i"));
+      track.appendChild(bar);
+    }
+    const state = k < at ? "done" : k === at ? "justdone" : k === next ? "unlock" : "locked";
+    const node = el("div","lvlup-node lv-" + state);
+    const dot = el("span","lvlup-dot");
+    if (state === "done") dot.appendChild(tel("b","lvlup-tick","✓"));
+    if (state === "justdone"){
+      dot.appendChild(tel("b","lvlup-num", String(k + 1)));
+      dot.appendChild(tel("b","lvlup-tick","✓"));
+    }
+    if (state === "unlock"){
+      dot.appendChild(el("span","lvlup-lock", LOCK_SVG));
+      dot.appendChild(tel("b","lvlup-num", String(k + 1)));
+    }
+    if (state === "locked") dot.appendChild(el("span","lvlup-lock", LOCK_SVG));
+    node.appendChild(dot);
+    node.appendChild(tel("span","lvlup-name", levelName(entry, k + 1)));
+    track.appendChild(node);
+  });
+  card.appendChild(track);
+
+  card.appendChild(tel("h2","lvlup-title", "Level " + (next + 1) + " unlocked!"));
+  const task = String((to.block && to.block.task) || "").trim();
+  const focus = el("p","lvlup-focus");
+  focus.appendChild(tel("b","", "Next focus: " + levelName(to, next + 1) + ". "));
+  if (task) focus.appendChild(el("span","", task));
+  card.appendChild(focus);
+  back.appendChild(card);
+  document.body.appendChild(back);
+  levelUpShowing = back;
+
+  setTimeout(() => {
+    back.classList.add("leaving");
+    reveal();
+    setTimeout(() => { back.remove(); if (levelUpShowing === back) levelUpShowing = null; }, LEVELUP_FADE);
+  }, LEVELUP_SHOWN);
+}
+/* A padlock whose shackle is its own path, so it can lift open. */
+const LOCK_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">' +
+  '<path class="lvlup-shackle" d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' +
+  '<rect x="5" y="11" width="14" height="10" rx="2.5" fill="currentColor"/></svg>';
+
 /* A page: several activities stacked together, one Continue at the end.
    This is how a Trinket-style page works, explanation, code, then questions. */
 function rPage(b){
@@ -3192,7 +3324,7 @@ function rPage(b){
     item.appendChild(built.section);
     slots.place(item, child);
     kids.push(built);
-    items.push({ item, built, type: child.type, name: bb.title || "" });
+    items.push({ item, built, type: child.type, name: bb.title || "", block: child });
     /* What finished means for an extension waiting on the page. A choice is
        left out: it offers a level to pick, and the one picked is the
        student's, so no single task in it is theirs to have done. A quiz the
@@ -3261,9 +3393,42 @@ function rPage(b){
       if (i === items.length - 1 && !extras.length) continue;
       shut = i; break;
     }
+    const hide = items.map((entry, i) => (shut !== -1 && i > shut) || !!entry.levelling);
+    const replaced = items.map(() => false);
+    /* Worked from the bottom up, because whether a level is still wanted
+       depends on whether the one after it is showing. */
+    for (let i = items.length - 1; i >= 0; i--){
+      const entry = items[i];
+      /* A level that has a later level showing has been replaced by it. The
+         program carried over, so the later one is everything the student
+         needs, and each level takes the place of the one before rather than
+         stacking under it. A teacher reading the work sees them all. */
+      /* Replaced by a level that is itself replaced counts too, or Level 1
+         came back the moment Level 3 took Level 2's place. */
+      if (!holdsOff && nextLevelOf(items, i + 1) && (!hide[i + 1] || replaced[i + 1])){
+        hide[i] = replaced[i] = true;
+        continue;
+      }
+      /* The next level of a program being built up task by task. It has just
+         been earned in front of us, so it waits behind the level-up rather
+         than appearing in the middle of the tick that earned it. */
+      if (!hide[i] && entry.item.hidden && nextLevelOf(items, i)
+          && items[i - 1].built.justCheered()){
+        entry.levelling = true;
+        hide[i] = true;
+        startLevelUp(items, i, () => {
+          entry.levelling = false;
+          refreshHold();
+          scrollStageTo(entry.item, () => {
+            entry.item.classList.add("justopened");
+            setTimeout(() => entry.item.classList.remove("justopened"), 1400);
+          });
+        });
+      }
+    }
     items.forEach((entry, i) => {
       const wasHidden = entry.item.hidden;
-      entry.item.hidden = shut !== -1 && i > shut;
+      entry.item.hidden = hide[i];
       /* Coming out from behind a task is being shown, the same as arriving on
          the page. A coding task that carries on from the one above it was
          drawn while that one was still empty, so this is the moment it can
@@ -3281,8 +3446,10 @@ function rPage(b){
     /* Extension work sits at the end of the page, so it is below the quiz as
        well. Somebody who has not passed it yet has not finished early. */
     extras.forEach(x => { x.section.hidden = shut !== -1; });
-    holdNote.hidden = shut === -1;
-    if (shut === -1) return;
+    /* "There is more on this page" under a level that is about to open is the
+       level-up saying the same thing worse. */
+    holdNote.hidden = shut === -1 || items.some(e => e.levelling);
+    if (holdNote.hidden) return;
     holdNote.textContent = items[shut].built.hold.words();
     /* The note goes after whatever the page itself holds, which is the row
        when the held task is sitting beside a picture rather than the task. */
@@ -4004,7 +4171,7 @@ function refreshChecklistMode(){
 /* Half a second between the program stopping and the tick, so the last line
    it printed is read as the program's own doing rather than as part of the
    tick arriving. */
-const CHEER_WAIT = 500, CHEER_SHOWN = 1000;
+const CHEER_WAIT = 500, CHEER_SHOWN = 1000, TICK_SETTLE = 900;
 
 /* Where to take the page when it does have to move. The whole list, so its
    heading is there to say what the glowing line is one of, unless the list is
@@ -4264,9 +4431,13 @@ function attachChecklist(section, checks, runner, blockId, b){
     }
     const all = list.show(results, fresh.length ? fresh : null);
     if (fresh.length){
-      cheering = true;
-      cheerChecklist(cheerOver, holder, list, fresh,
-                     () => { cheering = false; if (mine === showing) list.show(results); });
+      cheering++;
+      lastCheerAt = Date.now();
+      cheerChecklist(cheerOver, holder, list, fresh, () => {
+        if (mine === showing) list.show(results);
+        /* long enough for the last circle to pop and its glow to be seen */
+        setTimeout(() => { cheering = Math.max(0, cheering - 1); settle(); }, TICK_SETTLE);
+      });
     }
     markDirty();
     return all;
@@ -4278,7 +4449,8 @@ function attachChecklist(section, checks, runner, blockId, b){
      about what the program printed still wait for Run: the output they are
      judged on is the last run's, and that does not change as they type. The
      teacher can turn this off in the checklist pop-up. */
-  let cheering = false, typing = null;
+  /* `cheering` is the count declared below, for the level waiting on a tick. */
+  let typing = null;
   function typed(){
     if (!b || b.checksLive === false) return;
     clearTimeout(typing);
@@ -4297,9 +4469,27 @@ function attachChecklist(section, checks, runner, blockId, b){
       });
     }, 700);
   }
+  /* What the page waits on before opening the next level. The checklist
+     ticks itself the moment the program stops, which opens the level below
+     straight away, while the tick over the console and the line going green
+     are still a second or two off. A level that opened first would have
+     spoken over both. */
+  let cheering = 0, lastCheerAt = 0;
+  const waitingOnCheer = [];
+  function settle(){
+    if (cheering) return;
+    waitingOnCheer.splice(0).forEach(fn => { try{ fn(); }catch(e){} });
+  }
+  function whenSettled(fn){
+    if (!cheering) fn(); else waitingOnCheer.push(fn);
+  }
+  /* Whether this visit has just watched a run tick something off, as against
+     ticks put back from a save on opening the page. Only the first is
+     somebody finishing a level in front of us. */
+  const justCheered = () => cheering > 0 || Date.now() - lastCheerAt < 8000;
   /* An assessment adds a coding task up from these, so the result of the last
      run has to be readable rather than only drawn on the page. */
-  return { list, refresh, mark, typed, results: () => last };
+  return { list, refresh, mark, typed, results: () => last, whenSettled, justCheered };
 }
 
 /* The bubble that explains a word in a code box. It sits on <body>, fixed,
@@ -4866,6 +5056,9 @@ function rIDE(b){
 
   return { section:s,
            onShow: carryIn,
+           /* for the level-up between this task and the one carrying on from it */
+           whenSettled: (fn) => checklist ? checklist.whenSettled(fn) : fn(),
+           justCheered: () => !!(checklist && checklist.justCheered()),
            check:() => {
              if (!canRun) return { ok:true };            // nothing to run, nothing to wait for
              if (!ran) return { ok:false, message:"Press Run to try your code" };
@@ -6834,7 +7027,7 @@ function renderPracticalComplete(){
     const g = el("p","done-score", myResult.grade);
     hero.appendChild(g);
     const rub = ((lesson && lesson.rubric) || []).find(x => x.name === myResult.grade);
-    if (rub && rub.description) hero.appendChild(el("p","done-sub", rub.description));
+    if (rub && (rub.descriptionHtml || rub.description)) hero.appendChild(rubricWords(rub, "done-sub rubric-desc"));
   } else if (scored){
     hero.appendChild(el("p","done-score", myResult.score + " / " + myResult.outOf));
   }
