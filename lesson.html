@@ -2986,6 +2986,7 @@ async function tryFinish(){
     if (rocketUp) return;              // already on its way: a second press waits with it
   if (lesson && lesson.assessment){ assessmentFinish(); return; }
   finished = true;
+  tickWrittenCode();                 // before the save, so the ticks go with it
   save();
   sendExamMarks();                   // a lesson of exam questions still has a mark
   /* Sent first, behind the rocket, and the summary drawn with the answer,
@@ -4547,6 +4548,18 @@ function canTickManual(){
 /* The same lists as the page sees them, for what has to happen to each one
    when a teacher finishes ticking. */
 const attachedLists = [];
+/* One per coding task with a checklist: ticks off what the code already does
+   without it being run. Done when the lesson is finished, so a student who
+   wrote the print() and never pressed Run still has it ticked, for themselves,
+   for the teacher marking it and for the Strength and Target worked out from
+   those ticks. */
+const writtenTickers = [];
+function tickWrittenCode(){
+  if (spectate || workFrozen) return false;
+  let any = false;
+  writtenTickers.forEach(fn => { try{ if (fn()) any = true; }catch(e){} });
+  return any;
+}
 function refreshChecklistMode(){
   const on = canTickManual();
   allChecklists.forEach(l => {
@@ -4944,7 +4957,31 @@ function attachChecklist(section, checks, runner, blockId, b){
     lastCheerAt = Date.now();
   };
   attachedLists.push({ teacherDone });
-  return { list, refresh, mark, typed, results: () => last, whenSettled, justCheered,
+  /* The lines the code as it now stands already passes, ticked without Run
+     having been pressed. Only ever adds: a line ticked earlier stays ticked
+     and one still to do is left exactly as it was drawn, so nothing changes
+     on screen but the lines that have just been earned. Says whether it
+     ticked anything, so the caller knows there is something to save. */
+  function tickWritten(results){
+    if (!Array.isArray(results)) return false;
+    const had = list.ticked();
+    const given = list.getTeacher ? list.getTeacher() : {};
+    const gained = [];
+    results.forEach((r, i) => {
+      if (!r || r.manual || r.broken || !r.ok) return;
+      /* their own code does it now, so the tick is theirs, as on a run */
+      if (given[i]){ list.clearTeacher(i); gained.push(i); return; }
+      if (!had[i]) gained.push(i);
+    });
+    if (!gained.length) return false;
+    const hold = results.map((r, i) => i).filter(i => gained.indexOf(i) < 0);
+    list.show(results, hold);
+    /* checkFlags reads the last run's results before what is on screen, so
+       those have to learn about the new ticks or the save would not. */
+    if (Array.isArray(last)) gained.forEach(i => { last[i] = results[i]; });
+    return true;
+  }
+  return { list, refresh, mark, typed, tickWritten, results: () => last, whenSettled, justCheered,
            /* only kept when there is something in it, so ordinary work
               is saved exactly as it was */
            teacher: () => { const t = list.getTeacher(); return Object.keys(t).length ? t : undefined; },
@@ -5316,6 +5353,7 @@ function rIDE(b){
     if (ed.setRunError) ed.setRunError(res.ok ? null : (res.err || null));
     ran = true; runs++;
     runFailed = !res.ok;
+    ranCode = ta.value;
     if (checklist) checklist.refresh(cheerNext ? side : null);
     cheerNext = false;
     markDirty();
@@ -5329,7 +5367,7 @@ function rIDE(b){
      text it contains, and a tick there opened the next level on a program
      that does not run. Lines already ticked from an earlier run stay ticked:
      a mistake made since is not a reason to take back what was done. */
-  let runFailed = false;
+  let runFailed = false, ranCode = null;
   const mistakeShowing = () => runFailed || !!(ed.flagged && ed.flagged());
   const checklist = attachChecklist(s, b.checks, () => {
     const results = window.runPythonChecks(b.checks, ta.value, lastOut, runs);
@@ -5342,6 +5380,18 @@ function rIDE(b){
   if (allDone && !b.checks.length)
     s.insertBefore(el("p","ide-alldone","You ticked off everything on the checklist. " +
       "Use this time to make your program even better."), s.firstChild);
+
+  /* At the end of the lesson, what the code already does is ticked off
+     whether or not it was run. Lines about output and runs are still asked
+     of the last real run, since nothing else can answer them. Code nobody
+     has written in, the starter or what was carried in, earns nothing here.
+     A mistake holds new ticks back the same as on a run, but one Python
+     stopped on only counts while the code is still the code that stopped. */
+  if (checklist) writtenTickers.push(() => {
+    if (untouched()) return false;
+    if ((ed.flagged && ed.flagged()) || (runFailed && ta.value === ranCode)) return false;
+    return checklist.tickWritten(window.runPythonChecks(b.checks, ta.value, lastOut, runs));
+  });
 
   async function run(cheer){
     cheerNext = !!cheer;
@@ -5926,6 +5976,13 @@ function rWeb(b){
      run() so it can tick itself off once the page has been built. */
   const checklist = attachChecklist(s, b.checks,
     () => window.runWebChecks(b.checks, codeNow(), runs), b.id, b);
+  /* What the files already do, ticked at the end of the lesson without Run,
+     as in the Python task. Files still exactly as they started earn nothing. */
+  if (checklist) writtenTickers.push(() => {
+    const now = codeNow();
+    if (order.every(n => (code[n] || "") === (starters[n] || ""))) return false;
+    return checklist.tickWritten(window.runWebChecks(b.checks, now, runs));
+  });
 
   /* `cheer` is true only when a student pressed Run. The page runs this by
      itself when the task opens and again when saved work is put back, and
@@ -8855,6 +8912,11 @@ function achievementCard(){
   return card;
 }
 function showLessonComplete(revisit, justFinished, sentAlready){
+  /* Back on the summary, code written since the last visit gets its ticks
+     too, and goes to the teacher the way any change on this screen does.
+     Finishing has done this already, before its own save. Saved at the end,
+     once the summary is up, because that is what sends it on. */
+  const tickedNow = revisit && tickWrittenCode();
   const words = doneWords();
   const box = doneShell(words);
   const hero = heroBits(words, lesson.title + " complete");
@@ -8929,6 +8991,7 @@ function showLessonComplete(revisit, justFinished, sentAlready){
     status.textContent = "Saved earlier \u2713";
     paintSaveButtons("saved");
   }
+  if (tickedNow) markDirty();
 }
 
 /* ---------- Python via Pyodide ---------- */
