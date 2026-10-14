@@ -59,7 +59,7 @@
   </div>
       <div class="workframe"><iframe id="workFrame" title="Their work" allow="fullscreen"></iframe></div>
     </div>
-    <aside class="workside">
+    <aside class="workside" id="workSide">
       <!-- whose work it is, on the heading's own line, to leave the room for
            the boxes -->
       <h3 class="fbhead">Feedback <span id="fbWho"></span></h3>
@@ -104,6 +104,9 @@
           <button class="btn-ghost" id="saveFb">Save</button>
           <button class="btn-primary" id="saveNext" title="Ctrl + Enter">Save and next</button>
         </div>
+        <!-- While the list is being ticked, its own way on stands where Save
+             does: nothing is ready to save until the Target is agreed. -->
+        <div class="fbsave" id="fbListRow" hidden></div>
         <p class="hint" id="fbMsg"></p>
       </div>
     </aside>
@@ -1368,7 +1371,7 @@ function ticksChanged(row, byHand){
      the level off but these ticks, so the picker follows them. Picked by
      hand afterwards, it stays as picked until the next tick. */
   const pick = $("fbGrade");
-  if (byHand && fresh.reached !== null && fresh.reached !== undefined && !pick.hidden && !$("markWrap").hidden){
+  if (byHand && fresh.reached !== null && fresh.reached !== undefined && !pick.hidden && $("fbAsk").hidden && !$("markWrap").hidden){
     const name = fresh.reached >= 0 ? fresh.ladder[fresh.reached] : "";
     const match = Array.from(pick.options).find(o => o.value.trim().toLowerCase() === String(name).toLowerCase());
     pick.value = match ? match.value : "";
@@ -1424,7 +1427,7 @@ function checklistAuto(row){
      what that level asks for underneath. */
   const lv = window.progressMath.levelReached ? window.progressMath.levelReached(lessonJson, data) : null;
   if (lv && lv.next && target){
-    target = (/[.!?]$/.test(target) ? target : target + ".") + " Keep working to try to reach the next level.";
+    target = (/[.!?]$/.test(target) ? target : target + ".") + " Keep going and see how much further you can get.";
   }
   return { strength: strength, target: target };
 }
@@ -1839,7 +1842,7 @@ function listAuto(row){
   const lv = user ? levelFor(user) : null;
   const more = lv ? !!lv.next : (reached !== null && reached < ladder.length - 1);
   if (more && gap && target){
-    target = (/[.!?]$/.test(target) ? target : target + ".") + " Keep working to try to reach the next level.";
+    target = (/[.!?]$/.test(target) ? target : target + ".") + " Keep going and see how much further you can get.";
   }
   return { strength, target, reached, ladder };
 }
@@ -1862,6 +1865,14 @@ function paintList(row){
   box.hidden = off || listOpen.phase === "done";
   listBoxes(off || listOpen.phase === "done");
   paintListAgain(row, !off && listOpen.phase === "done");
+  /* Level reached and Save wait until the Target is agreed: the level is
+     what the ticks come to, and there is nothing to save before then. A
+     class rather than `hidden`, because paintMarking() owns that and the
+     picker it fills has to keep following the ticks underneath. */
+  $("workSide").classList.toggle("fbticking", !box.hidden);
+  const foot = $("fbListRow");
+  foot.innerHTML = "";
+  foot.hidden = box.hidden || listOpen.phase !== "levels";
   if (box.hidden) return;
   if (listOpen.phase === "strength" || listOpen.phase === "target"){ paintListCheck(row); return; }
   box.appendChild(el("p","bankhead","What have they done?"));
@@ -1914,17 +1925,19 @@ function paintList(row){
   });
   box.appendChild(dots);
   g.items.forEach(it => box.appendChild(listRow(row, it)));
-  /* the last level leads on to reading what the ticks have written */
+  /* Done ticking leads on to reading what the ticks have written, from any
+     level: a student who stopped early has nothing further on to tick. */
   const last = at === groups.length - 1;
-  const foot = el("div","fbask-yesno fblist-foot");
-  const next = el("button", last ? "btn-primary" : "btn-ghost", last ? "Done ticking" : "Next level ›");
-  next.type = "button";
-  next.addEventListener("click", () => {
-    if (!last){ listOpen.at = at + 1; paintList(row); return; }
-    listOpen.phase = "strength"; paintList(row);
-  });
-  foot.appendChild(next);
-  box.appendChild(foot);
+  const done = el("button", last ? "btn-primary" : "btn-ghost", "Done ticking");
+  done.type = "button";
+  done.addEventListener("click", () => { listOpen.phase = "strength"; paintList(row); });
+  foot.appendChild(done);
+  if (!last){
+    const next = el("button","btn-primary","Next level ›");
+    next.type = "button";
+    next.addEventListener("click", () => { listOpen.at = at + 1; paintList(row); });
+    foot.appendChild(next);
+  }
 }
 let listOpen = { user: null, at: null, phase: "levels" };
 
@@ -2142,7 +2155,7 @@ function saveNextKey(e){
   if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey) || e.repeat) return;
   const btn = $("saveNext");
   if ($("workPane").hidden || !$("mBack").hidden || document.querySelector(".whogate")) return;
-  if (!btn || btn.disabled || $("fbSaveRow").hidden) return;
+  if (!btn || btn.disabled || $("fbSaveRow").hidden || $("workSide").classList.contains("fbticking")) return;
   e.preventDefault();
   btn.click();
 }
