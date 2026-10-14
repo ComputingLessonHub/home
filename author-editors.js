@@ -1761,11 +1761,17 @@ EDITORS.caesar = function(b, k){
 EDITORS.short = function(b, k){
   const { F, R, listField, settings } = k;
   R("Question", "prompt", { rows:2 });
+  /* Under the question, where a reminder such as "Answer with just 1
+     word." is seen before anything is typed. */
+  R("Subheading (optional)", "note", { rows:2 });
   if (!Array.isArray(b.answers)) b.answers = [""];
   listField("Accepted answers", "answers",
     "The student has to type one of these. Capitals, extra spaces and stray " +
     "punctuation are ignored, so add a line only for answers that are really " +
-    "different, such as CPU and central processing unit.",
+    "different, such as CPU and central processing unit. The first one sets " +
+    "the word limit: a student who types more words than it has is told to " +
+    "keep their answer that long. Where it is a number, they are told to " +
+    "type just a number.",
     /* The note about the old keyword marking has been read and acted on the
        moment the list is touched, so it goes rather than sitting there for
        the rest of the afternoon. */

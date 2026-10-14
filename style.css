@@ -6440,3 +6440,9 @@ body.lpvpage{height:100vh; height:100dvh; overflow:hidden; display:flex; flex-di
 /* A label picture in the review, kept to a size that leaves the words
    under it in view. */
 .rev-label-pic{max-width:520px; margin:6px 0 4px}
+
+/* A short answer that has run past the length of the answer it is after:
+   a red line under the box saying how long it should be. */
+.short-toolong{color:var(--red); font-size:14px; font-weight:600; margin:6px 0 0}
+.short-toolong[hidden]{display:none}
+.short-row input.answer.too-long{border-color:var(--red)}

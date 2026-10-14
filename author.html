@@ -1268,6 +1268,7 @@ function compileOne(b, id, target){
     else if (b.type === "short")
       push(keepArrays({ type:"short", id, prompt: b.prompt || "",
         answers: (b.answers || []).map(x => String(x).trim()).filter(Boolean),
+        note: b.note || "",
         model: b.model || "", topic: lesson.assessment ? b.topic : "" }));
     else if (b.type === "table"){
       /* Every row squared off to the width of the headings, and a cell
@@ -7285,7 +7286,7 @@ function fromCompiled(data, meta){
         ? b.keywords.reduce((all, g) => all.concat(g), []).map(x => String(x).trim()).filter(Boolean)
         : window.shortAnswer.accepted(b);
       return { type:"short", prompt:b.prompt || "", answers: answers.length ? answers : [""],
-               wasKeywords: converted, model:b.model || "", topic:b.topic || "" };
+               wasKeywords: converted, model:b.model || "", note:b.note || "", topic:b.topic || "" };
     }
     if (b.type === "blanks") return { type:"blanks", prompt:b.prompt || "", text:b.text || "",
       distractors:(b.distractors || []).join(", "), topic:b.topic || "" };

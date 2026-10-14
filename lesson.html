@@ -8025,6 +8025,39 @@ function rShort(b){
   if (asked.code) s.appendChild(el("div","short-code", asked.code));
   s.appendChild(row);
 
+  /* A short answer is a word or two, and a student who writes a sentence
+     has usually not seen that. The first accepted answer is the one the
+     question is written around, so its length is the limit, and going past
+     it puts a red line under the box. Never over an answer the teacher
+     accepts: a longer form they listed (central processing unit for CPU)
+     is right, and telling a student to cut it down would be wrong. */
+  const mainAnswer = (window.shortAnswer.accepted(b) || [])[0] || "";
+  const wordsIn = (t) => (String(t || "").trim().match(/\S+/g) || []).length;
+  const wordLimit = wordsIn(mainAnswer);
+  /* Where the answer is a number, the thing to say is "a number", not "one
+     word": "sixty" and "it is 60" are both the wrong shape for it. Anything
+     that is not a plain number gets the line, even a word the teacher also
+     accepts, because the question asked for the number; it is still marked
+     right if they leave it. */
+  const isNumber = (t) => /^[-+]?\d+(\.\d+)?$/.test(String(t || "").trim());
+  const wantsNumber = isNumber(mainAnswer);
+  const tooLong = el("p","short-toolong");
+  tooLong.hidden = true;
+  tooLong.setAttribute("role","status");
+  tooLong.textContent = wantsNumber
+    ? "Make sure your answer is just a number"
+    : "Make sure your answer is only " + wordLimit + " word" + (wordLimit === 1 ? "" : "s") + " long";
+  s.appendChild(tooLong);
+  const paintLength = () => {
+    const over = wantsNumber
+      ? (ans.value.trim() !== "" && !isNumber(ans.value))
+      : wordLimit > 0 && wordsIn(ans.value) > wordLimit &&
+        !window.shortAnswer.mark(b, ans.value).ok;
+    tooLong.hidden = !over;
+    ans.classList.toggle("too-long", over);
+  };
+  ans.addEventListener("input", paintLength);
+
   /* In an assessment everything is marked at the end. In a lesson the student
      can check their own answer here and try again. */
   const inLesson = !(lesson && lesson.assessment);
@@ -8070,7 +8103,7 @@ function rShort(b){
     s.appendChild(fb);
   }
 
-  fields[b.id] = { get:() => ans.value, set:(v) => { ans.value = v || ""; } };
+  fields[b.id] = { get:() => ans.value, set:(v) => { ans.value = v || ""; paintLength(); } };
   return { section:s,
            check:() => ans.value.trim() ? { ok:true } : { ok:false, message:"Write an answer" },
            brief:{ eyebrow:"Short answer", text:b.note || "",
