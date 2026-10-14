@@ -51,6 +51,7 @@
     <button class="btn-ghost iconbtn" id="prevStu" title="Previous student">&larr;</button>
     <select id="stuPick"></select>
     <button class="btn-ghost iconbtn" id="nextStu" title="Next student">&rarr;</button>
+    <button class="btn-ghost" id="onlyUnmarked" aria-pressed="false" title="List and go to only the students with no saved feedback">Unmarked only</button>
     <button class="btn-ghost" id="viewMode">All on one page</button>
     <button class="btn-ghost" id="openPdf">PDF</button>
     <button class="btn-ghost" id="refreshWork" title="Fetch what has been saved since this page was opened">Refresh</button>
@@ -1003,16 +1004,52 @@ function paintPicker(){
   sel.innerHTML = "";
   const byName = {};
   roster.forEach(st => { (byName[st.display_name] = byName[st.display_name] || []).push(st); });
+  const only = unmarkedOnly();
   roster.forEach((st, i) => {
+    const marked = isMarked(st);
+    /* the student on screen stays in the list, or it would show somebody else */
+    if (only && marked && i !== idx) return;
     const o = document.createElement("option");
     o.value = String(i);
     const row = rows.find(r => r.username === st.username);
     const has = PRACTICE ? programsOf(row).length : !!row;
     o.textContent = st.display_name + pickerDisambig(st, byName[st.display_name]) +
-      (has ? "" : (PRACTICE ? "  \u00b7 no programs" : "  \u00b7 nothing saved"));
+      (marked ? "  \u00b7 \u2713 Saved" : has ? "" : (PRACTICE ? "  \u00b7 no programs" : "  \u00b7 nothing saved"));
     sel.appendChild(o);
   });
   sel.value = String(idx);
+  const btn = $("onlyUnmarked");
+  if (btn){
+    btn.hidden = PRACTICE;
+    btn.setAttribute("aria-pressed", only ? "true" : "false");
+    btn.classList.toggle("on", only);
+  }
+}
+/* Marked is feedback saved for them, the same thing the Save button says.
+   A class is marked in more than one sitting, so the ones done already are
+   marked in the list, and can be left out of it and out of Next altogether. */
+function isMarked(st){
+  if (PRACTICE || !st) return false;
+  return savedFeedback(rows.find(r => r.username === st.username));
+}
+const UNMARKED_KEY = "hub_mark_unmarked";
+function unmarkedOnly(){
+  if (PRACTICE) return false;
+  try{ return localStorage.getItem(UNMARKED_KEY) === "1"; }catch(e){ return false; }
+}
+/* The next student one way or the other, past anyone already marked when
+   only the unmarked are wanted, or -1 when there is nobody left that way. */
+function stepFrom(from, dir){
+  for (let i = from + dir; i >= 0 && i < roster.length; i += dir){
+    if (!unmarkedOnly() || !isMarked(roster[i])) return i;
+  }
+  return -1;
+}
+function goStep(dir, saved){
+  const i = stepFrom(idx, dir);
+  if (i >= 0){ showStudent(i); return; }
+  const word = unmarkedOnly() ? "Everyone is marked that way." : "That was the last one.";
+  $("fbMsg").textContent = (saved ? "Saved. " : "") + word;
 }
 window.addEventListener("message", (e) => {
   if (e && e.data && typeof e.data.hubWorkStep === "number"){
@@ -1080,7 +1117,9 @@ function showStudent(i, step){
   /* a practical assessment is marked by hand, so the boxes appear */
   paintMarking(st.username);
   loadFeedback(row);
-  paintFb("idle");
+  /* Their feedback is saved already, so the buttons say so and Next moves
+     on without saving it again, until something is changed. */
+  paintFb(savedFeedback(row) ? "saved" : "idle");
 }
 /* ---------------- one student's practice programs ----------------
    The sandbox itself, in the frame, reading the programs out of localStorage
@@ -1214,8 +1253,12 @@ async function saveProgFeedback(){
   }catch(e){ paintFb("idle"); $("fbMsg").textContent = e.message; return false; }
 }
 
-on("prevStu", "click", () => showStudent(idx - 1));
-on("nextStu", "click", () => showStudent(idx + 1));
+on("prevStu", "click", () => goStep(-1));
+on("nextStu", "click", () => goStep(1));
+on("onlyUnmarked", "click", () => {
+  try{ localStorage.setItem(UNMARKED_KEY, unmarkedOnly() ? "0" : "1"); }catch(e){}
+  paintPicker();
+});
 on("stuPick", "change", () => showStudent(parseInt($("stuPick").value, 10) || 0));
 on("viewMode", "click", () => {
   allPages = !allPages;
@@ -1292,7 +1335,12 @@ function feedbackMode(row, saved){
   }
   ask = null;
   showAsk(false);
-  listOpen = { user: (row && row.username) || "", at: null, phase: saved ? "done" : "levels" };
+  /* Every line a checklist line, each already ticked or not by the work:
+     the boxes already hold what the list would come to, so it waits behind
+     Change the ticks for the teacher who disagrees with one. */
+  const items = (PRACTICE || !lessonJson) ? [] : listItems(row).items;
+  const onlyChecklist = items.length > 0 && items.every(it => it.key === undefined);
+  listOpen = { user: (row && row.username) || "", at: null, phase: (saved || onlyChecklist) ? "done" : "levels" };
   paintList(row);
 }
 /* What the boxes are filled in from: the list, or for the questions what a
@@ -1753,7 +1801,7 @@ window.settingsSection = (holder) => {
 function savedFeedback(row){
   let f = {};
   try{ f = JSON.parse((row && row.feedback) || "{}") || {}; }catch(e){ f = {}; }
-  return !!(f.strength || f.target);
+  return !!(f.strength || f.target || f.comment);
 }
 /* Every line on the list with whether it is ticked for this student. */
 function listItems(row){
@@ -2045,7 +2093,11 @@ function paintFb(state){
   /* Pressed twice while the first save is still going, it would skip a
      student whose feedback nobody had looked at. */
   const next = $("saveNext");
-  if (next) next.disabled = state === "saving" || fbLocked();
+  if (next){
+    next.disabled = state === "saving" || fbLocked();
+    /* the same width either way: the row shares its space out, not by words */
+    next.textContent = state === "saved" ? "Next" : "Save and next";
+  }
 }
 ["fbStrength","fbTarget","fbComment","fbScore","fbGrade"].forEach(id => {
   const e = $(id);
@@ -2071,12 +2123,16 @@ async function submitFeedback(andNext){
   afterSave(await saveFeedback(), andNext);
 }
 function afterSave(ok, andNext){
+  if (ok) paintPicker();              // they are marked now
   if (!ok || !andNext) return;
-  if (idx + 1 < roster.length) showStudent(idx + 1);
-  else $("fbMsg").textContent = "Saved. That was the last one.";
+  goStep(1, true);
 }
 on("saveFb", "click", () => submitFeedback(false));
-on("saveNext", "click", () => submitFeedback(true));
+/* Next, with nothing changed since it was saved, only moves on */
+on("saveNext", "click", () => {
+  if ($("saveFb").dataset.saved === "yes" && !PRACTICE){ goStep(1); return; }
+  submitFeedback(true);
+});
 /* Ctrl + Enter is Save and next from anywhere on the marking screen, the
    feedback boxes included, so a class can be marked without the mouse. Not
    while a pop-up is open: that pop-up is asking something first. */
