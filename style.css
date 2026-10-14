@@ -495,7 +495,7 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:var
 }
 .paste-sub{font-size:var(--text-lg); color:var(--muted); margin:0 auto 20px; max-width:52ch; line-height:1.5}
 .paste-sub b{color:var(--text)}
-.paste-or{display:flex; justify-content:center}
+.paste-or{display:flex; justify-content:center; flex-wrap:wrap; gap:10px}
 .shot[hidden]{display:none}
 .shot-frame{position:relative; width:fit-content; max-width:100%; margin:0 auto 14px}
 .shot-img{

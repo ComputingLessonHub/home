@@ -7051,18 +7051,41 @@ function showPictureFull(src){
   }
 }
 
+/* Which screenshot task a paste belongs to. A step is usually a whole page,
+   not the task, and a page can hold more than one of these, so the one last
+   clicked wins, then the first on the page still waiting for a picture.
+   Checking the step's own section against the task's, as this used to,
+   meant a screenshot on any page was never pasted at all. */
+let imageTaskClicked = null;
+function pasteOwner(){
+  const here = steps[step] && steps[step].section;
+  if (!here) return null;
+  const tasks = (here.classList.contains("img-task") ? [here] : [])
+    .concat(Array.from(here.querySelectorAll(".img-task")))
+    .filter(t => t.offsetParent !== null);       // not inside a shut choice
+  if (tasks.indexOf(imageTaskClicked) >= 0) return imageTaskClicked;
+  return tasks.find(t => !t.__hasPicture()) || tasks[0] || null;
+}
+
 function rImage(b){
-  const s = el("section");
+  const s = el("section","img-task");
   let dataUrl = "";
+  s.__hasPicture = () => !!dataUrl;
+  s.addEventListener("pointerdown", () => { imageTaskClicked = s; });
 
   const zone = el("div","paste-zone");
   zone.appendChild(el("p","paste-big", "Press <kbd>Ctrl</kbd> + <kbd>V</kbd> to paste your screenshot"));
-  zone.appendChild(el("p","paste-sub", b.hint || "Take a screenshot first: hold <b>Windows</b> + <b>Shift</b> + <b>S</b> and drag a box around your work. Then click this page and press Ctrl + V."));
+  zone.appendChild(el("p","paste-sub", b.hint || "Take a screenshot first: hold <b>Windows</b> + <b>Shift</b> + <b>S</b> and drag a box around your work. Then press <b>Paste screenshot</b>, or Ctrl + V."));
   const orRow = el("div","paste-or");
-  const fileBtn = el("button","btn-ghost","or choose a picture file");
+  /* Ctrl + V is not something every child finds, and a keyboard is not
+     always there, so the clipboard has a button of its own. */
+  const pasteBtn = el("button","btn-primary","Paste screenshot");
+  pasteBtn.type = "button";
+  const fileBtn = el("button","btn-ghost","Browse pictures");
+  fileBtn.type = "button";
   const fileInp = el("input"); fileInp.type = "file"; fileInp.accept = "image/*";
   fileInp.style.display = "none";
-  orRow.appendChild(fileBtn); orRow.appendChild(fileInp);
+  orRow.appendChild(pasteBtn); orRow.appendChild(fileBtn); orRow.appendChild(fileInp);
   zone.appendChild(orRow);
   s.appendChild(zone);
 
@@ -7098,13 +7121,55 @@ function rImage(b){
       }
     });
   }
-  fileBtn.addEventListener("click", () => fileInp.click());
+  const NO_PICTURE = "There was no picture on the clipboard. Take a screenshot first with Windows + Shift + S.";
+  pasteBtn.addEventListener("click", async () => {
+    err.textContent = "";
+    if (!navigator.clipboard || !navigator.clipboard.read){
+      err.textContent = "Try to press Ctrl + V on your keyboard to paste the screenshot";
+      return;
+    }
+    let items;
+    try{ items = await navigator.clipboard.read(); }
+    catch(e){
+      /* Refused, or the browser's own "Allow" question was turned down. */
+      err.textContent = "Try to press Ctrl + V on your keyboard to paste the screenshot";
+      return;
+    }
+    for (const item of items){
+      const type = item.types.find(t => t.indexOf("image/") === 0);
+      if (type){ accept(new File([await item.getType(type)], "screenshot", { type })); return; }
+    }
+    err.textContent = NO_PICTURE;
+  });
+  /* A screenshot saved by Windows + Print Screen lands in Pictures, so the
+     picker starts there. Only Chrome and Edge can say where a picker opens;
+     anywhere else, or inside a frame that is not allowed one, the ordinary
+     file box opens wherever it last was. */
+  fileBtn.addEventListener("click", async () => {
+    if (window.showOpenFilePicker){
+      try{
+        const [handle] = await window.showOpenFilePicker({ startIn: "pictures", types: [{
+          description: "Pictures",
+          accept: { "image/png": [".png"], "image/jpeg": [".jpg", ".jpeg"], "image/gif": [".gif"],
+                    "image/webp": [".webp"], "image/bmp": [".bmp"] } }] });
+        accept(await handle.getFile());
+        return;
+      }catch(e){
+        if (e && e.name === "AbortError") return;    // they closed it without picking
+      }
+    }
+    fileInp.click();
+  });
   fileInp.addEventListener("change", () => { if (fileInp.files && fileInp.files[0]) accept(fileInp.files[0]); });
   redo.addEventListener("click", () => { shot.hidden = true; zone.hidden = false; });
 
-  // Ctrl+V anywhere on the page, but only while this activity is the one on screen.
+  // Ctrl+V anywhere on the page, but only into the screenshot task it is meant for.
   document.addEventListener("paste", (e) => {
-    if (!steps[step] || steps[step].section !== s) return;
+    if (pasteOwner() !== s) return;
+    /* Now that a page can hold this and a written answer together, a paste
+       into some other box on the page is that box's, picture or not. */
+    const into = e.target && e.target.closest && e.target.closest("input, textarea, [contenteditable]");
+    if (into && !s.contains(into)) return;
     const items = (e.clipboardData && e.clipboardData.items) || [];
     for (let i = 0; i < items.length; i++){
       if (items[i].type && items[i].type.indexOf("image") === 0){
@@ -7113,7 +7178,7 @@ function rImage(b){
         return;
       }
     }
-    err.textContent = "There was no picture on the clipboard. Take a screenshot first with Windows + Shift + S.";
+    err.textContent = NO_PICTURE;
   });
 
   fields[b.id] = {
