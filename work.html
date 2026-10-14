@@ -82,6 +82,12 @@
       <!-- Where a lesson has a bank of Strengths and Targets, a list of what
            it asks for is ticked off and writes the boxes below. Settings can
            swap it for a few Yes or No questions instead. -->
+      <!-- Only for a student with nothing saved. Ticked, the Strength and
+           Target go and the lesson's comment for lost work takes their place. -->
+      <label class="fblist-row fbnotsaved-tick" id="notSavedWrap" hidden>
+        <input type="checkbox" id="notSaved">
+        <span>Student was present but did not save their work properly</span>
+      </label>
       <div class="fblist" id="fbList" hidden></div>
       <div class="fbask" id="fbAsk" hidden></div>
       <div class="fbask-again" id="fbAskAgain" hidden></div>
@@ -1280,7 +1286,10 @@ on("openPdf", "click", () => {
   window.open("lesson.html?id=" + encodeURIComponent(lessonId) + "&view=1&pdf=1", "_blank");
 });
 /* ---------------- feedback ---------------- */
-function showing(which){ return !!$("fb" + which).value.trim(); }
+function showing(which){
+  if (notSaved && (which === "Strength" || which === "Target")) return false;
+  return !!$("fb" + which).value.trim();
+}
 function loadFeedback(row){
   let f = {};
   if (row && row.feedback){
@@ -1288,6 +1297,12 @@ function loadFeedback(row){
   }
   $("fbComment").value = f.comment || "";
   commentOpen = false;
+  /* Offered only when there is nothing of theirs to see, or when it was
+     ticked and saved, so it is still ticked when they are opened again. */
+  notSaved = !!f.notSaved;
+  notSavedWas = "";
+  $("notSaved").checked = notSaved;
+  $("notSavedWrap").hidden = PRACTICE || !notSaved && !(lessonJson && !window.progressMath.hasWork(lessonJson, row && row.data));
   /* Lines ticked while marking this student, saved with their feedback. A
      fresh copy for each student, so one child's ticks never travel with the
      next one's feedback. */
@@ -1334,8 +1349,37 @@ function loadFeedback(row){
   lastAuto = { strength: now.strength || "", target: now.target || "" };
   /* Feedback already saved for this student is shown as it was saved; the
      questions are for writing it the first time, and a button away after. */
-  feedbackMode(row, !!(f.strength || f.target) || away);
+  feedbackMode(row, !!(f.strength || f.target) || away || notSaved);
+  paintNotSaved();
 }
+/* ---------------- present, but nothing saved ----------------
+   Nothing saved usually means away, and the boxes say so. Sometimes they
+   were there and it was lost, and a Strength or Target would be about work
+   nobody can see. Ticked, those go and the lesson's comment for lost work
+   is written in the comment box instead, still there to be changed. */
+let notSaved = false;
+let notSavedWas = "";    // the comment box before the tick wrote over it
+function paintNotSaved(){
+  $("workSide").classList.toggle("fbnotsaved", notSaved);
+  if (notSaved) commentOpen = true;
+  commentShow(true);
+}
+on("notSaved", "change", () => {
+  const st = roster[idx];
+  const row = st ? rows.find(r => r.username === st.username) : null;
+  const box = $("fbComment");
+  const words = window.progressMath.unsavedComment(lessonJson);
+  notSaved = $("notSaved").checked;
+  if (notSaved){ notSavedWas = box.value; box.value = words; }
+  else {
+    if (box.value.trim() === words) box.value = notSavedWas;
+    commentOpen = !!box.value.trim();
+  }
+  $("fbMsg").textContent = "";
+  feedbackMode(row, true);
+  paintNotSaved();
+  paintFb("idle");
+});
 /* The list, or the questions when Settings asks for them. */
 function feedbackMode(row, saved){
   if (byQuestions()){
@@ -1866,7 +1910,7 @@ function paintList(row){
   const { ladder, items } = (PRACTICE || !lessonJson) ? { ladder: [], items: [] } : listItems(row);
   const user = (row && row.username) || "";
   if (listOpen.user !== user) listOpen = { user, at: null, phase: "levels" };
-  const off = !items.length || byQuestions();
+  const off = !items.length || byQuestions() || notSaved;
   box.hidden = off || listOpen.phase === "done";
   listBoxes(off || listOpen.phase === "done");
   paintListAgain(row, !off && listOpen.phase === "done");
@@ -2007,6 +2051,7 @@ function listBoxes(on){
    comment already, so a saved one is never hidden behind the button. */
 let commentOpen = false;
 function commentShow(boxesOn){
+  boxesOn = boxesOn || notSaved;     // the comment is all there is then
   const has = commentOpen || !!$("fbComment").value.trim();
   $("fbCommentWrap").hidden = !boxesOn || !has;
   $("fbCommentAdd").hidden = !boxesOn || has;
@@ -2139,7 +2184,7 @@ async function submitFeedback(andNext){
   if (PRACTICE) return afterSave(await saveProgFeedback(), andNext);
   /* Both boxes are on screen, so a missing one is a choice rather than an
      oversight. Only say something when exactly one has been filled in. */
-  const hasS = !!$("fbStrength").value.trim(), hasT = !!$("fbTarget").value.trim();
+  const hasS = showing("Strength"), hasT = showing("Target");
   if (hasS && !hasT) return askMissing("target", "strength", andNext);
   if (hasT && !hasS) return askMissing("strength", "target", andNext);
   afterSave(await saveFeedback(), andNext);
@@ -2302,7 +2347,8 @@ async function saveFeedback(){
                              target: showing("Target") ? $("fbTarget").value : "",
                              text: $("fbComment").value,
                              ticks: Object.keys(markingTicks).length ? markingTicks : undefined,
-                             got: Object.keys(got).length ? got : undefined }) });
+                             got: Object.keys(got).length ? got : undefined,
+                             notSaved: notSaved || undefined }) });
     if (!r.ok) throw new Error((await r.json()).error || "Could not save it.");
     /* the mark or grade goes with the feedback; a practice one only has a
        level, and only when it has levels to pick from */
@@ -2334,6 +2380,7 @@ async function saveFeedback(){
       comment: $("fbComment").value,
       ticks: Object.keys(markingTicks).length ? markingTicks : undefined,
       got: Object.keys(got).length ? got : undefined,
+      notSaved: notSaved || undefined,
       edits: keptEdits && Object.keys(keptEdits).length ? keptEdits : undefined });
     paintFb("saved");
     return true;

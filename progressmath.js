@@ -382,6 +382,13 @@
     return { strength: String((lessonJson && lessonJson.absentStrength) || "").trim() || ABSENT_STRENGTH,
              target: String((lessonJson && lessonJson.absentTarget) || "").trim() || ABSENT_TARGET };
   }
+  /* The other reason for nothing saved: they were there, and it was lost.
+     A Strength and Target would be about work nobody can see, so marking
+     gives them this comment instead. Any lesson can word its own. */
+  const UNSAVED_COMMENT = "You were in this lesson, but your work did not save. Next time, press Save Work before you leave so your teacher can see everything you did.";
+  function unsavedComment(lessonJson){
+    return String((lessonJson && lessonJson.unsavedComment) || "").trim() || UNSAVED_COMMENT;
+  }
 
   /* A practical's rubric, lowest level first. The builder has written it
      that way round since v12.1 and says so with rubricOrder; a lesson saved
@@ -405,5 +412,5 @@
                           quantifiableTasks, scoreTask, checkDone, attempted, withMarkingTicks, withTeacherEdits,
                           pagesLock, defaultLocks, fetchLockedPages, markRoster,
                           levelChain, levelName, levelReached, levelLadder, rubricLevels,
-                          hasWork, absentFeedback };
+                          hasWork, absentFeedback, unsavedComment };
 })();

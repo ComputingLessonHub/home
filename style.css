@@ -2129,6 +2129,11 @@ body.workpage .grow{flex:1}
 .fblist-row{display:flex; align-items:flex-start; gap:8px; padding:4px 0; font-size:14px; line-height:1.35; cursor:pointer}
 .fblist-row input{flex:none; width:17px; height:17px; margin:1px 0 0; accent-color:var(--amber-dark); cursor:pointer}
 .fblist-row input:disabled{cursor:default}
+/* Present but nothing saved: ticked, nothing is left to write but the
+   comment, so the boxes, the list and the questions all go. */
+.fbnotsaved-tick{margin:0 0 10px; font-weight:600}
+.workside.fbnotsaved #fbStrengthWrap, .workside.fbnotsaved #fbTargetWrap, .workside.fbnotsaved #fbList,
+.workside.fbnotsaved #fbAsk, .workside.fbnotsaved #fbAskAgain{display:none}
 .fblist-row.on .fblist-words{color:var(--text)}
 .fblist-words{color:var(--muted)}
 .fblist-by{font-size:12px; color:var(--dim)}
