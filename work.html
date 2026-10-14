@@ -1220,11 +1220,21 @@ function loadFeedback(row){
      student the same way, so a class of thirty is thirty reads and a press of
      Save rather than thirty sentences written from nothing. Never over
      anything already saved. */
-  const fromList = (!f.strength && !f.target && !auto.strength && !auto.target) ? checklistAuto(row) : null;
-  $("fbStrength").value = f.strength || auto.strength || (fromList ? fromList.strength : "");
-  $("fbTarget").value = f.target || auto.target || (fromList ? fromList.target : "");
+  const nothingSaved = !f.strength && !f.target && !auto.strength && !auto.target;
+  /* Nothing in a practical at all almost always means they were away for
+     it. Every question would be a No and the target would be the first
+     thing on the rubric, which is not what they need to hear, so the
+     boxes say they were not here instead, and the questions wait. */
+  const away = nothingSaved && !!(lessonJson && lessonJson.practical) && !PRACTICE &&
+               !window.progressMath.hasWork(lessonJson, row && row.data);
+  const fromList = (nothingSaved && !away) ? checklistAuto(row) : null;
+  const awayWords = away ? window.progressMath.absentFeedback(lessonJson) : null;
+  $("fbStrength").value = f.strength || auto.strength || (awayWords ? awayWords.strength : fromList ? fromList.strength : "");
+  $("fbTarget").value = f.target || auto.target || (awayWords ? awayWords.target : fromList ? fromList.target : "");
   paintBank("Strength"); paintBank("Target");
-  $("fbMsg").textContent = fromList && (fromList.strength || fromList.target)
+  $("fbMsg").textContent = away
+    ? "Nothing is saved in this practical for this student, so these say they were not here. Change them if that is not right, then press Save feedback."
+    : fromList && (fromList.strength || fromList.target)
     ? "Filled in from what this student ticked off. Change anything you like, then press Save feedback."
     : "";
   /* What the checklist says now. While the boxes still read exactly this,
@@ -1234,7 +1244,7 @@ function loadFeedback(row){
   lastAuto = { strength: now.strength || "", target: now.target || "" };
   /* Feedback already saved for this student is shown as it was saved; the
      questions are for writing it the first time, and a button away after. */
-  startAsk(row, !!(f.strength || f.target));
+  startAsk(row, !!(f.strength || f.target) || away);
 }
 /* A line has been ticked or unticked in the work beside the boxes. The
    Strength and Target are worked out again, and replace what is there if it

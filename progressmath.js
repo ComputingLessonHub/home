@@ -271,6 +271,48 @@
     return { at: at, total: chain.length, reached: named(at), next: named(at + 1) };
   }
 
+  /* Whether a student did anything in the lesson itself, as against only
+     opening it. Reading, links, videos and the reminder buttons are not
+     work, and a coding task saves itself the moment it is shown, so code
+     counts only once it is something other than the starter or what was
+     carried in, or has been run, or has a line ticked. Response tasks are
+     not looked at: they come after marking, so they say nothing about
+     whether somebody was in the lesson being marked. */
+  const NOT_WORK = { text:1, picture:1, link:1, embed:1, frame:1 };
+  const HOLDS = { page:1, group:1, extension:1, choice:1 };
+  function hasWork(lessonJson, data){
+    if (!data || typeof data !== "object") return false;
+    let found = false;
+    const codeIsTheirs = (b, v) => {
+      if (typeof v === "string") return !!v.trim() && v.trim() !== String(b.starter || "").trim();
+      if (!v || typeof v !== "object") return false;
+      if (v.ran || Number(v.runs) > 0) return true;
+      if (Array.isArray(v.checks) && v.checks.some(Boolean)) return true;
+      if (typeof v.code === "string")
+        return !!v.code.trim() && !v.carried && v.code.trim() !== String(b.starter || "").trim();
+      return attempted(data, b.id);       // a web task keeps its three files its own way
+    };
+    const walk = (blocks) => (blocks || []).forEach(b => {
+      if (found || !b) return;
+      if (HOLDS[b.type]){ walk(b.blocks); (b.options || []).forEach(o => walk(o.blocks)); return; }
+      if (NOT_WORK[b.type] || !b.id) return;
+      const v = data[b.id];
+      if (b.type === "ide" || b.type === "python" || b.type === "web") found = codeIsTheirs(b, v);
+      else found = attempted(data, b.id);
+    });
+    walk(lessonJson && lessonJson.blocks);
+    return found;
+  }
+  /* What a practical's Strength and Target say for a student with nothing
+     in it, which almost always means they were away for it. The lesson can
+     word its own; these are what every other one says. */
+  const ABSENT_STRENGTH = "You have tried hard in lessons this half term.";
+  const ABSENT_TARGET = "You were not here for the practical assessment lesson. Catch up on it so you can show everything you have learnt this half term.";
+  function absentFeedback(lessonJson){
+    return { strength: String((lessonJson && lessonJson.absentStrength) || "").trim() || ABSENT_STRENGTH,
+             target: String((lessonJson && lessonJson.absentTarget) || "").trim() || ABSENT_TARGET };
+  }
+
   /* A practical's rubric, lowest level first. The builder has written it
      that way round since v12.1 and says so with rubricOrder; a lesson saved
      before then has no rubricOrder and was written best first, so it is
@@ -292,5 +334,6 @@
   window.progressMath = { TASK_LABEL, plainText, normAns, taskInfo,
                           quantifiableTasks, scoreTask, checkDone, attempted, withMarkingTicks,
                           pagesLock, defaultLocks, fetchLockedPages, markRoster,
-                          levelChain, levelName, levelReached, levelLadder, rubricLevels };
+                          levelChain, levelName, levelReached, levelLadder, rubricLevels,
+                          hasWork, absentFeedback };
 })();

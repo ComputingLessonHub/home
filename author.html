@@ -11,6 +11,9 @@
 <script src="lessoncompat.js"></script>
 <script src="shortmatch.js"></script>
 <script>window.richTextBarOnFocus = true;   /* see richtext.js */</script>
+<!-- for the wording a practical uses for a student who was not there, kept
+     in one place with the marking screens that use it -->
+<script src="progressmath.js"></script>
 <script src="richtext.js"></script>
 <script src="pyedit.js"></script>
 <script src="scratchhub.js"></script>
@@ -855,6 +858,10 @@ function compile(){
     out.versionCode = lesson.versionCode || "";
   }
   if (lesson.perfectTarget) out.perfectTarget = lesson.perfectTarget;
+  /* For a student with nothing saved in a practical. Only written when
+     the teacher wrote one; otherwise the site's own wording stands. */
+  if (lesson.practical && String(lesson.absentStrength || "").trim()) out.absentStrength = lesson.absentStrength.trim();
+  if (lesson.practical && String(lesson.absentTarget || "").trim()) out.absentTarget = lesson.absentTarget.trim();
   if (lesson.zeroStrength) out.zeroStrength = lesson.zeroStrength;
   /* A practice assessment is a practical with no grade: it is sat like any
      other practical, all its pages open and handed in at the end, and comes
@@ -3507,11 +3514,20 @@ function checklistSentences(into){
    one topic: what to say when nothing was right, and when everything was.
    Strength first, the way round a student is shown them. */
 function extremeSentences(into){
+  /* A practical also has the pair for a student with nothing saved in it,
+     who was almost always away. Left empty, the site's own wording is
+     used, shown as the example in the box. */
+  const siteWords = window.progressMath.absentFeedback(null);
   [["zeroStrength","Strength for when a student gets everything wrong"],
-   ["perfectTarget","Target for when a student gets everything right"]].forEach(pair => {
+   ["perfectTarget","Target for when a student gets everything right"]]
+  .concat(lesson.practical
+    ? [["absentStrength","Strength for when a student has nothing saved (not here)", siteWords.strength],
+       ["absentTarget","Target for when a student has nothing saved (not here)", siteWords.target]] : [])
+  .forEach(pair => {
     const w = el("div","bfield");
     w.appendChild(el("label","", pair[1]));
     const inp = el("textarea"); inp.rows = 2; inp.value = lesson[pair[0]] || "";
+    if (pair[2]) inp.placeholder = pair[2];
     inp.addEventListener("input", () => { lesson[pair[0]] = inp.value; saveDraft(); schedulePreview(); });
     w.appendChild(inp);
     into.appendChild(w);
@@ -7047,6 +7063,7 @@ function fromCompiled(data, meta){
                    were saved but never read back, so reopening an assessment
                    emptied both boxes and the next save threw them away. */
                 perfectTarget: data.perfectTarget || "", zeroStrength: data.zeroStrength || "",
+                absentStrength: data.absentStrength || "", absentTarget: data.absentTarget || "",
                 linger: data.linger !== false,
                 versionOf: data.versionOf || "", versionName: data.versionName || "",
                 versionNote: data.versionNote || "", versionCode: data.versionCode || "",
