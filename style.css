@@ -2062,6 +2062,10 @@ body.workpage .grow{flex:1}
 .workside h3{margin:0 0 4px; font-family:var(--display); font-size:var(--text-2xl)}
 .workside textarea{width:100%; box-sizing:border-box}
 .btn-primary.wide{width:100%; margin-top:6px}
+/* Save and next is the one pressed down a class, so it takes more of the row */
+.fbsave{display:flex; gap:8px; margin-top:6px}
+.fbsave button{flex:1 1 0; min-width:0; white-space:nowrap}
+.fbsave .btn-primary{flex-grow:2}
 
 @media (max-width:1000px){
   body.workpage{height:auto; overflow:auto}
@@ -2136,6 +2140,7 @@ body.workpage .grow{flex:1}
 .fbask-level{margin:0 0 16px; padding:12px 14px; border-radius:12px; background:var(--panel-2);
   border:1.5px solid var(--amber); font-family:var(--display); font-size:17px; font-weight:700;
   line-height:1.35; color:var(--amber-dark)}
+.fbask-edit{display:block; width:100%; margin:0 0 12px; font-size:15px; line-height:1.45}
 .fbask-yesno{display:flex; gap:8px}
 .fbask-yesno button{flex:1; white-space:nowrap}
 .fbask-foot{display:flex; justify-content:space-between; gap:12px; margin-top:12px}

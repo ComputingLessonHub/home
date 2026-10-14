@@ -89,7 +89,12 @@
         <div class="bank" id="bankTarget"></div>
       </div>
       <div class="bfield" id="fbCommentWrap"><label>General comment</label><textarea id="fbComment" rows="2"></textarea></div>
-      <button class="btn-primary wide" id="saveFb">Save feedback</button>
+      <!-- Marking a class is one student after another, so moving on is the
+           button most pressed; Save on its own is for coming back to later. -->
+      <div class="fbsave" id="fbSaveRow">
+        <button class="btn-ghost" id="saveFb">Save</button>
+        <button class="btn-primary" id="saveNext" title="Ctrl + Enter">Save and next</button>
+      </div>
       <p class="hint" id="fbMsg"></p>
     </aside>
   </div>
@@ -1125,8 +1130,7 @@ function paintProgPick(){
    feedback on one of the programs in it. */
 function fbBoxes(on){
   ["fbStrength","fbTarget","fbComment"].forEach(id => { const e = $(id); if (e) e.disabled = !on; });
-  const save = $("saveFb");
-  if (save) save.disabled = !on;
+  ["saveFb","saveNext"].forEach(id => { const b = $(id); if (b) b.disabled = !on; });
   $("fbMsg").textContent = on ? "" :
     (progs.length ? "Open a program to write about it." : "");
 }
@@ -1181,7 +1185,8 @@ async function saveProgFeedback(){
     row.feedback = JSON.stringify({ programs: progNotes });
     paintProgPick();
     paintFb("saved");
-  }catch(e){ paintFb("idle"); $("fbMsg").textContent = e.message; }
+    return true;
+  }catch(e){ paintFb("idle"); $("fbMsg").textContent = e.message; return false; }
 }
 
 on("prevStu", "click", () => showStudent(idx - 1));
@@ -1233,9 +1238,9 @@ function loadFeedback(row){
   $("fbTarget").value = f.target || auto.target || (awayWords ? awayWords.target : fromList ? fromList.target : "");
   paintBank("Strength"); paintBank("Target");
   $("fbMsg").textContent = away
-    ? "Nothing is saved in this practical for this student, so these say they were not here. Change them if that is not right, then press Save feedback."
+    ? "Nothing is saved in this practical for this student, so these say they were not here. Change them if that is not right, then press Save."
     : fromList && (fromList.strength || fromList.target)
-    ? "Filled in from what this student ticked off. Change anything you like, then press Save feedback."
+    ? "Filled in from what this student ticked off. Change anything you like, then press Save."
     : "";
   /* What the checklist says now. While the boxes still read exactly this,
      they are the checklist's words rather than the teacher's, and a tick
@@ -1269,13 +1274,13 @@ function ticksChanged(row){
   const msg = $("fbMsg");
   msg.textContent = kept.length
     ? "The ticks have changed, and your own words are kept. "
-    : "Strength and Target updated from the ticks. Press Save feedback to keep them.";
+    : "Strength and Target updated from the ticks. Press Save to keep them.";
   if (kept.length){
     const use = el("button","btn-ghost bmini2","Use the checklist's Strength and Target");
     use.addEventListener("click", () => {
       $("fbStrength").value = lastAuto.strength;
       $("fbTarget").value = lastAuto.target;
-      msg.textContent = "Strength and Target updated from the ticks. Press Save feedback to keep them.";
+      msg.textContent = "Strength and Target updated from the ticks. Press Save to keep them.";
       paintFb("idle");
     });
     msg.appendChild(use);
@@ -1326,7 +1331,7 @@ function checklistAuto(row){
    means part of that level is done, so the rest of it is asked, for the
    Strength, and they end at the end of the level. What they did reach is
    said, and picked for the teacher in Level reached. */
-let ask = null;      // { row, items, ladder, answers, at, phase, stop, target, targetChosen }
+let ask = null;      // { row, items, ladder, answers, at, phase, stop, target, targetChosen, strength, strengthEdited, editingStrength }
 
 /* One question per bank entry that says what doing it well looks like. A
    topic is on the rubric level the builder put it on, and a checklist line
@@ -1366,7 +1371,7 @@ function askItems(row, ladder){
 
 function showAsk(asking){
   $("fbAsk").hidden = !asking;
-  ["fbStrengthWrap","fbTargetWrap","fbCommentWrap","saveFb"].forEach(id => { $(id).hidden = asking; });
+  ["fbStrengthWrap","fbTargetWrap","fbCommentWrap","fbSaveRow"].forEach(id => { $(id).hidden = asking; });
   /* The questions decide the level, so the picker waits until they have. */
   if (asking) $("markWrap").hidden = true;
   else if (ask && ask.row) paintMarking(ask.row.username);
@@ -1384,7 +1389,8 @@ function startAsk(row, saved){
   const ladder = window.progressMath.levelLadder(lessonJson);
   const items = askItems(row, ladder);
   ask = { row, items, ladder, answers: items.map(it => it.met === undefined ? null : it.met),
-          at: 0, phase: "strength", stop: -1, target: "", targetChosen: false };
+          at: 0, phase: "strength", stop: -1, target: "", targetChosen: false,
+          strength: "", strengthEdited: false, editingStrength: false };
   if (!items.length || saved){ showAsk(false); return; }
   $("fbMsg").textContent = "";
   showAsk(true);
@@ -1430,11 +1436,12 @@ function askReached(){
   return Math.max.apply(null, levelled.map(it => it.level));
 }
 
-/* The three most recent Yes answers, which in level order are the furthest
-   the student got, after a word of praise. */
+/* The two most recent Yes answers, which in level order are the furthest
+   the student got, after a word of praise. Two rather than three, the same
+   as a practical's checklist Strength: three made a paragraph. */
 function askStrength(){
   const lines = ask.items.filter((it, i) => i <= askedUpTo() && ask.answers[i] === true && it.strength)
-    .map(it => it.strength).slice(-3);
+    .map(it => it.strength).slice(-2);
   return lines.length ? praiseFor(ask.row) + " " + joinSentences(lines) : (lessonJson.zeroStrength || "");
 }
 
@@ -1483,9 +1490,11 @@ function paintAsk(){
       b.addEventListener("click", () => {
         ask.answers[ask.at] = value;
         ask.targetChosen = false;          // the first No may have moved
+        ask.strengthEdited = false;        // and so may the Yeses
+        ask.editingStrength = false;
         const next = askNext(ask.at);
         if (next >= 0){ ask.stop = -1; ask.at = next; }
-        else { ask.stop = ask.at; ask.phase = "target"; }
+        else { ask.stop = ask.at; ask.phase = "summary"; }
         paintAsk();
       });
       row.appendChild(b);
@@ -1505,15 +1514,54 @@ function paintAsk(){
     box.appendChild(foot);
     return;
   }
+  if (!ask.strengthEdited) ask.strength = askStrength();
   if (!ask.targetChosen) ask.target = askFirstTarget();
   const reached = askReached();
-  if (reached !== null){
-    box.appendChild(el("p","fbask-level", reached >= 0
-      ? "Based on your feedback, this student reached " + ask.ladder[reached]
-      : "Based on your feedback, this student has not reached " + ask.ladder[0] + " yet"));
+  /* The Strength is shown whole and agreed to before the Target comes up,
+     so the teacher reads what the student will read rather than taking it
+     on trust from the questions. */
+  if (ask.phase === "summary"){
+    if (reached !== null){
+      box.appendChild(el("p","fbask-level", reached >= 0
+        ? "Based on your feedback, this student reached " + ask.ladder[reached]
+        : "Based on your feedback, this student has not reached " + ask.ladder[0] + " yet"));
+    }
+    box.appendChild(el("p","fbask-count","This is their Strength:"));
+    if (ask.editingStrength){
+      const edit = el("textarea","fbask-edit");
+      edit.rows = 4;
+      edit.value = ask.strength;
+      edit.addEventListener("input", () => { ask.strength = edit.value; ask.strengthEdited = true; });
+      box.appendChild(edit);
+      setTimeout(() => edit.focus(), 0);
+    } else {
+      const card = el("div","fbask-card");
+      card.appendChild(el("p","", ask.strength || "Nothing from the bank. You can write one with Edit Strength."));
+      box.appendChild(card);
+    }
+    const row = el("div","fbask-yesno");
+    if (!ask.editingStrength){
+      const change = el("button","btn-ghost","Edit Strength");
+      change.type = "button";
+      change.addEventListener("click", () => { ask.editingStrength = true; paintAsk(); });
+      row.appendChild(change);
+    }
+    const ok = el("button","btn-primary","Looks good");
+    ok.type = "button";
+    ok.addEventListener("click", () => { ask.editingStrength = false; ask.phase = "target"; paintAsk(); });
+    row.appendChild(ok);
+    box.appendChild(row);
+    const foot = el("div","fbask-foot");
+    const back = el("button","bank-link","Back");
+    back.type = "button";
+    back.addEventListener("click", () => {
+      ask.editingStrength = false; ask.phase = "strength"; ask.at = askedUpTo(); paintAsk();
+    });
+    foot.appendChild(back);
+    box.appendChild(foot);
+    return;
   }
-  box.appendChild(el("p","bankhead","What do they need to improve?"));
-  box.appendChild(el("p","fbask-count","This will be the student's target:"));
+  box.appendChild(el("p","fbask-count","And this is their Target:"));
   const card = el("div","fbask-card");
   card.appendChild(el("p","", ask.target || "Nothing from the bank. You can write one in the Target box."));
   box.appendChild(card);
@@ -1523,7 +1571,7 @@ function paintAsk(){
   const use = el("button","btn-primary","Looks good");
   use.type = "button";
   use.addEventListener("click", () => {
-    $("fbStrength").value = askStrength();
+    $("fbStrength").value = ask.strength;
     $("fbTarget").value = ask.target;
     showAsk(false);
     /* The level the answers reached goes into Level reached, where there is
@@ -1537,7 +1585,7 @@ function paintAsk(){
       showGradeHelp();
     }
     paintFb("idle");
-    $("fbMsg").textContent = "Filled in from your answers. Change anything you like, then press Save feedback.";
+    $("fbMsg").textContent = "Filled in from your answers. Change anything you like, then press Save.";
   });
   const row = el("div","fbask-yesno");
   row.appendChild(change); row.appendChild(use);
@@ -1545,7 +1593,7 @@ function paintAsk(){
   const foot = el("div","fbask-foot");
   const back = el("button","bank-link","Back");
   back.type = "button";
-  back.addEventListener("click", () => { ask.phase = "strength"; ask.at = askedUpTo(); paintAsk(); });
+  back.addEventListener("click", () => { ask.phase = "summary"; paintAsk(); });
   foot.appendChild(back);
   box.appendChild(foot);
 }
@@ -1741,7 +1789,11 @@ function paintFb(state){
   if (!btn) return;
   if (state === "saving"){ btn.textContent = "Saving…"; btn.disabled = true; btn.dataset.saved = "no"; }
   else if (state === "saved"){ btn.textContent = "✓ Saved"; btn.disabled = fbLocked(); btn.dataset.saved = "yes"; }
-  else { btn.textContent = "Save feedback"; btn.disabled = fbLocked(); btn.dataset.saved = "no"; }
+  else { btn.textContent = "Save"; btn.disabled = fbLocked(); btn.dataset.saved = "no"; }
+  /* Pressed twice while the first save is still going, it would skip a
+     student whose feedback nobody had looked at. */
+  const next = $("saveNext");
+  if (next) next.disabled = state === "saving" || fbLocked();
 }
 ["fbStrength","fbTarget","fbComment","fbScore","fbGrade"].forEach(id => {
   const e = $(id);
@@ -1751,19 +1803,47 @@ function paintFb(state){
   e.addEventListener("change", undo);
 });
 
-on("saveFb", "click", () => {
+/* Save, and with andNext the next student in the picker once it has worked.
+   A save that fails stays put, so the message saying why is still on screen
+   beside the feedback it is about. */
+async function submitFeedback(andNext){
   /* Practice is not marked and a note on it is not a report: a teacher
      writing one line about a program somebody made in their own time should
      not be asked for the other half of it. */
-  if (PRACTICE) return saveProgFeedback();
+  if (PRACTICE) return afterSave(await saveProgFeedback(), andNext);
   /* Both boxes are on screen, so a missing one is a choice rather than an
      oversight. Only say something when exactly one has been filled in. */
   const hasS = !!$("fbStrength").value.trim(), hasT = !!$("fbTarget").value.trim();
-  if (hasS && !hasT) return askMissing("target", "strength");
-  if (hasT && !hasS) return askMissing("strength", "target");
-  saveFeedback();
+  if (hasS && !hasT) return askMissing("target", "strength", andNext);
+  if (hasT && !hasS) return askMissing("strength", "target", andNext);
+  afterSave(await saveFeedback(), andNext);
+}
+function afterSave(ok, andNext){
+  if (!ok || !andNext) return;
+  if (idx + 1 < roster.length) showStudent(idx + 1);
+  else $("fbMsg").textContent = "Saved. That was the last student.";
+}
+on("saveFb", "click", () => submitFeedback(false));
+on("saveNext", "click", () => submitFeedback(true));
+/* Ctrl + Enter is Save and next from anywhere on the marking screen, the
+   feedback boxes included, so a class can be marked without the mouse. Not
+   while a pop-up is open: that pop-up is asking something first. */
+function saveNextKey(e){
+  if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey) || e.repeat) return;
+  const btn = $("saveNext");
+  if ($("workPane").hidden || !$("mBack").hidden || document.querySelector(".whogate")) return;
+  if (!btn || btn.disabled || $("fbSaveRow").hidden) return;
+  e.preventDefault();
+  btn.click();
+}
+document.addEventListener("keydown", saveNextKey);
+/* Keys pressed inside the frame stay inside it, and clicking the work to
+   read it puts the focus there. It is the same site, so it can be listened
+   to; the frame is loaded again for every student, hence every load. */
+$("workFrame").addEventListener("load", () => {
+  try{ $("workFrame").contentWindow.addEventListener("keydown", saveNextKey); }catch(e){}
 });
-function askMissing(missing, given){
+function askMissing(missing, given, andNext){
   openModal(box => {
     box.appendChild(el("h2","", "Add a " + missing + " as well?"));
     box.appendChild(el("p","modal-text",
@@ -1773,8 +1853,8 @@ function askMissing(missing, given){
       closeModal();
       $("fb" + (missing === "target" ? "Target" : "Strength")).focus();
     });
-    const anyway = el("button","btn-ghost modal-stay","Save feedback without " + missing);
-    anyway.addEventListener("click", () => { closeModal(); saveFeedback(); });
+    const anyway = el("button","btn-ghost modal-stay","Save without a " + missing);
+    anyway.addEventListener("click", async () => { closeModal(); afterSave(await saveFeedback(), andNext); });
     box.appendChild(add); box.appendChild(anyway);
   });
 }
@@ -1899,7 +1979,8 @@ async function saveFeedback(){
       comment: $("fbComment").value,
       ticks: Object.keys(markingTicks).length ? markingTicks : undefined });
     paintFb("saved");
-  }catch(e){ paintFb("idle"); $("fbMsg").textContent = e.message; }
+    return true;
+  }catch(e){ paintFb("idle"); $("fbMsg").textContent = e.message; return false; }
 }
 
 /* ---------------- who opened this link ----------------
@@ -2005,11 +2086,12 @@ async function handBack(){
     if (markedLink.length > window.workLink.MAX){
       paintFb("idle");
       $("fbMsg").textContent = "That is too long to send as a link. Shorten the feedback.";
-      return;
+      return false;
     }
     paintFb("saved");
     showMarkedLink();
-  }catch(e){ paintFb("idle"); $("fbMsg").textContent = "The link could not be made."; }
+    return true;
+  }catch(e){ paintFb("idle"); $("fbMsg").textContent = "The link could not be made."; return false; }
 }
 
 function showMarkedLink(){

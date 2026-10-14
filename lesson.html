@@ -8162,7 +8162,7 @@ function markEditor(res){
       try{
         if (window.parent && window.parent !== window){
           window.parent.postMessage({ hubMarks: box }, "*");
-          msg.textContent = "Kept. Press Save feedback to send it back.";
+          msg.textContent = "Kept. Press Save to send it back.";
         } else {
           msg.textContent = "Open this from a student's work link to send the marks back.";
         }
