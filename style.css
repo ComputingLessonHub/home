@@ -738,7 +738,8 @@ html[data-bg=night] .result-card .st i{color:#F0938E}
   width:78px; height:78px; margin:0 auto 16px; border-radius:50%;
   display:grid; place-items:center; font-size:var(--text-5xl); color:var(--mint);
   border:3px solid var(--mint); background:rgba(65,199,164,.08);
-  animation:tickpop .55s cubic-bezier(.2,1.6,.4,1) both;
+  --done-pop:tickpop .55s cubic-bezier(.2,1.6,.4,1) both;
+  animation:var(--done-pop);
 }
 @keyframes tickpop{from{transform:scale(.2); opacity:0} to{transform:scale(1); opacity:1}}
 .done-title{font-family:var(--display); font-size:var(--text-6xl); font-weight:700; margin:0 0 6px}
@@ -747,8 +748,6 @@ html[data-bg=night] .result-card .st i{color:#F0938E}
 .done-locked{margin:0 0 6px; padding:10px 14px; border-radius:10px; font-weight:700;
   border-left:4px solid var(--amber); background:color-mix(in srgb, var(--amber) 10%, transparent)}
 .done-score{font-family:var(--display); font-size:var(--text-7xl); font-weight:700; line-height:1; margin-top:6px}
-/* the level a practical reached: a sentence, with what it asks for under it */
-.done-reached{font-family:var(--display); font-size:20px; font-weight:600; color:var(--text); margin:8px 0 6px}
 .done-pct{font-family:var(--mono); font-size:var(--text-lg); color:var(--muted); margin:8px 0 4px}
 .done-save{font-size:var(--text-2xl); padding:15px 34px; border-radius:var(--rad-md); margin:14px auto 0; display:inline-block}
 .done-back{display:block; margin:18px 0 4px; color:var(--muted); text-decoration:none}
@@ -2104,8 +2103,6 @@ body.workpage .grow{flex:1}
 .fbhead #fbWho{font-family:var(--body); font-size:15px; font-weight:500; color:var(--muted)}
 .workside #markWrap{margin-bottom:10px}
 .workside #markWrap label{margin-bottom:2px}
-.workside .levelshown{font-size:15px}
-.workside .levelshown.none{font-size:14px}
 .fbfoot .fbsave button{padding-top:7px; padding-bottom:7px; font-size:15px}
 .fbfoot #fbMsg{font-size:13px}
 /* The list of what a student has done, a level at a time. */
@@ -2117,10 +2114,10 @@ body.workpage .grow{flex:1}
 .fblist-count{font-size:12.5px; font-weight:600; color:var(--muted)}
 .fblist-go{flex:none; font-size:20px; line-height:1}
 .fblist-go:disabled{opacity:.35; cursor:default}
-/* While the list is ticked, Level reached and Save wait for the Target to
+/* While the list is ticked, the Grade and Save wait for the Target to
    be agreed; the list's own buttons stand in the foot instead. */
 .workside.fbticking #markWrap, .workside.fbticking #fbSaveRow{display:none}
-/* nothing saved: no work, so no level to say they reached */
+/* nothing saved: no work, so nothing to mark */
 .workside.fbempty #markWrap{display:none}
 .fbcomment-add{display:block; margin:0 0 12px; font-size:14px}
 .fblist-dots{display:flex; justify-content:center; gap:6px; margin:0 0 6px}
@@ -2197,11 +2194,6 @@ body.workpage .grow{flex:1}
   .bank-link{min-height:0; min-width:0}
   .bank-link::after{content:""; position:absolute; left:-8px; right:-8px; top:50%; height:44px; transform:translateY(-50%)}
 }
-/* The level a practice practical reached, read off the checklists. One line:
-   the rubric it names is a button away and would push the boxes down. */
-.levelshown{margin:2px 0 0; font-family:var(--display); font-size:var(--text-xl); font-weight:700; color:var(--amber-dark)}
-.levelshown.none{font-family:var(--body); font-size:var(--text-md); font-weight:600; color:var(--muted)}
-
 .bankhead{margin:0 0 6px; font-size:var(--text-xs); letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
 .bankpick{ width:100%; text-align:left; padding:8px 11px;
   background:var(--panel-2); border:1px solid var(--line); border-radius:var(--rad-md); cursor:pointer;
@@ -2219,9 +2211,6 @@ body.workpage .grow{flex:1}
 .fbask-card b{display:block; margin:0 0 4px; font-size:15px; color:var(--amber-dark)}
 .fbask-card p{margin:0; font-size:15px; line-height:1.45; color:var(--text)}
 .fbask-card .fbask-met{margin-top:8px; font-size:13px; color:var(--muted)}
-.fbask-level{margin:0 0 16px; padding:12px 14px; border-radius:12px; background:var(--panel-2);
-  border:1.5px solid var(--amber); font-family:var(--display); font-size:17px; font-weight:700;
-  line-height:1.35; color:var(--amber-dark)}
 .fbask-edit{display:block; width:100%; margin:0 0 12px; font-size:15px; line-height:1.45}
 .fbask-yesno{display:flex; gap:8px}
 .fbask-yesno button{flex:1; white-space:nowrap}
@@ -3188,23 +3177,35 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
    middle and slides back, which the browser can do smoothly; animating the
    grid itself cannot be. */
 .done-layout{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:20px; align-items:start}
-.done-hero-col{transition:transform .8s cubic-bezier(.25,.8,.3,1)}
+.done-hero-col{--slide-aside:transform .8s cubic-bezier(.25,.8,.3,1); transition:var(--slide-aside)}
 .done-layout.staged .done-hero-col{transform:translateX(calc(50% + 10px))}
 .done-layout.staged .done-cards{opacity:0; pointer-events:none}
-.done-cards{transition:opacity .4s ease}
+.done-cards{--cards-show:opacity .4s ease; transition:var(--cards-show)}
 .done-hero-col{min-width:0}
 .done-cards{display:flex; flex-direction:column; gap:14px; min-width:0; overflow:hidden}
-.flyin{opacity:0; transform:translateX(60px); transition:opacity .6s ease, transform .6s cubic-bezier(.2,.7,.3,1)}
+.flyin{opacity:0; transform:translateX(60px);
+  --fly-in:opacity .6s ease, transform .6s cubic-bezier(.2,.7,.3,1); transition:var(--fly-in)}
 .flyin.in{opacity:1; transform:translateX(0)}
 .st-card[data-done=yes]{border-color:var(--mint)}
 .done-save{margin-top:14px}
 /* the two buttons arrive last */
-.fadein{opacity:0; transition:opacity .6s ease}
+.fadein{opacity:0; --fade-in:opacity .6s ease; transition:var(--fade-in)}
 .fadein.in{opacity:1}
 
+/* The finished screen arrives the same at school as anywhere else. Every
+   machine there has Windows Animation effects off, which Chromium reports
+   as prefers-reduced-motion, so the blanket rule near the top of the file
+   left the tick, the slide and the cards all standing still and the moment
+   of finishing was a page that simply appeared. It plays once, only when a
+   student has just finished, and is over in three seconds, so it is let
+   through. Each one is kept in a custom property where it is defined, so
+   these lines only name it again. */
 @media (prefers-reduced-motion:reduce){
-  .flyin,.fadein{transition:none; opacity:1; transform:none}
-  .done-layout{transition:none}
+  .done-tick{animation:var(--done-pop) !important}
+  .done-hero-col{transition:var(--slide-aside) !important}
+  .done-cards{transition:var(--cards-show) !important}
+  .flyin{transition:var(--fly-in) !important}
+  .fadein,.fadelast{transition:var(--fade-in) !important}
 }
 @media (max-width:900px){
   .done-layout{grid-template-columns:minmax(0,1fr)}
@@ -3212,9 +3213,8 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 }
 
 /* the tasks themselves arrive after the buttons */
-.fadelast{opacity:0; transition:opacity .6s ease}
+.fadelast{opacity:0; --fade-in:opacity .6s ease; transition:var(--fade-in)}
 .fadelast.in{opacity:1}
-@media (prefers-reduced-motion:reduce){ .fadelast{transition:none; opacity:1} }
 
 /* picking from the bank of strengths and targets */
 .bankfind{width:100%; margin-bottom:10px}

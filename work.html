@@ -76,7 +76,6 @@
           <input id="fbScore" type="number" min="0"> <span id="outOfLabel">out of 20</span>
         </span>
         <select id="fbGrade" class="bigselect" hidden></select>
-        <p class="levelshown" id="levelShown" hidden></p>
         <p class="bhelp" id="gradeHelp"></p>
       </div>
       <!-- Where a lesson has a bank of Strengths and Targets, a list of what
@@ -1303,7 +1302,7 @@ function loadFeedback(row){
   notSavedWas = "";
   listWas = null;
   $("notSaved").checked = notSaved;
-  /* Nothing of theirs to mark, so no Level reached either, whether they
+  /* Nothing of theirs to mark, so no Mark or Grade either, whether they
      were away or were there and lost it. A class rather than `hidden`,
      because paintMarking() owns that. */
   $("workSide").classList.toggle("fbempty",
@@ -1537,8 +1536,7 @@ function checklistAuto(row){
    taken on its own, though: the question after it on the same level is
    asked too. A second No straight after confirms it and ends there. A Yes
    means part of that level is done, so the rest of it is asked, for the
-   Strength, and they end at the end of the level. What they did reach is
-   said, and picked for the teacher in Level reached. */
+   Strength, and they end at the end of the level. */
 let ask = null;      // { row, items, ladder, answers, at, phase, stop, target, targetChosen, strength, strengthEdited, editingStrength }
 
 /* One question per bank entry that says what doing it well looks like. A
@@ -1742,11 +1740,6 @@ function paintAsk(){
      so the teacher reads what the student will read rather than taking it
      on trust from the questions. */
   if (ask.phase === "summary"){
-    if (reached !== null){
-      box.appendChild(el("p","fbask-level", reached >= 0
-        ? "Based on your feedback, this student reached " + ask.ladder[reached]
-        : "Based on your feedback, this student has not reached " + ask.ladder[0] + " yet"));
-    }
     box.appendChild(el("p","fbask-count","This is their Strength:"));
     if (ask.editingStrength){
       const edit = el("textarea","fbask-edit");
@@ -1795,9 +1788,8 @@ function paintAsk(){
     $("fbStrength").value = ask.strength;
     $("fbTarget").value = ask.target;
     showAsk(false);
-    /* The level the answers reached goes into Level reached, where there is
-       a picker to put it in. One read off the checklists has no picker and
-       is left as the ticks say. */
+    /* The level the answers reached is picked in Grade, for a practical
+       graded from a list. A practice one has no picker, and says nothing. */
     const pick = $("fbGrade");
     if (reached !== null && !pick.hidden){
       const name = reached >= 0 ? ask.ladder[reached] : "";
@@ -1960,7 +1952,7 @@ function paintList(row){
   box.hidden = off || listOpen.phase === "done";
   listBoxes(off || listOpen.phase === "done");
   paintListAgain(row, !off && listOpen.phase === "done");
-  /* Level reached and Save wait until the Target is agreed: the level is
+  /* The Grade and Save wait until the Target is agreed: the grade follows
      what the ticks come to, and there is nothing to save before then. A
      class rather than `hidden`, because paintMarking() owns that and the
      picker it fills has to keep following the ticks underneath. */
@@ -2274,60 +2266,35 @@ let marks = {};
 function markFor(user){ return marks[user] || null; }
 /* A practical is marked either out of a total or with a grade, whichever the
    lesson was built with. */
-/* A practice assessment is not graded. Its rubric is levels to aim for, and
-   picking the one a student reached is all the marking it has: with no
-   levels written there is nothing to pick, so there is no mark row at all. */
+/* A practice assessment is not marked at all, not even with a level. It
+   used to carry a Level reached row, and that was taken out: the Strength
+   and Target are the whole of its feedback, so it has no mark row. */
 function practiceRun(){ return !!(lessonJson && lessonJson.practiceAssessment); }
 function usesRubric(){
-  if (!lessonJson || !lessonJson.practical) return false;
-  return practiceRun() ? (lessonJson.rubric || []).length > 0 : lessonJson.marking === "rubric";
+  if (!lessonJson || !lessonJson.practical || practiceRun()) return false;
+  return lessonJson.marking === "rubric";
 }
-/* The level a practice practical's student reached, worked out from what
-   their checklists say rather than picked by hand: the levels open one after
-   another as the lines are ticked, so the ticks already are the answer, and
-   a picker beside them could only disagree. Null for a practical with no
-   levels to read, which keeps its picker. */
+/* How far a practice practical's checklists have got. Not shown anywhere:
+   it only decides whether the Target says there is further to go. */
 function levelFor(user){
   if (PRACTICE || !practiceRun() || !window.progressMath.levelReached) return null;
   const row = rows.find(r => r.username === user);
   return window.progressMath.levelReached(lessonJson, (row && row.data) || {});
 }
-/* The name a level is saved under: the rubric's own wording where one
-   matches, because that is what the student's rubric picks out as theirs. */
-function levelGrade(lv){
-  if (!lv || !lv.reached) return "";
-  const named = ((lessonJson && lessonJson.rubric) || [])
-    .find(g => String(g.name || "").trim().toLowerCase() === lv.reached.name.toLowerCase());
-  return named ? named.name : lv.reached.name;
-}
 function paintMarking(user){
-  const lv = levelFor(user);
-  const shown = $("levelShown");
-  if (shown) shown.hidden = !lv;
-  if (lv){
-    $("markWrap").hidden = false;
-    $("markLabel").textContent = "Level reached";
-    $("scoreRow").hidden = true;
-    $("fbGrade").hidden = true;
-    $("gradeHelp").textContent = "";
-    shown.textContent = lv.reached ? lv.reached.label
-      : "Not reached " + (lv.next ? lv.next.label : "the first level") + " yet";
-    shown.classList.toggle("none", !lv.reached);
-    return;
-  }
-  const practical = !!(lessonJson && lessonJson.practical) && (!practiceRun() || usesRubric());
+  const practical = !!(lessonJson && lessonJson.practical) && !practiceRun();
   $("markWrap").hidden = !practical;
   if (!practical) return;
   const mk = markFor(user);
   const rubric = usesRubric();
   $("scoreRow").hidden = rubric;
   $("fbGrade").hidden = !rubric;
-  $("markLabel").textContent = !rubric ? "Mark" : practiceRun() ? "Level reached" : "Grade";
+  $("markLabel").textContent = rubric ? "Grade" : "Mark";
   if (rubric){
     const sel = $("fbGrade");
     sel.innerHTML = "";
     const none = document.createElement("option");
-    none.value = ""; none.textContent = practiceRun() ? "No level picked" : "Not graded yet";
+    none.value = ""; none.textContent = "Not graded yet";
     sel.appendChild(none);
     window.progressMath.rubricLevels(lessonJson).forEach(g => {
       const o = document.createElement("option");
@@ -2387,12 +2354,10 @@ async function saveFeedback(){
                              got: Object.keys(got).length ? got : undefined,
                              notSaved: notSaved || undefined }) });
     if (!r.ok) throw new Error((await r.json()).error || "Could not save it.");
-    /* the mark or grade goes with the feedback; a practice one only has a
-       level, and only when it has levels to pick from */
-    const lv = levelFor(st.username);
-    if (lessonJson && lessonJson.practical && (lv || !practiceRun() || usesRubric())){
-      const rubric = !!lv || usesRubric();
-      const grade = lv ? levelGrade(lv) : rubric ? $("fbGrade").value : "";
+    /* the mark or grade goes with the feedback; a practice one has neither */
+    if (lessonJson && lessonJson.practical && !practiceRun()){
+      const rubric = usesRubric();
+      const grade = rubric ? $("fbGrade").value : "";
       const total = lessonJson.outOf || 20;
       const score = rubric ? 0 : (parseInt($("fbScore").value, 10) || 0);
       const worth = rubric ? 1 : total;
@@ -2504,7 +2469,7 @@ async function handBack(){
   const box = { n: st.display_name, l: lessonId,
                 d: Object.assign({}, row.data || {}, pendingEdits), fb: fb };
 
-  if (lessonJson && lessonJson.practical && (!practiceRun() || usesRubric())){
+  if (lessonJson && lessonJson.practical && !practiceRun()){
     const rubric = usesRubric();
     const grade = rubric ? $("fbGrade").value : "";
     const total = lessonJson.outOf || 20;

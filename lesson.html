@@ -8513,7 +8513,10 @@ async function assessmentFinish(){
 /* A practical has no questions to add up: the mark or grade comes from the
    teacher, so this page is built from that rather than from a score. */
 function renderPracticalComplete(){
-  const graded = myResult && myResult.grade;
+  /* A practice assessment says no level, even one saved before the Level
+     reached row came out of Mark work: its feedback is the Strength and
+     Target and nothing that reads as a mark. */
+  const graded = myResult && myResult.grade && !lesson.practiceAssessment;
   const scored = myResult && typeof myResult.score === "number" && myResult.outOf > 1;
   const marked = graded || scored ||
     (teacherNote && (teacherNote.strength || teacherNote.target || teacherNote.comment));
@@ -8525,12 +8528,7 @@ function renderPracticalComplete(){
            : "Your teacher will mark your assessment.");
   /* the mark or grade sits where a percentage would on a normal assessment */
   if (graded){
-    /* Said in a sentence rather than as a big headline: the level is a
-       description of the work, and what it asks for underneath is the part
-       worth reading. A name that already says "level" is not given another. */
-    const name = String(myResult.grade).trim();
-    hero.appendChild(el("p","done-reached",
-      /\blevel\b/i.test(name) ? "You reached " + name : "You reached the " + name + " level"));
+    hero.appendChild(el("p","done-score", String(myResult.grade).trim()));
     const rub = ((lesson && lesson.rubric) || []).find(x => x.name === myResult.grade);
     if (rub && (rub.descriptionHtml || rub.description)) hero.appendChild(rubricWords(rub, "done-sub rubric-desc"));
   } else if (scored){
@@ -9273,9 +9271,12 @@ async function showPdfView(){
 
 
 /* ---------- completion screens ---------- */
+/* Not held back by prefers-reduced-motion. Every machine in school reports
+   it, because Windows Animation effects is off across the estate, so
+   asking meant no student there ever saw it. It falls once, for under
+   three seconds, at the moment they finish. */
 function confetti(){
   try{
-    if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const c = document.createElement("canvas");
     if (!c.getContext) return;
     c.className = "confetti";
