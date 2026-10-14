@@ -120,7 +120,13 @@ let step = 0, bypassed = false, lesson = null;
    lesson up. Kept apart from bypassed so letting somebody through a single
    sticking point does not hand them the rest of the lesson as well. */
 const skipped = new Set();
-const waved = (i) => bypassed || skipped.has(i);
+/* The lesson Preview is a teacher trying the lesson as a student would, with
+   no class and no teacher to open anything. Its pretend server already says
+   every page is open, but a page held shut by anything else, once, was a
+   preview that could not be got past, so here locks are not asked about at
+   all. Everything else a student meets is left as it is. */
+const inPreview = !!window.hubInPreview;
+const waved = (i) => bypassed || inPreview || skipped.has(i);
 if (spectate) bypassed = true;   // teachers see past every lock
 /* Skimming a student's work should never ask the teacher to run code, tick a
    box or wait for anything. */
@@ -1077,7 +1083,7 @@ function nextOpen(from, dir){
 /* Where should Continue land? A single locked task is skipped (the teacher
    shut just that one); when everything ahead is locked, that's pacing, wait. */
 async function continueTarget(){
-  if (bypassed || !apiReady || !token) return step + 1;
+  if (bypassed || inPreview || !apiReady || !token) return step + 1;
   await fetchRelease();                 // freshen; offline keeps the last known
   const at = nextOpen(step + 1, +1);
   if (at !== null) return at;
@@ -2950,7 +2956,7 @@ async function manualSave(){
    told to wait, the same as a locked page. */
 async function tryFinish(){
   if (workFrozen){ backToFeedback(); return; }
-  if (bypassed || !apiReady || !token){ finishLesson(); return; }
+  if (bypassed || inPreview || !apiReady || !token){ finishLesson(); return; }
   if (lesson && lesson.assessment){ finishLesson(); return; }   // never hold up a test
   if (askingToMoveOn) return;                  // see tryContinue: one at a time
   askingToMoveOn = true;
