@@ -278,6 +278,11 @@
           const imgId = n.getAttribute ? n.getAttribute("data-img") : "";
           if (imgId) keep.setAttribute("data-img", imgId);
           else if (src) keep.setAttribute("src", src);
+          /* What the picture shows, in words: read out by a screen reader,
+             and printed in its place where a picture cannot go, such as a
+             student's hand-in or the markbook. */
+          const alt = n.getAttribute ? n.getAttribute("alt") : "";
+          if (alt) keep.setAttribute("alt", alt);
           if (n.style && n.style.width) keep.style.width = n.style.width;
           if (n.style && n.style.height) keep.style.height = n.style.height;
         }

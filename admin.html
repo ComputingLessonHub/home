@@ -5210,7 +5210,7 @@ function markQuestion(b, v){
   if (b.type === "short") return { max:1, got: window.shortAnswer.mark(b, v).ok ? 1 : 0 };
   /* A table and a label picture, the same as everywhere else marks them:
      progressmath.js holds the one copy of those rules. */
-  if ((b.type === "table" || b.type === "label") && window.progressMath && window.progressMath.scoreTask){
+  if ((b.type === "table" || b.type === "label" || b.type === "hotspot") && window.progressMath && window.progressMath.scoreTask){
     const m = window.progressMath.scoreTask(b, v);
     return m.max ? { max: m.max, got: m.got } : null;
   }
@@ -5226,7 +5226,7 @@ function assessmentQuestions(){
     if (reading.includes(b.type)) return;
     n++;
     if (["mc","order","blanks","short"].includes(b.type) ||
-        ((b.type === "table" || b.type === "label") && markQuestion(b, null))){
+        ((b.type === "table" || b.type === "label" || b.type === "hotspot") && markQuestion(b, null))){
       out.push({ id: b.id, n: n, block: b,
                  label: "Q" + n, title: stripTags(b.prompt || b.title || b.task || b.id) });
     }

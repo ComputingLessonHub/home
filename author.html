@@ -201,6 +201,7 @@
           <button class="pal" data-add="order"><b>Put in order</b><span>Drag to sort</span></button>
           <button class="pal" data-add="table"><b>Table</b><span>They fill in the blank cells</span></button>
           <button class="pal" data-add="label"><b>Label a picture</b><span>Drag words onto an image</span></button>
+          <button class="pal" data-add="hotspot"><b>Click the right spot</b><span>They click a place on a picture</span></button>
         </div>
       </div>
       <div class="palgroup" data-group="media">
@@ -280,6 +281,7 @@
           <button class="pal" data-add="table"><b>Table</b><span>They fill in the blank cells</span></button>
           <button class="pal" data-add="short"><b>Short answer</b><span>Matched to the answers you set</span></button>
           <button class="pal" data-add="label"><b>Label a picture</b><span>Drag words onto an image</span></button>
+          <button class="pal" data-add="hotspot"><b>Click the right spot</b><span>They click a place on a picture</span></button>
           <button class="pal" data-add="text"><b>Paragraph</b><span>Instructions or context</span></button>
         </div>
       </div>
@@ -614,6 +616,7 @@ const BLANK = {
   keywords: () => ({ type:"keywords", title:"", task:"",
                      words:[{ word:"", hint:"" }, { word:"", hint:"" }] }),
   label:    () => ({ type:"label", title:"", task:"", image:"", spots:[] }),
+  hotspot:  () => ({ type:"hotspot", title:"", task:"", image:"", x:50, y:50, r:8 }),
   binary:   () => ({ type:"binary", title:"", task:"", mode:"toDenary", bits:8, count:4,
                      showPlace:true, numbers:"" }),
   binadd:   () => ({ type:"binadd", title:"", task:"", bits:8, count:3,
@@ -705,7 +708,7 @@ const LABEL = { text:"Paragraph", picture:"Image", pastelink:"Paste a link", ide
                 embed:"Video", link:"Link to a site", mc:"Multiple choice", blanks:"Fill the gaps", order:"Put in order",
                 short:"Short answer", page:"Page", extension:"Extension tasks", group:"Group", choice:"Choice", frame:"Embedded page", binary:"Binary conversion", binadd:"Binary addition", notes:"Notes", mindmap:"Mind map", board:"Whiteboard", label:"Label a picture", keywords:"Keyword definitions", code:"Coding task", web:"Web page", scratch:"Block coding",
                 password:"Password checker", caesar:"Caesar cipher", exam:"Exam question",
-                table:"Table" };
+                table:"Table", hotspot:"Click the right spot" };
 
 /* The lesson page hashes what a student types and compares it with this, so
    the answer is never sitting in the lesson file for anyone to read. Same
@@ -821,6 +824,17 @@ function schemeList(v){
     return v.split(/\r?\n/).map(t => t.trim()).filter(Boolean).map(t => ({ text:t, marks:1 }));
   if (typeof v === "object") return Object.keys(v).map(k => v[k]).filter(p => p && typeof p === "object");
   return [];
+}
+/* One answer from a formatting box, as one line of html: a picture, bold,
+   code and so on survive, the paragraph round it does not. Empty means
+   nothing typed and no picture, and is dropped. Plain text, from a lesson
+   written before answers could hold pictures, comes through as it was. */
+function optionHtml(x){
+  let h = String(x == null ? "" : x);
+  if (/<[a-z]/i.test(h) && window.cleanRichText) h = window.cleanRichText(h);
+  h = h.replace(/<\/?(p|div)[^>]*>/gi, " ").replace(/(<br\s*\/?>\s*)+$/i, "").replace(/\s+/g, " ").trim();
+  const words = h.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+  return words || /<img/i.test(h) ? h : "";
 }
 function keepArrays(o){
   Object.keys(o).forEach(k => {
@@ -1197,6 +1211,16 @@ function compileOne(b, id, target){
                  .sort(() => Math.random() - 0.5),
         spots: (b.spots || []).filter(sp => sp.answer),
         topic: lesson.assessment ? b.topic : "" }));
+    else if (b.type === "hotspot"){
+      /* The spot and the size of the circle are percentages of the picture,
+         and ratio keeps the circle round on a picture that is not square. */
+      const pct = (n, d) => Math.round(Math.min(100, Math.max(0, Number(n) || d)) * 10) / 10;
+      push(keepArrays({ type:"hotspot", id, title: b.title || "", task: b.task || "",
+        image: b.image || "", alt: b.alt || "",
+        x: pct(b.x, 50), y: pct(b.y, 50), r: Math.max(1, Math.min(50, Number(b.r) || 8)),
+        ratio: Number(b.ratio) > 0 ? Math.round(Number(b.ratio) * 10000) / 10000 : undefined,
+        topic: lesson.assessment ? b.topic : "" }));
+    }
     else if (b.type === "binary")
       push(keepArrays({ type:"binary", id, title: b.title || "", task: b.task || "",
         mode: b.mode || "toDenary", bits: Number(b.bits) || 8, count: Number(b.count) || 4,
@@ -1255,8 +1279,10 @@ function compileOne(b, id, target){
     else if (b.type === "link")
       push(keepArrays({ type:"link", id, url: b.url || "", title: b.title || "Open this",   // the button needs words
              heading: b.heading || "", task: b.task || "", confirm: b.confirm === true }));
+    /* An option written in a formatting box is kept as a line: its
+       paragraph wrapper goes, so it sits beside its radio button. */
     else if (b.type === "mc")
-      push(keepArrays({ type:"mc", id, prompt: b.prompt || "", options: (b.options || []).filter(x => x !== ""),
+      push(keepArrays({ type:"mc", id, prompt: b.prompt || "", options: (b.options || []).map(optionHtml).filter(Boolean),
         answer: Number(b.answer) || 0, topic: lesson.assessment ? b.topic : "" }));
     else if (b.type === "blanks")
       push(keepArrays({ type:"blanks", id, prompt: b.prompt || "", text: b.text || "",
@@ -1264,7 +1290,7 @@ function compileOne(b, id, target){
         topic: lesson.assessment ? b.topic : "" }));
     else if (b.type === "order")
       push(keepArrays({ type:"order", id, prompt: b.prompt || "",
-        items: (b.items || []).filter(x => x !== ""), topic: lesson.assessment ? b.topic : "" }));
+        items: (b.items || []).map(optionHtml).filter(Boolean), topic: lesson.assessment ? b.topic : "" }));
     else if (b.type === "short")
       push(keepArrays({ type:"short", id, prompt: b.prompt || "",
         answers: (b.answers || []).map(x => String(x).trim()).filter(Boolean),

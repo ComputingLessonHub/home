@@ -6446,3 +6446,33 @@ body.lpvpage{height:100vh; height:100dvh; overflow:hidden; display:flex; flex-di
 .short-toolong{color:var(--red); font-size:14px; font-weight:600; margin:6px 0 0}
 .short-toolong[hidden]{display:none}
 .short-row input.answer.too-long{border-color:var(--red)}
+
+/* ---------- pictures inside questions and answers ----------
+   A Scratch block in a question sits on its own line between the words
+   round it; in an answer it sits beside the radio button or the grip. */
+.pg-h img, #briefTitle img, .resq b img, .opt img, .order-item img, .rev-opt img, .rev-order img{
+  max-width:100%; height:auto; vertical-align:middle}
+.pg-h img, #briefTitle img, .resq b img{display:block; margin:8px 0}
+/* An answer written in a formatting box in the builder: the bar only
+   while it is being written in, or four answers are four bars. */
+.rt-option{flex:1 1 auto; min-width:0}
+.rt-option .rt-bar{display:none}
+.rt-option:focus-within .rt-bar{display:flex}
+
+/* ---------- click the right spot ---------- */
+.hotspot-pic{position:relative; display:inline-block; max-width:100%; cursor:crosshair; border-radius:12px; line-height:0}
+.hotspot-pic img{max-width:100%; display:block; border-radius:12px; user-select:none; -webkit-user-drag:none; pointer-events:none}
+.hotspot-pic:focus-visible{outline:3px solid var(--amber); outline-offset:3px}
+.hotspot-pin{position:absolute; width:22px; height:22px; border-radius:50%; transform:translate(-50%,-50%);
+  background:var(--amber); border:3px solid var(--panel); box-shadow:0 0 0 2px var(--text); pointer-events:none}
+.hotspot-pin[hidden]{display:none}
+.hotspot-pic[data-verdict=yes] .hotspot-pin{background:var(--mint)}
+.hotspot-pic[data-verdict=no] .hotspot-pin{background:var(--red)}
+.hotspot-ring{position:absolute; aspect-ratio:1; transform:translate(-50%,-50%); border-radius:50%;
+  border:3px dashed var(--mint); background:color-mix(in srgb, var(--mint) 15%, transparent); pointer-events:none}
+.hotspot-check{display:block; margin-top:12px}
+.hotspot-said{margin:8px 0 0; font-weight:600}
+.hotspot-said[hidden]{display:none}
+.hotspot-said[data-verdict=yes]{color:var(--mint)}
+.hotspot-said[data-verdict=no]{color:var(--red)}
+.rev-hotspot{max-width:520px; cursor:default}

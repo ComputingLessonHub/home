@@ -492,6 +492,15 @@ function inlineHtml(s){
     .replace(/<\/?(p|div|h[1-6]|ul|ol|li|br|blockquote)[^>]*>/gi, " ")
     .replace(/\s+/g, " ").trim();
 }
+/* A question can carry a picture, a Scratch block say, as part of what it
+   asks. inlineHtml keeps an <img>, but one uploaded into the database
+   arrives with only its id, so the address is put on it here. Used for
+   anything drawn as a heading from a teacher's words. */
+function askHtml(s){
+  return inlineHtml(s).replace(/<img\b([^>]*?)\sdata-img="([^"]+)"([^>]*)>/gi, (m, a, id, z) =>
+    /\ssrc=/i.test(a + z) ? m
+      : '<img' + a + ' data-img="' + id + '" src="' + (API || "") + "/api/catalog?image=" + encodeURIComponent(id) + '"' + z + '>');
+}
 /* A question can carry a code box, and a heading cannot: inlineHtml folds
    every line of the code into one. So the words before the first box are the
    question, and the box onwards is drawn underneath it, where its lines and
@@ -1728,6 +1737,7 @@ function questionAnswered(it){
     case "short": return filled(v);
     case "table": return Array.isArray(v) && v.every(filled);
     case "label": return (b.spots || []).every((_, i) => !!(v && v.placed && v.placed[i]));
+    case "hotspot": return !!(v && typeof v.x === "number");
     case "exam": return filled(v && typeof v === "object" ? v.text : v);
     case "binary": case "binadd":
       return !!(v && Array.isArray(v.answers) && v.answers.length && v.answers.every(filled));
@@ -2538,6 +2548,9 @@ const TASK_ICON = {
                d:'<path d="M7 5v14"/><path d="M4 16l3 3 3-3"/><path d="M13 6.5h7M13 12h5M13 17.5h3"/>' },
   label:     { name:"Label a picture",
                d:'<path d="M3.5 3.5h8l9 9-8 8-9-9z"/><path d="M7.5 7.5h.01"/>' },
+  /* a target */
+  hotspot:   { name:"Click the right spot",
+               d:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><path d="M12 12h.01"/>' },
   notes:     { name:"Notes",
                d:'<path d="M6.5 3.5h7l4.5 4.5v12.5h-11.5z"/><path d="M13.5 3.5V8H18"/>' +
                  '<path d="M9 13h6M9 16.5h4"/>' },
@@ -3676,7 +3689,7 @@ function buildBlock(b, i){
               board:rBoardTask, label:rLabelTask, notes:rNotesTask, mindmap:rMindmapTask, web:rWeb,
               keywords:rKeywordsTask,
               mc:rMC, order:rOrder, blanks:rBlanks, short:rShort, ide:rIDE, page:rPage,
-              exam:rExamTask, table:rTableTask,
+              exam:rExamTask, table:rTableTask, hotspot:rHotspotTask,
               extension:rExtension, group:rGroup, choice:rChoice }[b.type];
   if (!R){ console.warn("Unknown block type:", b.type); return null; }
   try { return R(b); }
@@ -7068,6 +7081,7 @@ const rBoardTask   = (b) => wrapExtra(b, window.rBoard,   "Whiteboard");
 const rKeywordsTask = (b) => wrapExtra(b, window.rKeywords, "Keywords");
 const rTableTask  = (b) => wrapExtra(b, window.rTable,    "Table");
 const rLabelTask   = (b) => wrapExtra(b, window.rLabel,   "Labelling");
+const rHotspotTask = (b) => wrapExtra(b, window.rHotspot, "Click the right spot");
 /* An exam question is nearly one of the four above, but it also reports what
    it scored, which wrapExtra has no room for: fields[] would drop result()
    and the coverage screen would have nothing to read. */
@@ -7860,6 +7874,8 @@ function rMC(b){
     lab.appendChild(radio); lab.appendChild(el("span","", text));
     opts.appendChild(lab);
   });
+  /* an answer can be a picture, such as a Scratch block */
+  fillImageIds(opts);
   s.appendChild(opts);
   fields[b.id] = { get:() => chosen, set:(v) => {
     if (v === null || v === undefined) return;
@@ -7869,7 +7885,7 @@ function rMC(b){
   }};
   return { section:s,
            check:() => (!(b.options || []).length || chosen !== null) ? { ok:true } : { ok:false, message:"Choose an answer" },
-           brief:{ eyebrow:"Question", title:stripTags(b.prompt) || "", text:b.note || "" } };
+           brief:{ eyebrow:"Question", title:askHtml(b.prompt) || "", text:b.note || "" } };
 }
 
 /* The order a "put in order" list is dealt in: shuffled, but the same
@@ -7961,7 +7977,7 @@ function rOrder(b){
                    set:(v) => { if (Array.isArray(v) && v.length === items.length){ arrangement = v.slice(); redraw(); } } };
   return { section:s,
            check:() => ({ ok:true }),   // any order can be submitted, like a Form
-           brief:{ eyebrow:"Put in order", title:stripTags(b.prompt) || "", text:b.note || "" } };
+           brief:{ eyebrow:"Put in order", title:askHtml(b.prompt) || "", text:b.note || "" } };
 }
 
 /* Fill in the blanks, a dropdown per gap. The choices are every gap's
@@ -8003,7 +8019,7 @@ function rBlanks(b){
                      }); } };
   return { section:s,
            check:() => (!selects.length || selects.every(x => x.value)) ? { ok:true } : { ok:false, message:"Choose a word for every gap" },
-           brief:{ eyebrow:"Fill in the blanks", title:stripTags(b.prompt) || "", text:b.note || "" } };
+           brief:{ eyebrow:"Fill in the blanks", title:askHtml(b.prompt) || "", text:b.note || "" } };
 }
 
 /* Short answer. One question, one answer box, and the answer has to be one
@@ -8107,7 +8123,7 @@ function rShort(b){
   return { section:s,
            check:() => ans.value.trim() ? { ok:true } : { ok:false, message:"Write an answer" },
            brief:{ eyebrow:"Short answer", text:b.note || "",
-                   title:inlineHtml(asked.ask) || (asked.code ? "Look at the code below." : "") } };
+                   title:askHtml(asked.ask) || (asked.code ? "Look at the code below." : "") } };
 }
 
 /* ---------- marking ---------- */
@@ -8158,7 +8174,7 @@ function computeAssessment(){
     const codingMarks = isCodeTask(b)
       && Array.isArray(b.checks)
       && b.checks.some(c => (parseInt(c.marks, 10) || 0) > 0);
-    if (!codingMarks && !["mc","order","blanks","short","exam","table","label"].includes(b.type)) return;
+    if (!codingMarks && !["mc","order","blanks","short","exam","table","label","hotspot"].includes(b.type)) return;
     const v = fields[b.id] ? fields[b.id].get() : null;
     /* A table with no answers in it, or a picture with no labels, has
        nothing to mark, so it is left out the way an unmarked checklist is. */
@@ -8192,6 +8208,11 @@ function computeAssessment(){
       const m = b.type === "table" ? tableMarks(b, v) : labelMarks(b, v);
       pts = m.got; max = m.max;
       review.items = m.items;
+    } else if (b.type === "hotspot"){
+      /* one mark for clicking inside the circle */
+      max = 1;
+      pts = window.hotspotHit(b, v) ? 1 : 0;
+      review = { clicked: !!(v && typeof v.x === "number") };
     } else if (isCodeTask(b)){
       const flags = (v && Array.isArray(v.checks)) ? v.checks : [];
       review.items = (b.checks || []).map((c, i) => {
@@ -8244,7 +8265,8 @@ function computeAssessment(){
     /* Numbered as the student saw it, so Question 4 in the review is the
        question that was 4 on the page. */
     perQ.push({ id: b.id, n: questionNo[b.id] || n, type: b.type,
-                title: stripTags(b.prompt || b.title || b.task || "") || REVIEW_NAME[b.type] || b.id,
+                title: (stripTags(b.prompt || b.title || b.task || "") || /<img/i.test(b.prompt || "")
+                          ? askHtml(b.prompt || b.title || b.task || "") : "") || REVIEW_NAME[b.type] || b.id,
                 pts, max, review });
     const topic = b.topic || "general";
     byTopic[topic] = byTopic[topic] || { right: 0, total: 0 };
@@ -8254,7 +8276,7 @@ function computeAssessment(){
 }
 
 /* What a question with no heading of its own is called in the review. */
-const REVIEW_NAME = { table:"Complete the table", label:"Label the picture" };
+const REVIEW_NAME = { table:"Complete the table", label:"Label the picture", hotspot:"Click the right spot" };
 
 /* Best topic -> strength, worst topic -> target. Sentences live in the
    assessment JSON's "topics" bank, so each assessment owns its own wording. */
@@ -8514,7 +8536,7 @@ function renderAssessmentComplete(justFinished, res, st, sent){
         if (j === b.answer) c += " answer";
         const o = el("div", c);
         o.appendChild(el("span","dot",""));
-        o.appendChild(el("span","", stripTags(text)));
+        o.appendChild(el("span","", askHtml(text)));
         if (j === b.answer) o.appendChild(el("span","tag","Correct"));
         else if (j === v) o.appendChild(el("span","tag","Your answer"));
         opts.appendChild(o);
@@ -8565,6 +8587,7 @@ function renderAssessmentComplete(justFinished, res, st, sent){
 
     if (q.type === "table") body.appendChild(reviewTable(b, q));
     if (q.type === "label") body.appendChild(reviewLabels(b, q));
+    if (q.type === "hotspot") body.appendChild(reviewHotspot(b, q, v));
 
     if (q.type === "short"){
       body.appendChild(el("div","rev-quote", q.review.yours));
@@ -8780,6 +8803,29 @@ function reviewTable(b, q){
   scroller.appendChild(table);
   wrap.appendChild(scroller);
   wrap.appendChild(el("span","why", q.pts + " of " + q.max + " boxes correct, one mark per box."));
+  return wrap;
+}
+/* The picture with the right spot ringed and where they clicked marked on
+   it, green inside the ring and red outside. */
+function reviewHotspot(b, q, v){
+  const wrap = el("div");
+  const holder = el("div","hotspot-pic rev-hotspot");
+  const img = el("img"); img.src = b.image || ""; img.alt = b.alt || ""; img.draggable = false;
+  holder.appendChild(img);
+  const ring = el("div","hotspot-ring");
+  ring.style.left = Number(b.x || 0) + "%";
+  ring.style.top = Number(b.y || 0) + "%";
+  ring.style.width = (2 * Number(b.r || 0)) + "%";
+  holder.appendChild(ring);
+  if (v && typeof v.x === "number"){
+    const pin = el("div","hotspot-pin");
+    pin.style.left = v.x + "%"; pin.style.top = v.y + "%";
+    holder.dataset.verdict = q.pts ? "yes" : "no";
+    holder.appendChild(pin);
+  }
+  wrap.appendChild(holder);
+  wrap.appendChild(el("span","why", !(v && typeof v.x === "number") ? "Not answered. The ring shows the right spot."
+    : q.pts ? "You clicked the right spot." : "Your click is outside the ring, which shows the right spot."));
   return wrap;
 }
 /* The picture with what they dropped on it, marked, and underneath it each
@@ -9349,7 +9395,7 @@ function paintStatus(elm, state){
 const ACH_LABEL = { quiz:"Quiz", mc:"Multiple choice", order:"Put in order",
                      blanks:"Fill the gaps", short:"Short answer",
                      ide:"Coding task", web:"Coding task",
-                     table:"Table", label:"Label a picture" };
+                     table:"Table", label:"Label a picture", hotspot:"Click the right spot" };
 /* The words after the number, so "9 of 9" reads as what it actually is:
    ticked checklist points, not an unexplained score "on coding task". Kept
    apart from the number itself so pluralising the noun is one word here
@@ -9362,7 +9408,8 @@ const ACH_PHRASE = {
   "Short answer": (m) => " of " + m + " short answer" + (m === 1 ? "" : "s") + " right",
   "Coding task": (m) => " of " + m + " checklist point" + (m === 1 ? "" : "s") + " ticked off",
   "Table": (m) => " of " + m + " table box" + (m === 1 ? "" : "es") + " filled in correctly",
-  "Label a picture": (m) => " of " + m + " label" + (m === 1 ? "" : "s") + " in the right place"
+  "Label a picture": (m) => " of " + m + " label" + (m === 1 ? "" : "s") + " in the right place",
+  "Click the right spot": (m) => " of " + m + " spot" + (m === 1 ? "" : "s") + " clicked correctly"
 };
 /* Whether a task has been touched at all, read off the same live value
    lessonTaskScore marks. A live quiz or "put in order" get() is always a
@@ -9380,6 +9427,7 @@ function lessonTaskAttempted(b, v){
   if (b.type === "scratch") return !!(v && (v.changed || v.runs));
   if (b.type === "table") return Array.isArray(v) && v.some(x => String(x == null ? "" : x).trim() !== "");
   if (b.type === "label") return !!(v && v.placed && Object.keys(v.placed).some(k => v.placed[k]));
+  if (b.type === "hotspot") return !!(v && typeof v.x === "number");
   return true;
 }
 function lessonTaskScore(b, v){
@@ -9414,6 +9462,7 @@ function lessonTaskScore(b, v){
     const m = b.type === "table" ? tableMarks(b, v) : labelMarks(b, v);
     return m.max ? { got: m.got, max: m.max } : null;
   }
+  if (b.type === "hotspot") return { got: window.hotspotHit(b, v) ? 1 : 0, max: 1 };
   if (isCodeTask(b) && Array.isArray(b.checks) && b.checks.length){
     const flags = (v && Array.isArray(v.checks)) ? v.checks : [];
     const manual = (v && v.manual && typeof v.manual === "object") ? v.manual : {};
@@ -9867,6 +9916,9 @@ PDF.W = 210 - PDF.M * 2;
    spaces before the tags are dropped. */
 function pdfText(html){
   return stripHtml(String(html || "")
+    /* a picture prints as what it shows, in brackets, where there is a
+       description of it: a Scratch block reads as its words */
+    .replace(/<img\b[^>]*\salt="([^"]*)"[^>]*>/gi, " [$1] ")
     .replace(/<\s*br\s*\/?>|<\/(p|div|li|h[1-6]|tr|td|blockquote)\s*>/gi, " "));
 }
 
@@ -10329,6 +10381,15 @@ function buildPdf(){
         });
       };
       walk(root.id, 1);
+      return out;
+    }
+    if (b.type === "hotspot"){
+      out.push({ t: "text", face: "task", text: title || "Click the right spot" });
+      const clicked = !!(v && typeof v.x === "number");
+      const hit = clicked && window.hotspotHit(b, v);
+      out.push({ t: "text", face: "p",
+                 text: !clicked ? "Not answered" : hit ? "Clicked the right spot" : "Clicked the wrong spot",
+                 colour: !clicked ? PDF.RED : hit ? PDF.GREEN : PDF.RED });
       return out;
     }
     if (b.type === "label"){

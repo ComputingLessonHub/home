@@ -213,15 +213,26 @@ function editorKit(b, body, ctx){
   }
   /* onChange fires whenever a line is typed in, added or removed, for the
      lists that have something to put right once a teacher has touched them. */
-  function listField(label, key, help, onChange){
+  function listField(label, key, help, onChange, rich){
     const changed = () => { if (onChange) onChange(); };
     const w = el("div","bfield");
     w.appendChild(el("label","", label));
     b[key].forEach((val, k) => {
       const row = el("div","brow");
-      const input = el("input"); input.value = val;
-      input.addEventListener("input", () => { b[key][k] = input.value; changed(); saveDraft(); schedulePreview(); });
-      row.appendChild(input);
+      if (rich){
+        /* An answer can be a picture: a Scratch block pasted in, say, or
+           words with bold or code in them. Its formatting bar only shows
+           while it is being written in, or a list of four would be four
+           bars. */
+        const ed = window.richText(val || "", (html) => { b[key][k] = html; changed(); saveDraft(); schedulePreview(); },
+                                   { rows: 1, upload: pasteUpload, imageSrc: (id) => pictureSrc({ imgId: id }) });
+        ed.classList.add("rt-option");
+        row.appendChild(ed);
+      } else {
+        const input = el("input"); input.value = val;
+        input.addEventListener("input", () => { b[key][k] = input.value; changed(); saveDraft(); schedulePreview(); });
+        row.appendChild(input);
+      }
       if (b.answer !== undefined){
         const pick = el("button","btn-ghost bmini" + (Number(b.answer) === k ? " right" : ""), "\u2713");
         pick.title = "This is the correct answer";
@@ -369,6 +380,7 @@ const TASK_ICONS = {
   order:     '<path d="M7 4v16M4 7l3-3 3 3M4 17l3 3 3-3M13 7h8M13 12h8M13 17h8"/>',
   table:     '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M10 4v16"/>',
   label:     '<path d="M3 12V4h8l10 10-7 7z"/><circle cx="7.5" cy="8.5" r="1.3"/>',
+  hotspot:   '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="14" cy="11" r="3.5"/><path d="M14 11h.01M7 16l2.5-2.5"/>',
   picture:   '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 8"/>',
   embed:     '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/>',
   frame:     '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M6.5 6.5h.01M9 6.5h.01"/>',
@@ -1417,7 +1429,9 @@ EDITORS.link = function(b, k){
 EDITORS.mc = function(b, k){
   const { F, R, listField, settings } = k;
   R("Question", "prompt", { rows:2 });
-  listField("Options (tick the right one)", "options");
+  listField("Options (tick the right one)", "options",
+    "Each option can hold a picture as well as words: paste one in, a screenshot of a Scratch block for example.",
+    null, true);
   settings(() => {
     if (topicTags()) F("Topic tag", "topic", { help:"Used for Strength and Target feedback." });
   });
@@ -1437,7 +1451,8 @@ EDITORS.blanks = function(b, k){
 EDITORS.order = function(b, k){
   const { F, listField, settings } = k;
   F("Instruction (optional)", "prompt");
-  listField("Items in the CORRECT order", "items", "Students see them shuffled.");
+  listField("Items in the CORRECT order", "items",
+    "Students see them shuffled. Each item can hold a picture as well as words: paste one in.", null, true);
   settings(() => {
     if (topicTags()) F("Topic tag", "topic");
   });
@@ -1567,6 +1582,65 @@ EDITORS.board = function(b, k){
   settings(() => {
     F("How tall, in pixels", "height", { num:true,
       help:"What they draw is kept as the strokes themselves, not a picture, so it takes very little room." });
+  });
+};
+
+/* Click the right spot: one place on a picture, and a ring round it that
+   counts as right. Positions are shares of the picture's width and height,
+   so the spot stays put however wide the picture is drawn. */
+EDITORS.hotspot = function(b, k){
+  const { F, add, settings } = k;
+  F("Heading (optional)", "title");
+  F("Instruction (optional)", "task", { area:true, rows:2 });
+  F("Picture address", "image", { help:"Paste a link to the picture, or the address of one in the site's images folder." });
+  F("What the picture shows (optional)", "alt", { help:"Read out by a screen reader. Do not give the answer away." });
+  const w = el("div","bfield");
+  const head = el("div","brow");
+  head.appendChild(el("label","","The right spot"));
+  head.appendChild(helpDot("Click on the picture to put the right spot there. Anywhere inside the ring counts as right."));
+  w.appendChild(head);
+  if (!b.image) w.appendChild(el("p","hint","Paste a picture address above to start."));
+  else {
+    const holder = el("div","hotspot-pic hotspot-edit");
+    const img = el("img"); img.src = b.image; img.draggable = false;
+    holder.appendChild(img);
+    const ring = el("div","hotspot-ring");
+    const dot = el("div","hotspot-pin");
+    holder.appendChild(ring); holder.appendChild(dot);
+    const paint = () => {
+      ring.style.left = dot.style.left = (Number(b.x) || 0) + "%";
+      ring.style.top = dot.style.top = (Number(b.y) || 0) + "%";
+      ring.style.width = (2 * (Number(b.r) || 8)) + "%";
+    };
+    /* The circle is a share of the picture's width, so how tall it is on
+       the picture depends on the picture's shape, measured here. */
+    img.addEventListener("load", () => {
+      if (img.naturalWidth){
+        const ratio = Math.round(img.naturalHeight / img.naturalWidth * 10000) / 10000;
+        if (ratio !== b.ratio){ b.ratio = ratio; saveDraft(); }
+      }
+    });
+    holder.addEventListener("click", (e) => {
+      const r = img.getBoundingClientRect();
+      if (!r.width) return;
+      b.x = Math.round((e.clientX - r.left) / r.width * 1000) / 10;
+      b.y = Math.round((e.clientY - r.top) / r.height * 1000) / 10;
+      paint(); saveDraft(); schedulePreview();
+    });
+    paint();
+    w.appendChild(holder);
+    const size = el("div","brow");
+    size.appendChild(el("span","bhelp","How big the ring is"));
+    const range = el("input");
+    range.type = "range"; range.min = "2"; range.max = "30"; range.step = "0.5";
+    range.value = String(Number(b.r) || 8);
+    range.addEventListener("input", () => { b.r = Number(range.value); paint(); saveDraft(); schedulePreview(); });
+    size.appendChild(range);
+    w.appendChild(size);
+  }
+  add(w);
+  settings(() => {
+    if (topicTags()) F("Topic tag", "topic");
   });
 };
 

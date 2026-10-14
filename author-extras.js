@@ -407,6 +407,9 @@ function taskProblems(b){
     case "table":
       if (!(b.rows || []).some(r => (r || []).some(c => c && c.fill))) out.push("No boxes for them to fill in");
       break;
+    case "hotspot":
+      if (!String(b.image || "").trim()) out.push("No picture to click on");
+      break;
     case "caesar":
       if (!String(b.message || "").replace(/[^A-Za-z]/g, "")) out.push("No hidden message");
       break;

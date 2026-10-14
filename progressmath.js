@@ -8,7 +8,7 @@
   const TASK_LABEL = { quiz:"Quiz", mc:"Multiple choice", order:"Put in order",
                        blanks:"Fill the gaps", short:"Short answer",
                        ide:"Coding task", web:"Coding task", scratch:"Coding task",
-                       table:"Table", label:"Label a picture" };
+                       table:"Table", label:"Label a picture", hotspot:"Click the right spot" };
   function plainText(html){ return String(html || "").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim(); }
   function normAns(x){ return String(x || "").toLowerCase().trim().replace(/\s+/g," ").replace(/[.,!?;:'"]+$/g,""); }
 
@@ -41,6 +41,14 @@
       if (given && given.toLowerCase() === answer.toLowerCase()) got++;
     });
     return { got: got, max: max };
+  }
+  /* Inside the ring or not: the same rule as window.hotspotHit in
+     tasks-extra.js, which this page does not load. */
+  function hotspotScore(b, v){
+    if (!v || typeof v.x !== "number" || typeof v.y !== "number") return { got: 0, max: 1 };
+    const ratio = Number(b.ratio) > 0 ? Number(b.ratio) : 1;
+    const dx = v.x - Number(b.x || 0), dy = (v.y - Number(b.y || 0)) * ratio;
+    return { got: Math.sqrt(dx * dx + dy * dy) <= Number(b.r || 0) ? 1 : 0, max: 1 };
   }
   function taskInfo(b){
     const label = TASK_LABEL[b.type];
@@ -110,6 +118,7 @@
       return { got: (window.shortAnswer && window.shortAnswer.mark(b, v).ok) ? 1 : 0, max: 1 };
     if (b.type === "table") return tableScore(b, v);
     if (b.type === "label") return labelScore(b, v);
+    if (b.type === "hotspot") return hotspotScore(b, v);
     /* a checklist: every line counts once, whether a run ticked it or a
        teacher did, the same as the checklist's own "done of counted" score */
     let got = 0;

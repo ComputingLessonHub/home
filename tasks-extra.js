@@ -697,6 +697,110 @@
   };
 
   /* ===================================================================
+     CLICK THE RIGHT SPOT
+     { type:"hotspot", image, x, y, r, ratio }
+     The student clicks once on a picture. The right spot is a point, x
+     and y as percentages of the picture's width and height, with a circle
+     round it r per cent of the picture's width across. ratio is the
+     picture's height over its width, so the circle stays a circle on a
+     picture that is not square. What they clicked is saved as a point,
+     never as a picture.
+     =================================================================== */
+  window.hotspotHit = function(b, v){
+    if (!v || typeof v.x !== "number" || typeof v.y !== "number") return false;
+    const ratio = Number(b.ratio) > 0 ? Number(b.ratio) : 1;
+    const dx = v.x - Number(b.x || 0);
+    const dy = (v.y - Number(b.y || 0)) * ratio;
+    return Math.sqrt(dx * dx + dy * dy) <= Number(b.r || 0);
+  };
+  window.rHotspot = function(b, ctx){
+    const s = make("section", "hotspottask");
+    const holder = make("div", "hotspot-pic");
+    /* a picture can be pressed with the keyboard too: Tab to it, the arrow
+       keys move the marker, which starts in the middle */
+    holder.tabIndex = 0;
+    holder.setAttribute("role", "application");
+    holder.setAttribute("aria-label", "Click on the picture, or use the arrow keys to move the marker");
+    const img = make("img");
+    img.src = b.image || "";
+    img.alt = b.alt || "";
+    img.draggable = false;
+    /* The builder measures the picture's shape when the spot is set. A
+       lesson written by hand may not say, so it is read off the picture. */
+    img.addEventListener("load", () => {
+      if (!(Number(b.ratio) > 0) && img.naturalWidth) b.ratio = img.naturalHeight / img.naturalWidth;
+    });
+    holder.appendChild(img);
+    const pin = make("div", "hotspot-pin");
+    pin.hidden = true;
+    holder.appendChild(pin);
+    s.appendChild(holder);
+    const said = make("p", "hotspot-said");
+    said.hidden = true;
+
+    let at = null;
+    let right = false;
+    const round = (n) => Math.round(Math.min(100, Math.max(0, n)) * 10) / 10;
+    function paint(){
+      pin.hidden = !at;
+      if (at){ pin.style.left = at.x + "%"; pin.style.top = at.y + "%"; }
+    }
+    function moved(){
+      holder.dataset.verdict = "";
+      said.hidden = true;
+      right = false;
+      paint();
+      ctx.changed();
+    }
+    holder.addEventListener("click", (e) => {
+      const r = img.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      const x = (e.clientX - r.left) / r.width * 100;
+      const y = (e.clientY - r.top) / r.height * 100;
+      if (x < 0 || x > 100 || y < 0 || y > 100) return;
+      at = { x: round(x), y: round(y) };
+      moved();
+    });
+    holder.addEventListener("keydown", (e) => {
+      const step = { ArrowLeft:[-2,0], ArrowRight:[2,0], ArrowUp:[0,-2], ArrowDown:[0,2] }[e.key];
+      if (!step) return;
+      e.preventDefault();
+      if (!at) at = { x: 50, y: 50 };
+      else at = { x: round(at.x + step[0]), y: round(at.y + step[1]) };
+      moved();
+    });
+
+    /* In a lesson they can check where they clicked and try again. In an
+       assessment it is marked when it is handed in, like everything else. */
+    if (!(ctx && ctx.assessment)){
+      const btn = make("button", "btn-primary hotspot-check", "Check my answer");
+      btn.type = "button";
+      btn.addEventListener("click", () => {
+        said.hidden = false;
+        if (!at){ said.dataset.verdict = ""; said.textContent = "Click on the picture first."; return; }
+        right = window.hotspotHit(b, at);
+        holder.dataset.verdict = right ? "yes" : "no";
+        said.dataset.verdict = right ? "yes" : "no";
+        said.textContent = right ? "That is the right spot." : "Not quite. Have another go.";
+        ctx.changed();
+      });
+      s.appendChild(btn);
+    }
+    s.appendChild(said);
+
+    return {
+      section: s,
+      get: () => at ? { x: at.x, y: at.y } : null,
+      set: (v) => {
+        if (!v || typeof v.x !== "number" || typeof v.y !== "number") return;
+        at = { x: v.x, y: v.y };
+        paint();
+      },
+      done: () => !!at
+    };
+  };
+
+  /* ===================================================================
      NOTES
      { type:"notes", title, task, starter }
      Somewhere for a student to keep their own notes, with the same
