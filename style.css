@@ -2081,6 +2081,9 @@ body.workpage .grow{flex:1}
 .fbsave{display:flex; gap:8px; margin-top:6px}
 .fbsave button{flex:1 1 0; min-width:0; white-space:nowrap}
 .fbsave .btn-primary{flex-grow:2}
+/* Done ticking and Next level are a pair, neither the one pressed down a
+   class, and at a third of the row Done ticking ran out of its button */
+#fbListRow .btn-primary{flex-grow:1}
 /* Save and Save and next stay on screen at the foot of the column, however
    long the questions or the boxes above them make it. The negative margins
    take it out to the column's edges, and the bottom offset matches the
@@ -2117,6 +2120,8 @@ body.workpage .grow{flex:1}
 /* While the list is ticked, Level reached and Save wait for the Target to
    be agreed; the list's own buttons stand in the foot instead. */
 .workside.fbticking #markWrap, .workside.fbticking #fbSaveRow{display:none}
+/* nothing saved: no work, so no level to say they reached */
+.workside.fbempty #markWrap{display:none}
 .fbcomment-add{display:block; margin:0 0 12px; font-size:14px}
 .fblist-dots{display:flex; justify-content:center; gap:6px; margin:0 0 6px}
 .fblist-dot{position:relative; width:9px; height:9px; padding:0; border-radius:50%; border:1.5px solid var(--line-2);

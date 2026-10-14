@@ -1306,6 +1306,11 @@ function loadFeedback(row){
   const offer = !!lessonJson && !!window.progressMath.unsavedComment(lessonJson) &&
                 !window.progressMath.hasWork(lessonJson, row && row.data);
   $("notSavedWrap").hidden = PRACTICE || (!notSaved && !offer);
+  /* Nothing of theirs to mark, so no Level reached either, whether they
+     were away or were there and lost it. A class rather than `hidden`,
+     because paintMarking() owns that. */
+  $("workSide").classList.toggle("fbempty",
+    !PRACTICE && !!lessonJson && !window.progressMath.hasWork(lessonJson, row && row.data));
   /* Lines ticked while marking this student, saved with their feedback. A
      fresh copy for each student, so one child's ticks never travel with the
      next one's feedback. */
