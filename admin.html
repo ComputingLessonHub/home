@@ -2191,7 +2191,14 @@ function confirmSwitch(from, to){
         const r = await catPost({ op:"switch-version", from: from, to: to, group: cls, carryWork: carryWork });
         await loadCatalogue();
         closeModal(); await loadClassLocks().catch(() => {}); paintLessonGrid();
-        if (carryWork) say("Moved, with their work",
+        /* A server from before 12.3.1 ignores carryWork, switches the class
+           and answers without a count. Reading that as "no students" told a
+           teacher their work had moved when it had not moved at all. */
+        if (carryWork && typeof r.moved !== "number") say("Their work did not go with them",
+          cls + " is on “" + versionOfId(to) + "” now, but the server has not been updated yet, so "
+          + "their work is still on “" + versionOfId(from) + "”. Nothing is lost. Once the server is "
+          + "updated, move them back with “Move them over”, then across again with their work.");
+        else if (carryWork) say("Moved, with their work",
           (r.moved === 1 ? "One student's work" : (r.moved || "No") + " students' work")
           + " is now on “" + versionOfId(to) + "”, and will be marked against it. "
           + "Move them back the same way to undo this.");
