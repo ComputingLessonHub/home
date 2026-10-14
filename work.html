@@ -1197,10 +1197,43 @@ function loadFeedback(row){
      A teacher is editing those rather than starting from nothing, so whatever
      the assessment came up with fills the boxes until they write their own. */
   const auto = (row && marks[row.username]) || {};
-  $("fbStrength").value = f.strength || auto.strength || "";
-  $("fbTarget").value = f.target || auto.target || "";
+  /* A practical has no questions to mark itself from, but its checklist lines
+     can carry a Strength and a Target each. Those are put together for this
+     student the same way, so a class of thirty is thirty reads and a press of
+     Save rather than thirty sentences written from nothing. Never over
+     anything already saved. */
+  const fromList = (!f.strength && !f.target && !auto.strength && !auto.target) ? checklistAuto(row) : null;
+  $("fbStrength").value = f.strength || auto.strength || (fromList ? fromList.strength : "");
+  $("fbTarget").value = f.target || auto.target || (fromList ? fromList.target : "");
   paintBank("Strength"); paintBank("Target");
-  $("fbMsg").textContent = "";
+  $("fbMsg").textContent = fromList && (fromList.strength || fromList.target)
+    ? "Filled in from what this student ticked off. Change anything you like, then press Save feedback."
+    : "";
+}
+/* The Strength and Target a practical's checklist lines add up to for one
+   student. The Strength is from the two furthest lines they got done, which
+   in a task that builds up is the best they managed rather than the first
+   thing anyone does. The Target is from the first line they did not, which
+   is the next step for them and not one three steps on. Done is read through
+   checkDone, as the bank and every checklist total are, so it never
+   disagrees with the ticks on the work beside it. */
+function checklistAuto(row){
+  if (PRACTICE || !lessonJson || !lessonJson.practical) return null;
+  const data = (row && row.data) || {};
+  const done = [], todo = [];
+  quantifiableTasks().forEach(t => {
+    if (t.type !== "ide" && t.type !== "web") return;
+    (t.block.checks || []).forEach((c, i) => {
+      (window.progressMath.checkDone(c, i, data[t.id]) ? done : todo).push(c);
+    });
+  });
+  if (!done.length && !todo.length) return null;
+  const said = (list, key) => list.map(c => String((c && c[key]) || "").trim()).filter(Boolean);
+  const strengths = said(done, "strength"), targets = said(todo, "target");
+  return {
+    strength: strengths.length ? joinSentences(strengths.slice(-2)) : (lessonJson.zeroStrength || ""),
+    target: targets.length ? targets[0] : (todo.length ? "" : (lessonJson.perfectTarget || ""))
+  };
 }
 /* The sentences written in the builder, offered as a starting point. Picking
    one fills the box, which the teacher can then reword. */
@@ -1403,21 +1436,28 @@ let marks = {};
 function markFor(user){ return marks[user] || null; }
 /* A practical is marked either out of a total or with a grade, whichever the
    lesson was built with. */
-function usesRubric(){ return !!(lessonJson && lessonJson.practical && lessonJson.marking === "rubric"); }
+/* A practice assessment is not graded. Its rubric is levels to aim for, and
+   picking the one a student reached is all the marking it has: with no
+   levels written there is nothing to pick, so there is no mark row at all. */
+function practiceRun(){ return !!(lessonJson && lessonJson.practiceAssessment); }
+function usesRubric(){
+  if (!lessonJson || !lessonJson.practical) return false;
+  return practiceRun() ? (lessonJson.rubric || []).length > 0 : lessonJson.marking === "rubric";
+}
 function paintMarking(user){
-  const practical = !!(lessonJson && lessonJson.practical);
+  const practical = !!(lessonJson && lessonJson.practical) && (!practiceRun() || usesRubric());
   $("markWrap").hidden = !practical;
   if (!practical) return;
   const mk = markFor(user);
   const rubric = usesRubric();
   $("scoreRow").hidden = rubric;
   $("fbGrade").hidden = !rubric;
-  $("markLabel").textContent = rubric ? "Grade" : "Mark";
+  $("markLabel").textContent = !rubric ? "Mark" : practiceRun() ? "Level reached" : "Grade";
   if (rubric){
     const sel = $("fbGrade");
     sel.innerHTML = "";
     const none = document.createElement("option");
-    none.value = ""; none.textContent = "Not graded yet";
+    none.value = ""; none.textContent = practiceRun() ? "No level picked" : "Not graded yet";
     sel.appendChild(none);
     (lessonJson.rubric || []).forEach(g => {
       const o = document.createElement("option");
@@ -1453,8 +1493,9 @@ async function saveFeedback(){
                              target: showing("Target") ? $("fbTarget").value : "",
                              text: $("fbComment").value }) });
     if (!r.ok) throw new Error((await r.json()).error || "Could not save it.");
-    /* the mark or grade goes with the feedback */
-    if (lessonJson && lessonJson.practical){
+    /* the mark or grade goes with the feedback; a practice one only has a
+       level, and only when it has levels to pick from */
+    if (lessonJson && lessonJson.practical && (!practiceRun() || usesRubric())){
       const rubric = usesRubric();
       const grade = rubric ? $("fbGrade").value : "";
       const total = lessonJson.outOf || 20;
@@ -1557,7 +1598,7 @@ async function handBack(){
   };
   const box = { n: st.display_name, l: lessonId, d: row.data || {}, fb: fb };
 
-  if (lessonJson && lessonJson.practical){
+  if (lessonJson && lessonJson.practical && (!practiceRun() || usesRubric())){
     const rubric = usesRubric();
     const grade = rubric ? $("fbGrade").value : "";
     const total = lessonJson.outOf || 20;

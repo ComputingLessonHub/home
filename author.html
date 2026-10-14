@@ -856,27 +856,25 @@ function compile(){
   }
   if (lesson.perfectTarget) out.perfectTarget = lesson.perfectTarget;
   if (lesson.zeroStrength) out.zeroStrength = lesson.zeroStrength;
-  /* A practice assessment is a practical that is handed out as a lesson:
-     written feedback, no grade. It is saved without practical or assessment
-     on it, because those two words are what make the lesson page, the hub
-     and the marking screen treat it as a test, and every one of them should
-     see an ordinary lesson. Its own word is what brings it back into the
-     builder as a practical. */
+  /* A practice assessment is a practical with no grade: it is sat like any
+     other practical, all its pages open and handed in at the end, and comes
+     back with a Strength, a Target and response tasks. It used to be saved
+     as an ordinary lesson, which left it nowhere to hand out response tasks
+     from. practiceAssessment is the one word that says it is not graded. */
   const practiceRun = !!(lesson.practical && lesson.practice);
   if (lesson.practical){
-    /* Kept on a practice one too, so switching back to graded finds the
-       rubric where it was left rather than empty. */
     out.marking = lesson.marking || "rubric";
     if (out.marking === "score") out.outOf = lesson.outOf || 20;
-    else out.rubric = (lesson.rubric || []).filter(g => g.name);
-  }
-  if (practiceRun) out.practiceAssessment = true;
-  else if (lesson.practical){
+    /* A practice one keeps its rubric whichever way it was being marked,
+       because there the rubric is the levels a student can aim for, and a
+       teacher can say which one they reached without it being a grade. */
+    if (out.marking !== "score" || practiceRun) out.rubric = (lesson.rubric || []).filter(g => g.name);
     out.practical = true;
     out.assessment = true;      // students and teachers treat it as an assessment
+    if (practiceRun) out.practiceAssessment = true;
   }
   if (lesson.assessment || lesson.practical){
-    if (!practiceRun) out.assessment = true;
+    out.assessment = true;
     const topics = {};
     Object.keys(lesson.topics || {}).forEach(k => {
       const t = lesson.topics[k];
@@ -1027,6 +1025,14 @@ function compileOne(b, id, target){
       if (!b.key) b.key = newCodeKey();
       const blk = { type:"ide", id, starter: b.starter || "", key: b.key };
       if (b.startFrom) blk.startFrom = b.startFrom;
+      /* The checklist lines still to do on every coding task before this one,
+         or every one in the lesson for a response task. Saved as the keys
+         rather than worked out on the lesson page, so it is the tasks there
+         were when the teacher saved, not whatever happens to be nearby. */
+      if (b.checksFrom){
+        const keys = earlierCodeTasks(b).map(e => e.task.key).filter(Boolean);
+        if (keys.length) blk.checksFrom = keys;
+      }
       if (Array.isArray(b.checks) && b.checks.length){
         blk.checks = b.checks.filter(c => (c.label || "").trim())
                              .map(c => Object.assign({}, c,
@@ -1047,6 +1053,11 @@ function compileOne(b, id, target){
       if (blk.checks && b.checksShowAll === true) blk.checksShowAll = true;
       if (blk.checks && b.checksLive === false) blk.checksLive = false;
       if (String(b.modelCode || "").trim()) blk.modelCode = b.modelCode;
+      if (b.helpful === true) blk.helpful = true;  // off unless turned on
+      /* No box for it in the builder, but a lesson file can set how tall the
+         code box is when there is no starter to size it from, and saving the
+         lesson again must not quietly put it back to the small default. */
+      if (Number(b.height) > 0) blk.height = Number(b.height);
       push(blk);
     }
     else if (b.type === "question")
@@ -1540,7 +1551,8 @@ function renderNow(){
   }
   if (respEditing){
     const head = el("div","classhead");
-    const niceName = (lesson.topics[respEditing] && lesson.topics[respEditing].label) || respEditing;
+    const niceName = respEditing === EVERYONE ? "Everyone"
+                   : (lesson.topics[respEditing] && lesson.topics[respEditing].label) || respEditing;
     head.appendChild(el("h2","", respEditing === "__ext" ? "Extension tasks"
                                                         : "Response tasks \u2022 " + niceName));
     const back = el("button","btn-ghost bmini2","Back to the list");
@@ -2416,12 +2428,9 @@ function setMode(assess, practical){
      hand against a rubric, so there would be nothing to mark these with. */
   $("palExtensionBtn").hidden = !!assess || !!practical;
   $("palAssess").hidden = !assess;
-  /* Response tasks are handed out from the screen a graded assessment ends
-     on. A practice one ends like a lesson, so nothing would ever give them
-     out, and a tab for writing them would be a promise nobody keeps. */
-  const practiceRun = !!practical && !!lesson.practice;
-  $("tabResponses").hidden = practiceRun;
-  if (practiceRun && assessTab === "responses"){ assessTab = "targets"; respEditing = null; }
+  /* Response tasks are handed out from the screen an assessment ends on,
+     practice ones included, so every kind has the tab. */
+  $("tabResponses").hidden = false;
   ["tabQuestions","tabTargets","tabResponses"].forEach(id => {
     const e = $(id);
     if (e) e.classList.toggle("on", (id === "tabQuestions" && assessTab === "questions") ||
@@ -2480,13 +2489,18 @@ function rubricPopup(){
   if (!lesson.rubric) lesson.rubric = [];
   openModal(box => {
     box.classList.add("wide");
-    box.appendChild(el("h2","","Rubric"));
-    box.appendChild(el("p","modal-text","Put the best grade first. Teachers pick one of these when marking."));
+    /* the same list in a practice one, where it is levels rather than grades */
+    const lv = !!lesson.practice;
+    box.appendChild(el("h2","", lv ? "Levels" : "Rubric"));
+    box.appendChild(el("p","modal-text", lv
+      ? "Put the highest level first. Students can read these while they work, and you can pick the one they reached when you mark."
+      : "Put the best grade first. Teachers pick one of these when marking."));
     const list = el("div");
     box.appendChild(list);
     function paint(){
       list.innerHTML = "";
-      if (!lesson.rubric.length) list.appendChild(el("p","hint","No grades yet, press \u201c+ New grade\u201d."));
+      if (!lesson.rubric.length) list.appendChild(el("p","hint", lv ? "No levels yet, press \u201c+ New level\u201d."
+                                                                    : "No grades yet, press \u201c+ New grade\u201d."));
       lesson.rubric.forEach((g, i) => {
         const card = el("div","qsub");
         const head = el("div","qsub-head");
@@ -2519,7 +2533,7 @@ function rubricPopup(){
         head.appendChild(tools);
         card.appendChild(head);
         const d = el("div","bfield");
-        d.appendChild(el("label","","What is needed for this grade"));
+        d.appendChild(el("label","", lv ? "What is needed for this level" : "What is needed for this grade"));
         const desc = el("textarea"); desc.rows = 2; desc.value = g.description || "";
         desc.addEventListener("input", () => { g.description = desc.value; saveDraft(); });
         d.appendChild(desc);
@@ -2528,7 +2542,7 @@ function rubricPopup(){
       });
     }
     paint();
-    const add = el("button","btn-ghost bmini2","+ New grade");
+    const add = el("button","btn-ghost bmini2", lv ? "+ New level" : "+ New grade");
     add.addEventListener("click", () => { lesson.rubric.push({ name:"", description:"" }); saveDraft(); paint(); });
     box.appendChild(add);
     const done = el("button","btn-primary modal-cta","Done");
@@ -3151,7 +3165,10 @@ function checklistPopup(block, isWeb){
         hin.value = c.hint || "";
         hin.placeholder = "Leave empty for no hint";
         hin.addEventListener("input", () => { c.hint = hin.value; saveDraft(); });
-        hline.appendChild(hin);
+        /* Code goes between backticks and is drawn as code, the way the
+           Helpful IDE writes its own. */
+        hline.appendChild(withHelp(hin, ["Put any code between backticks and students see it as code: " +
+          "`print(\"Hello\")` shows as print(\"Hello\") in the code font."]));
         /* How many times they have to have pressed Run before Need a hint?
            appears under the line. Nought offers it as soon as the line is
            not ticked. */
@@ -3228,7 +3245,6 @@ function markingSetup(into){
     b.addEventListener("click", () => {
       if (pair[0] === "practice") lesson.practice = true;
       else { lesson.practice = false; lesson.marking = pair[0]; }
-      $("tabResponses").hidden = !!lesson.practice;
       paintBuildBar();
       saveDraft(); render(); schedulePreview();
     });
@@ -3238,8 +3254,21 @@ function markingSetup(into){
 
   if (lesson.practice){
     body.appendChild(el("p","bhelp",
-      "Students get this as an ordinary lesson, not an assessment. You still write them a " +
-      "Strength and a Target, but nothing is graded."));
+      "Students sit this like any practical and hand it in at the end, but nothing is graded. " +
+      "You give a Strength and a Target, filled in for you from their checklists, and they " +
+      "get the response tasks."));
+    /* The rubric stays, as levels to aim for rather than grades: students can
+       open it while they work, and you can say which level they reached. */
+    if (!lesson.rubric) lesson.rubric = [];
+    const w = el("div","bfield");
+    const n = lesson.rubric.filter(g => g.name).length;
+    w.appendChild(el("p","bhelp", n
+      ? n + " level" + (n === 1 ? "" : "s") + " set up. Students can open them while they work."
+      : "No levels yet. Add some for students to aim for, or leave it empty."));
+    const editBtn = el("button","btn-ghost bmini2","Edit the levels");
+    editBtn.addEventListener("click", rubricPopup);
+    w.appendChild(editBtn);
+    body.appendChild(w);
   } else if (lesson.marking === "score"){
     const w = el("div","bfield");
     w.appendChild(el("label","","Total mark"));
@@ -3413,14 +3442,22 @@ function paintResponseTopics(into){
   lesson.blocks.forEach(b => { if (b.topic) used[b.topic] = true; });
   Object.keys(lesson.topics || {}).forEach(k => { used[k] = true; });
   Object.keys(lesson.responses).forEach(k => { used[k] = true; });
+  /* A practical is marked from its checklists rather than from topics, so
+     it has one list that every student gets. The lesson page hands out a
+     topic's list when there is no target topic to pick by, and this is the
+     only list there is. */
+  if (lesson.practical) used[EVERYONE] = true;
   const names = Object.keys(used);
-  into.appendChild(el("p","hint","Students get the tasks for their target topic, then the extension tasks."));
+  into.appendChild(el("p","hint", lesson.practical
+    ? "Every student gets these once you have given them feedback, then the extension tasks."
+    : "Students get the tasks for their target topic, then the extension tasks."));
   if (!names.length) into.appendChild(el("p","hint","Add a topic tag to some questions first."));
   names.forEach(name => {
     if (!lesson.responses[name]) lesson.responses[name] = [];
     const n = lesson.responses[name].length;
     const row = el("button","ov-row");
-    const nice = (lesson.topics[name] && lesson.topics[name].label) || name;
+    const nice = name === EVERYONE ? "Everyone"
+               : (lesson.topics[name] && lesson.topics[name].label) || name;
     row.appendChild(el("span","t", nice));
     row.appendChild(el("span","p", n + " task" + (n === 1 ? "" : "s")));
     row.appendChild(el("span","edit","Open \u2192"));
@@ -3438,6 +3475,8 @@ function paintResponseTopics(into){
 
 
 let respEditing = null;
+/* The response list a practical gives every student, whatever their target. */
+const EVERYONE = "all";
 let assessTab = "questions";   // questions | targets | responses
 
 /* Every section starts folded away, so the palette is the same short list
@@ -6611,8 +6650,8 @@ async function downloadForFolder(){
      others. */
   const entry = Object.assign(
     { id: id, title: lesson.title, description: lesson.intro || "" },
-    /* a practice one is listed as the lesson it is to a student */
-    (lesson.assessment || (lesson.practical && !lesson.practice)) ? { assessment: true } : {},
+    /* a practice one is a practical too, and is listed as one */
+    (lesson.assessment || lesson.practical) ? { assessment: true } : {},
     lesson.homework ? { homework: true } : {},
     lesson.versionOf ? { versionOf: lesson.versionOf, versionName: lesson.versionName || "",
                          versionNote: lesson.versionNote || "", versionCode: lesson.versionCode || "" } : {},

@@ -5160,7 +5160,9 @@ async function openMarkbook(backToManage){
         const grade = r ? (r.grade || "") : "";
         return { name: st.display_name, username: st.username, grade: grade,
                  score: r ? r.score : null, outOf: r ? r.out_of : null,
-                 pct: (r && !grade) ? Math.round(100 * r.score / Math.max(1, r.out_of)) : null,
+                 /* nor does one nobody has graded yet, or a practice one, which is
+                    never graded: 0 out of 1 there is "not marked", not nought */
+                 pct: (r && !grade && !(lessonJson && lessonJson.practical)) ? Math.round(100 * r.score / Math.max(1, r.out_of)) : null,
                  seconds: r ? (r.seconds || 0) : 0,
                  strength: r ? (r.strength || "") : "", target: r ? (r.target || "") : "",
                  marks: marks, data: w ? w.data : null };

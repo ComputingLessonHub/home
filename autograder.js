@@ -1205,7 +1205,18 @@
         it.mark.textContent = r.broken ? "!" : r.ok ? "✓" : blank(i);
         it.note.textContent = r.note || "";
         const words = String(r.hint || "");
-        it.hintText.textContent = words;
+        /* Code in a hint is written between backticks, the same way the
+           Helpful IDE marks it, and is drawn as code so a student can see
+           exactly what to type. */
+        it.hintText.textContent = "";
+        words.split("`").forEach((part, k) => {
+          if (!part) return;
+          if (k % 2){
+            const code = document.createElement("code");
+            code.textContent = part;
+            it.hintText.appendChild(code);
+          } else it.hintText.appendChild(document.createTextNode(part));
+        });
         it.hintReady = !r.ok && !r.broken && !!words.trim()
           && (Number(r.runs) || 0) >= (Number(r.hintAfter) || 0);
         if (!was && done(it)) turned = true;

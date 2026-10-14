@@ -1058,17 +1058,51 @@ EDITORS.ide = function(b, k){
        will never see. */
     if (!b.startFrom) PY("Starter code", "starter");
   }
+  /* A follow-up task's checklist can be whatever the student has not yet
+     ticked on the tasks before it: a response task after a practical, or
+     a catch-up task at the end of a lesson. Its own lines, if it has any,
+     come after those. */
+  {
+    const earlier = earlierCodeTasks(b).filter(e => Array.isArray(e.task.checks) && e.task.checks.length);
+    if (earlier.length || b.checksFrom){
+      const w = el("div","bfield");
+      w.appendChild(el("label","","Checklist lines still to do"));
+      const row = el("div","brow");
+      const on = !!b.checksFrom;
+      const btn = el("button","btn-ghost bmini2" + (on ? " right" : ""),
+        "From earlier tasks: " + (on ? "on" : "off"));
+      btn.addEventListener("click", () => {
+        if (on) delete b.checksFrom; else b.checksFrom = true;
+        saveDraft(); redraw(); schedulePreview();
+      });
+      row.appendChild(btn);
+      row.appendChild(helpDot(["Turn this on and the checklist starts with every line the student " +
+        "has not ticked yet on the coding tasks " + (respEditing ? "in the lesson" : "before this one") +
+        ", each worded as it was there. Any lines you add below come after those.",
+        "Pair it with Start from, so they carry on with their own code and can see what is left to do. " +
+        "A student who ticked everything is told so, and the box is theirs to improve their program."]));
+      w.appendChild(row);
+      add(w);
+    }
+  }
   settings(() => {
     toggleRow([["turtle","Turtle canvas", false],
                ["run","Running", true],
                ["edit","Editing", true], ["help","Help", true], ["tooltips","Tooltips", true],
-               ["autocomplete","Autocomplete", true]],
+               ["autocomplete","Autocomplete", true], ["helpful","Helpful IDE", false]],
               null,
+              ["With Helpful IDE on, mistakes are explained one at a time in a yellow card under the "
+              + "code: which line, what is wrong and how to fix it, with a button to jump to the line "
+              + "and, where it is safe, one to fix it. It looks harder than usual for the mistakes "
+              + "beginners make, such as a missing colon, a line not pushed in, capital letters on "
+              + "print or if, text with no quote marks and answer == \"B\" or \"b\". When the program "
+              + "stops with an error, the card says what Python meant in plain words. Best for "
+              + "students who find errors hard to read.",
               "With Autocomplete on, a little list of words appears as they type: keywords, "
               + "built-in functions, what is in random or turtle, and the variables they have "
               + "made themselves. Arrow keys or a tap to choose, Enter or Tab to take it. The "
               + "rest of the typing help stays either way: brackets and quotes in pairs, and "
-              + "Backspace taking a whole indent.");
+              + "Backspace taking a whole indent."]);
   });
   /* what they are marked against, in the body where it can be seen */
   checklistField(b, k);

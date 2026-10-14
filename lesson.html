@@ -67,7 +67,7 @@
 
 <div class="dock" id="dock">
   <button class="btn-ghost" id="backBtn">&larr; Back</button>
-  <div class="mid"><button class="btn-ghost dock-rubric" id="rubricBtn" hidden>Show Assessment Rubric</button></div>
+  <div class="mid"><button class="btn-ghost dock-rubric" id="rubricBtn" hidden>Show Rubric</button></div>
   <span id="bypassDot" role="button" tabindex="0" aria-label="Teacher options">&#183;</span>
   <span class="btn-wrap" id="btnWrap">
     <button class="btn-primary btn-continue" id="nextBtn">Continue &rarr;</button>
@@ -257,7 +257,9 @@ function showRubric(){
       const col = el("div","rubriccol" + (myResult && myResult.grade === g.name ? " mine" : ""));
       col.appendChild(el("b","", g.name));
       col.appendChild(el("p","", g.description || ""));
-      if (myResult && myResult.grade === g.name) col.appendChild(el("span","rubricmine","Your grade"));
+      /* A practice one is not graded, so what a teacher picks is a level */
+      if (myResult && myResult.grade === g.name)
+        col.appendChild(el("span","rubricmine", lesson.practiceAssessment ? "Your level" : "Your grade"));
       strip.appendChild(col);
     });
     box.appendChild(strip);
@@ -2849,6 +2851,35 @@ function askBypass(){
    here rather than by position, so inserting a task in between does not send
    the reference somewhere else. */
 const codeKeys = {};
+/* The tasks themselves, by the same key, for a response task that needs to
+   know what was on another task's checklist and not only what code is in it. */
+const codeBlocks = {};
+
+/* The checklist lines from other coding tasks that a student has not ticked
+   yet, for a response task to set as its own list. Read from what each task
+   holds now, which is what was put back from their saved work: the ticks from
+   their last run, the same ones the marking screen reads. A line only a
+   teacher can tick is left out, because nothing the student does here can
+   tick it either. The Strength and Target sentences stay behind with the
+   original line, so the marking bank does not offer each one twice. */
+function stillToDo(keys){
+  const out = [];
+  (keys || []).forEach(key => {
+    const src = codeBlocks[key];
+    if (!src || !Array.isArray(src.checks)) return;
+    const f = fields[src.id];
+    let v = null;
+    try{ v = f && f.get ? f.get() : null; }catch(e){ v = null; }
+    const flags = (v && Array.isArray(v.checks)) ? v.checks : [];
+    src.checks.forEach((c, i) => {
+      if (!c || c.manual || flags[i]) return;
+      const copy = JSON.parse(JSON.stringify(c));
+      delete copy.strength; delete copy.target;
+      out.push(copy);
+    });
+  });
+  return out;
+}
 
 /* ---------- colours a teacher picked, read on either background ----------
    A dark red chosen for a white page is close to unreadable on a dark one, and
@@ -3230,7 +3261,18 @@ function rPage(b){
       if (i === items.length - 1 && !extras.length) continue;
       shut = i; break;
     }
-    items.forEach((entry, i) => { entry.item.hidden = shut !== -1 && i > shut; });
+    items.forEach((entry, i) => {
+      const wasHidden = entry.item.hidden;
+      entry.item.hidden = shut !== -1 && i > shut;
+      /* Coming out from behind a task is being shown, the same as arriving on
+         the page. A coding task that carries on from the one above it was
+         drawn while that one was still empty, so this is the moment it can
+         pick up the code that has just opened it. Left out, the next step
+         opened on a blank box. */
+      if (wasHidden && !entry.item.hidden && typeof entry.built.onShow === "function"){
+        try{ entry.built.onShow(); }catch(e){}
+      }
+    });
     /* A picture and the task beside it share one row. The row itself has to go
        once everything in it has gone, or its rule is left behind on its own. */
     slots.rows.forEach(row => {
@@ -4366,6 +4408,19 @@ function rIDE(b){
   const canEdit = b.edit !== false;         // and can make the code read-only
   const wantHelp = b.help !== false;        // the reference tab
   const wantTips = b.tooltips !== false;    // click-a-word explanations
+  /* Off unless a teacher turns it on: mistakes explained one at a time in a
+     card under the code, for students who cannot read Python's errors yet. */
+  const helpful = b.helpful === true;
+  /* A response task's list is what is still to do on the tasks it names,
+     then any lines of its own. Worked out once, as it is built: by then the
+     tasks it reads have had the student's saved work put back. */
+  let allDone = false;
+  if (Array.isArray(b.checksFrom) && b.checksFrom.length){
+    if (!b._ownChecks) b._ownChecks = Array.isArray(b.checks) ? b.checks : [];
+    const left = stillToDo(b.checksFrom);
+    allDone = !left.length;
+    b.checks = left.concat(b._ownChecks);
+  }
   const s = el("section","ide");
   const wrap = el("div","ide-wrap" + (b.turtle ? " has-canvas" : "") + (b.run === false ? " no-console" : ""));
 
@@ -4413,6 +4468,7 @@ function rIDE(b){
     help: PY_HELP,
     tips: wantTips,
     autocomplete: b.autocomplete !== false,
+    helpful: helpful,
     /* Once they have typed here it is their work, and nothing carries into it
        again. See carryIn below. */
     onInput: () => { lastCarried = null; markDirty(); if (checklist) checklist.typed(); }
@@ -4428,7 +4484,15 @@ function rIDE(b){
   if (String(b.starter || "").trim())
     editor.style.setProperty("--ed-rows",
       "calc(" + (starterRows + 2) + " * var(--ed-row) + var(--ed-pad))");
-  if (b.key) codeKeys[b.key] = b.id;
+  /* Code carried in from an earlier task is usually longer than any starter,
+     and a whole quiz squeezed into a box sized for nothing is a scroll bar
+     with a few lines showing. The same two lines of room the starter gets. */
+  function fitRows(text){
+    const rows = String(text || "").split("\n").length;
+    if (rows + 2 > starterRows + 2)
+      editor.style.setProperty("--ed-rows", "calc(" + (rows + 2) + " * var(--ed-row) + var(--ed-pad))");
+  }
+  if (b.key){ codeKeys[b.key] = b.id; codeBlocks[b.key] = b; }
   pane.appendChild(editor);
   pane.appendChild(probs);
   wrap.appendChild(pane);
@@ -4572,6 +4636,8 @@ function rIDE(b){
     }
     askRow.hidden = true;
     if (!lastOut) out.textContent = "(your program printed nothing)";
+    /* the Helpful IDE explains whatever stopped it, under the code */
+    if (ed.setRunError) ed.setRunError(res.ok ? null : (res.err || null));
     ran = true; runs++;
     if (checklist) checklist.refresh(cheerNext ? side : null);
     cheerNext = false;
@@ -4581,10 +4647,16 @@ function rIDE(b){
   /* the teacher's checklist, if this task has one. Declared before run()
      so it can tick itself off when the code has finished. */
   const checklist = attachChecklist(s, b.checks,
-    () => window.runPythonChecks(b.checks, ta.value, lastOut, runs), b.id, b);
+      () => window.runPythonChecks(b.checks, ta.value, lastOut, runs), b.id, b);
+    /* A response task with nothing left from the tasks it reads says so,
+       rather than showing an empty space where a checklist would be. */
+    if (allDone && !b.checks.length)
+      s.insertBefore(el("p","ide-alldone","You ticked off everything on the checklist. " +
+        "Use this time to make your program even better."), s.firstChild);
 
   async function run(cheer){
     cheerNext = !!cheer;
+    if (ed.setRunError) ed.setRunError(null);
     if (cheer && checklist) checklist.mark();
     runBtn.disabled = true;
     const label = runBtn.textContent;
@@ -4683,6 +4755,12 @@ function rIDE(b){
     if (!key) return null;
     const from = fields[codeKeys[key]];
     if (!from || typeof from.get !== "function") return null;
+    /* A task with nothing of the student's own in it yet hands on what it
+       would carry in itself. A program built up over four tasks, where a
+       student only reached the second, still reaches a response task that
+       starts from the fourth: the third and fourth were never opened, and
+       without this the response task started from an empty box. */
+    if (typeof from.latest === "function") return from.latest();
     let v = null;
     try{ v = from.get(); }catch(e){ return null; }
     const code = (v && typeof v === "object") ? v.code : (typeof v === "string" ? v : "");
@@ -4702,7 +4780,18 @@ function rIDE(b){
     lastCarried = code;
     if (ta.value === code) return;    // already the same, so nothing to redraw
     ta.value = code;
+    fitRows(code);
     repaint(); markDirty();
+  }
+
+  /* The newest code this task stands for: the student's own if they have
+     written any here, otherwise whatever it would carry in, otherwise its
+     starter. See codeFrom. */
+  function latest(){
+    if (!untouched()) return ta.value;
+    const carried = b.startFrom ? codeFrom(b.startFrom) : null;
+    if (carried !== null) return carried;
+    return ta.value.trim() ? ta.value : null;
   }
 
   /* What Reset goes back to. A task that starts from an earlier one goes back
@@ -4717,6 +4806,7 @@ function rIDE(b){
   }
 
   fields[b.id] = {
+    latest: latest,
     get:() => {
       const v = { code: ta.value, out: lastOut.slice(0, 4000), ran: ran, runs: runs,
                   checks: checklist ? checkFlags(checklist) : undefined,
@@ -4729,8 +4819,8 @@ function rIDE(b){
     },
     set:(v) => {
       if (!v) return;
-      if (typeof v === "string"){ ta.value = v; repaint(); return; }
-      if (typeof v.code === "string") ta.value = v.code;
+      if (typeof v === "string"){ ta.value = v; fitRows(v); repaint(); return; }
+      if (typeof v.code === "string"){ ta.value = v.code; fitRows(v.code); }
       if (typeof v.out === "string" && v.out){ lastOut = v.out; out.textContent = v.out; }
       ran = !!v.ran;
       /* older work has no count, so a run it remembers counts as one */
@@ -6736,7 +6826,9 @@ function renderPracticalComplete(){
 
   const box = doneShell(marked ? "Marked!" : "Submitted!");
   const hero = heroBits(marked ? "Marked!" : "Submitted!",
-    marked ? lesson.title : "Your teacher will mark your assessment.");
+    marked ? lesson.title
+           : lesson.practiceAssessment ? "Your teacher will look at your work and give you some feedback."
+           : "Your teacher will mark your assessment.");
   /* the mark or grade sits where a percentage would on a normal assessment */
   if (graded){
     const g = el("p","done-score", myResult.grade);
@@ -7109,7 +7201,10 @@ function renderResponses(container, targetTopic, statusEl){
   if (!list.length && !extras.length) return;
   const wrap = el("div","responses");
   wrap.appendChild(el("h2","sect-head","Response tasks"));
-  wrap.appendChild(el("p","resp-sub","Chosen from your target. Work through them, press Save Work when you're done."));
+  /* a practical gives everyone the same list, so it is not chosen from anything */
+  wrap.appendChild(el("p","resp-sub", lesson && lesson.practical
+    ? "Use your feedback to make your work even better. Press Save Work when you're done."
+    : "Chosen from your target. Work through them, press Save Work when you're done."));
   list.forEach((b, i) => {
     if (!b.id) b.id = "resp_" + targetTopic + "_" + i;
     const R = { question:rQuestion, quiz:rQuiz, python:rPython, blanks:rBlanks, mc:rMC, short:rShort,
@@ -7128,6 +7223,10 @@ function renderResponses(container, targetTopic, statusEl){
       task.appendChild(built.section);
       wrap.appendChild(task);
       if (restoredData && restoredData[b.id] !== undefined && fields[b.id]) fields[b.id].set(restoredData[b.id]);
+      /* A response task can start from the code they wrote in the lesson, and
+         a page does that as it is shown. Nothing shows these one at a time,
+         so it is done here, once their own saved answer is back in. */
+      if (b.type === "ide" && typeof built.onShow === "function") built.onShow();
     }catch(e){ console.error("response task failed:", e); }
   });
   /* extension tasks: everyone gets these after their own practice */

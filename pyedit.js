@@ -22,6 +22,16 @@ const TRIPLES = ["'''", '"""'];
 function escHtml(t){ return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function el(tag, cls){ const e = document.createElement(tag); if (cls) e.className = cls; return e; }
 function tel(tag, cls, text){ const e = el(tag, cls); if (text !== undefined) e.textContent = text; return e; }
+/* Words with code in them. The messages about mistakes mark their code with
+   backticks, and it is drawn as code, so print("Hello") in a sentence looks
+   like the thing they type rather than more of the sentence. */
+function codeWords(into, text){
+  String(text || "").split("`").forEach((part, i) => {
+    if (!part) return;
+    into.appendChild(i % 2 ? tel("code","ide-inline", part) : document.createTextNode(part));
+  });
+  return into;
+}
 
 /* ---------- colouring one line ----------
    `state.triple` carries a long string over to the next line, so a docstring
@@ -100,19 +110,37 @@ function strip(line, carry, comment){
   return { text: out, open: open };
 }
 
-/* ---------- spotting mistakes before the code is even run ---------- */
-function checkPython(code){
+/* ---------- spotting mistakes before the code is even run ----------
+   Every mistake carries `how` as well as `msg`. Only the Helpful IDE shows
+   it: the ordinary list under the code stays one line per mistake, as it
+   always was. `helpful` also turns on the extra checks further down, which
+   are written for a student who cannot yet read Python's own errors and
+   would rather be told too much than too little. */
+function checkPython(code, helpful){
   const issues = [], lines = code.split("\n");
   const opens = { "(": ")", "[": "]", "{": "}" };
   const stack = [];
   let carry = "";                                      // a long string left open above
+  const known = helpful ? namesMade(lines) : null;
+  /* For the indent checks: the line before that was real code, the indents
+     still open, and which keyword each indent last started with, so an elif
+     can be told whether there is an if above it to belong to. */
+  let prev = null;
+  const levels = [0];
+  const lastWord = {};
+  /* Lines with a quote left open: a bracket after the quote is inside the
+     text as far as anyone can tell, so it is not reported as never closed
+     as well. One mistake, one message. */
+  const quoteOpen = new Set();
   lines.forEach((raw, n) => {
     const wasInside = !!carry;
     const st = strip(raw, carry);
     if (st.open && st.open.length === 3){
       carry = st.open;                                 // a docstring carrying on
     } else {
-      if (st.open) issues.push({ line:n, msg:"A quote mark is missing from this line." });
+      if (st.open) quoteOpen.add(n);
+      if (st.open) issues.push({ line:n, msg:"A quote mark is missing from this line.",
+        how:'Text goes between a pair of quote marks, one at the start and one at the end, like `"Hello"`. Find where your text starts and ends and check both are there.' });
       carry = "";
     }
     /* Lines inside a long string are text, not code, so nothing below applies
@@ -120,24 +148,31 @@ function checkPython(code){
     if (wasInside) return;
     const t = st.text;
     if (!t.trim()) return;
+    const depthBefore = stack.length;
     for (const ch of t){
       if (opens[ch]) stack.push({ ch, n });
       else if (ch === ")" || ch === "]" || ch === "}"){
-        if (!stack.pop()) issues.push({ line:n, msg:"There is a closing bracket here with nothing to close." });
+        if (!stack.pop()) issues.push({ line:n, msg:"There is a closing bracket here with nothing to close.",
+          how:"Count the brackets on this line. Every `(` needs one `)`, so take out the extra `)`." });
       }
     }
 
     const printMatch = /^(\s*)print\s+(?!\()(.+)$/.exec(raw);
-    if (printMatch) issues.push({ line:n, msg:"In Python 3, print needs brackets around what it prints.",
+    if (printMatch) issues.push({ line:n, msg:"In Python 3, `print` needs brackets around what it prints.",
+                          how:'Put brackets round what you want to print, like `print("Hello")`.',
                           fix:() => printMatch[1] + 'print(' + printMatch[2].trim() + ')' });
 
     const opener = /^\s*(if|elif|else|for|while|def|class|try|except|finally|with)\b/.exec(t);
     if (opener && !/:\s*$/.test(t.trim())){
-      issues.push({ line:n, msg:'Lines starting with "' + opener[1] + '" need a colon (:) at the end.',
+      issues.push({ line:n, msg:"Lines starting with `" + opener[1] + "` need a colon `:` at the end.",
+                    how:"Type a colon `:` at the very end of the line. It tells Python the lines underneath belong to this one.",
                     fix:() => raw.replace(/\s*$/, "") + ":" });
     }
-    if (/^\s*(if|elif|while)\b/.test(t) && /[^=!<>+\-*\/%]=[^=]/.test(t.replace(/^\s*\w+/, ""))){
-      issues.push({ line:n, msg:"Use == to compare two things. A single = puts a value into a variable.",
+    /* =< and => are the signs the wrong way round rather than a single =,
+       and the Helpful IDE says so further down */
+    if (/^\s*(if|elif|while)\b/.test(t) && /[^=!<>+\-*\/%]=[^=<>!]/.test(t.replace(/^\s*\w+/, ""))){
+      issues.push({ line:n, msg:"Use `==` to compare two things. A single `=` puts a value into a variable.",
+                    how:'To check if two things are the same, use two equals signs: `if answer == "B":`',
                     fix:() => raw.replace(/([^=!<>+\-*\/%])=([^=])/, "$1==$2") });
     }
     const typo = /\b(pirnt|prnit|Print|inptu|inupt|Input|rang|whlie|improt|fro|esle|retrun)\b/.exec(t);
@@ -145,13 +180,380 @@ function checkPython(code){
       const right = { pirnt:"print", prnit:"print", Print:"print", inptu:"input", inupt:"input",
                       Input:"input", rang:"range", whlie:"while", improt:"import", fro:"for",
                       esle:"else", retrun:"return" }[typo[1]];
-      issues.push({ line:n, msg:'Did you mean "' + right + '"?',
+      issues.push({ line:n, msg:"Did you mean `" + right + "`?",
+                    how:"Python only knows words spelled exactly right, small letters included. Change `" + typo[1] + "` to `" + right + "`.",
                     fix:() => raw.replace(new RegExp("\\b" + typo[1] + "\\b"), right) });
     }
-    if (/^\t+ +| +\t/.test(raw)) issues.push({ line:n, msg:"This line mixes tabs and spaces. Use spaces only." });
+    if (/^\t+ +| +\t/.test(raw)) issues.push({ line:n, msg:"This line mixes tabs and spaces. Use spaces only.",
+      how:"Delete the gap at the start of the line and press Tab once for each step in." });
+
+    if (helpful){
+      helpfulLine(raw, t, n, issues, known, typo);
+      /* Indents only mean something outside brackets: a long list carried
+         over several lines is one line to Python. */
+      if (depthBefore === 0){
+        const ind = indentOf(raw);
+        const word = (/^\s*([A-Za-z_]\w*)/.exec(t) || [])[1] || "";
+        /* A line reported as needing pushing in is read from then on as if it
+           had been, so the else under it is not told it has no if as well. */
+        let at = ind, misplaced = false;
+        if (prev && prev.opens && ind <= prev.indent){
+          const p = prev;
+          issues.push({ line:n, msg:"This line needs pushing in, under the line above it.",
+            how:"Line " + (p.n + 1) + " ends with a colon, so the lines that belong to it have to be pushed in. Click at the start of this line and press Tab.",
+            fix:() => " ".repeat(p.indent + 4) + raw.replace(/^\s+/, "") });
+          at = p.indent + 4; misplaced = true;
+          levels.push(at);
+        } else if (prev && !prev.opens && ind > prev.indent){
+          const p = prev;
+          issues.push({ line:n, msg:"This line is pushed in, but nothing above it needs it to be.",
+            how:"Only the lines under an `if`, `elif`, `else` or `while` get pushed in. Take the gap at the start of this line away so it lines up with the line above.",
+            fix:() => " ".repeat(p.indent) + raw.replace(/^\s+/, "") });
+        } else {
+          if (prev && prev.opens && ind > prev.indent) levels.push(ind);
+          while (levels.length > 1 && ind < levels[levels.length - 1]) levels.pop();
+          if (ind !== levels[levels.length - 1]){
+            const want = levels[levels.length - 1];
+            issues.push({ line:n, msg:"This line does not line up with the lines above it.",
+              how:"Lines that belong together must start at exactly the same place. Line it up with the line it goes with.",
+              fix:() => " ".repeat(want) + raw.replace(/^\s+/, "") });
+          }
+        }
+        /* An elif or else belongs to the if above it, at the same indent. */
+        if (word === "elif" || word === "else"){
+          const before = lastWord[ind];
+          const fits = word === "elif" ? (before === "if" || before === "elif")
+                                       : ["if","elif","for","while","try","except"].includes(before);
+          if (!fits) issues.push({ line:n, msg:"This `" + word + "` has no `if` to belong to.",
+            how:"`" + word + "` has to come straight after an `if` and the lines pushed in under it, lined up exactly with the `if`. Check it starts at the same place as the `if` above it." });
+        }
+        if (!misplaced){
+          Object.keys(lastWord).forEach(k => { if (+k > ind) delete lastWord[k]; });
+          lastWord[ind] = word;
+        }
+        /* A line starting with if or while opens a block even with its colon
+           missing: that is reported already, and the line under it should not
+           then be told it is pushed in for no reason. */
+        const opensBlock = /:\s*$/.test(t.trim()) || /^(if|elif|else|for|while|def)$/.test(word);
+        prev = { indent: at, opens: opensBlock && stack.length === 0, n };
+      }
+    }
   });
-  stack.forEach(o => issues.push({ line:o.n, msg:"This " + o.ch + " is never closed." }));
+  stack.filter(o => !quoteOpen.has(o.n)).forEach(o => issues.push({ line:o.n, msg:"This `" + o.ch + "` is never closed.",
+    how:"Every `" + o.ch + "` needs a `" + opens[o.ch] + "` to close it. Count them on this line: a line like `int(input(\"...\"))` needs two at the end." }));
   return issues;
+}
+
+function indentOf(line){ return (/^[ \t]*/.exec(line) || [""])[0].replace(/\t/g, "    ").length; }
+
+/* ---------- the extra checks the Helpful IDE makes ----------
+   Each of these is a mistake a Year 7 or 8 makes in nearly every lesson, and
+   each one either stops the program with an error they cannot read or, worse,
+   lets it run and do the wrong thing without saying why. */
+const HELP_KEYWORDS = ["if","elif","else","while","for","in","and","or","not","def","import","from","break","return"];
+const HELP_FUNCS = ["print","input","int","str","float","len","range","round"];
+const HELP_ALL = HELP_KEYWORDS.concat(HELP_FUNCS);
+
+/* Every name the program gives a value to, so a word on its own can be told
+   apart from a variable nobody made. */
+function namesMade(lines){
+  const made = new Set();
+  lines.forEach(raw => {
+    const t = strip(raw, "").text;
+    let m = /^\s*([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s*[-+*\/]?=(?!=)/.exec(t);
+    if (m) m[1].split(",").forEach(x => made.add(x.trim()));
+    m = /^\s*for\s+([A-Za-z_]\w*)/.exec(t); if (m) made.add(m[1]);
+    m = /^\s*def\s+([A-Za-z_]\w*)\s*\(([^)]*)/.exec(t);
+    if (m){ made.add(m[1]); m[2].split(",").forEach(x => made.add(x.split("=")[0].trim())); }
+    m = /^\s*import\s+(.+)$/.exec(t); if (m) m[1].split(",").forEach(x => made.add(x.trim().split(/\s+as\s+/).pop()));
+    m = /^\s*from\s+\S+\s+import\s+(.+)$/.exec(t); if (m) m[1].split(",").forEach(x => made.add(x.trim().split(/\s+as\s+/).pop()));
+  });
+  return made;
+}
+
+/* How many single-letter changes turn one word into the other. */
+function distance(a, b){
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++){
+    let diag = row[0]; row[0] = i;
+    for (let j = 1; j <= b.length; j++){
+      const keep = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diag = keep;
+    }
+  }
+  return row[b.length];
+}
+/* The nearest word to a misspelling, if one is near enough to be worth
+   suggesting. Short words have to be closer: "fr" is one away from "for"
+   and two away from half the language. */
+function nearest(word, list){
+  let best = null, gap = Infinity;
+  list.forEach(w => {
+    const d = distance(word.toLowerCase(), w.toLowerCase());
+    if (d < gap){ gap = d; best = w; }
+  });
+  const allowed = word.length <= 3 ? 1 : 2;
+  return gap > 0 && gap <= allowed ? best : null;
+}
+
+function helpfulLine(raw, t, n, issues, made, typoFound){
+  const add = (x) => { x.line = n; issues.push(x); };
+
+  /* Quote marks copied out of a document are curly, and Python does not
+     count them as quote marks at all. */
+  if (/[“”‘’]/.test(raw)){
+    add({ msg:"These are curly quote marks, which Python cannot read.",
+          how:'They usually come from copying text out of a document. Type the quote marks yourself, straight ones like `"this"`.',
+          fix:() => raw.replace(/[“”]/g, '"').replace(/[‘’]/g, "'") });
+  }
+  if (/^\s*else\s+if\b/.test(t)){
+    add({ msg:"Python writes `else if` as one word: `elif`.",
+          how:'Change `else if` to `elif`, like `elif answer == "C":`',
+          fix:() => raw.replace(/\belse\s+if\b/, "elif") });
+  } else if (/^\s*else\s+[^\s:]/.test(t)){
+    add({ msg:"`else` never has a check after it.",
+          how:"`else` means “for anything else”, so it is just `else:` on its own. If you want to check something here, use `elif` and the check instead.",
+          fix:() => raw.replace(/^(\s*)else\b.*$/, "$1else:") });
+  }
+  const wrongWay = /=>|=<|=!/.exec(t);
+  if (wrongWay){
+    const right = { "=>":">=", "=<":"<=", "=!":"!=" }[wrongWay[0]];
+    add({ msg:"The two signs in `" + wrongWay[0] + "` are the wrong way round.",
+          how:"Python writes it as `" + right + "`, with the `=` second.",
+          fix:() => raw.replace(wrongWay[0], right) });
+  }
+  /* score == score + 1 on a line of its own compares and throws the answer
+     away, so the score never goes up and nothing says why. */
+  const lone = /^\s*([A-Za-z_]\w*)\s*==(?!=)/.exec(t);
+  if (lone && !HELP_KEYWORDS.includes(lone[1]) && lone[1] !== "print"){
+    add({ msg:"`==` only compares. It does not change `" + lone[1] + "`.",
+          how:"To give a variable a new value, use one equals sign, like `" + lone[1] + " = " + lone[1] + " + 1`",
+          fix:() => raw.replace("==", "=") });
+  }
+  /* if answer == "B" or "b": is always true, because "b" on its own counts
+     as true. The quiz then says every answer is right. */
+  const orLoose = /\b([A-Za-z_]\w*)\s*(==|!=)\s*("[^"]*"|'[^']*'|\w+)\s+(or|and)\s+("[^"]*"|'[^']*')/.exec(raw);
+  if (orLoose){
+    const whole = orLoose[1] + " " + orLoose[2] + " " + orLoose[3] + " " + orLoose[4] + " " +
+                  orLoose[1] + " " + orLoose[2] + " " + orLoose[5];
+    add({ msg:"The part after `" + orLoose[4] + "` needs its own check.",
+          how:"Python reads `" + orLoose[5] + "` on its own as “true”, so this check always passes. Write the variable again: `" + whole + "`",
+          fix:() => raw.replace(orLoose[0], whole) });
+  }
+  /* if answer == B: with no quote marks reads B as a variable. */
+  const bare = /(==|!=)\s*([A-Za-z_]\w*)\s*(?::|\s+(?:or|and)\b|$)/.exec(t);
+  if (bare && !made.has(bare[2]) && !["True","False","None"].concat(HELP_ALL).includes(bare[2])){
+    add({ msg:"`" + bare[2] + "` needs quote marks round it.",
+          how:"Without quote marks Python thinks `" + bare[2] + "` is a variable. To check for the text " + bare[2] + ', write `"' + bare[2] + '"`.',
+          fix:() => raw.replace(new RegExp("(==|!=)(\\s*)" + bare[2] + "\\b"), '$1$2"' + bare[2] + '"') });
+  }
+  if (/\binput\s+["']/.test(raw)){
+    add({ msg:"`input` needs brackets around its question.",
+          how:'Write it like `answer = input("What is 2 + 2? ")`',
+          fix:() => raw.replace(/\binput\s+(["'].*?["'])/, "input($1)") });
+  }
+  /* print(Hello world) */
+  const words = /\bprint\(\s*([A-Za-z][A-Za-z']*(?:\s+[A-Za-z!?.,']+)+)\s*\)/.exec(t);
+  if (words && !/\b(and|or|not|in|if|else|is)\b/.test(words[1])){
+    add({ msg:"The words in this `print` need quote marks round them.",
+          how:'Text you want to show has to be inside quote marks, like `print("' + words[1] + '")`.',
+          fix:() => raw.replace(words[1], '"' + words[1] + '"') });
+  }
+  /* A keyword that opens a block, spelled wrongly: "whiel answer != 'B':". */
+  const first = /^\s*([A-Za-z_]\w*)\b/.exec(t);
+  if (first && /:\s*$/.test(t.trim()) && !HELP_KEYWORDS.includes(first[1]) && !typoFound){
+    const guess = first[1].toLowerCase() === first[1] ? nearest(first[1], ["if","elif","else","while","for","def"]) : null;
+    if (guess) add({ msg:"Did you mean `" + guess + "`?",
+                     how:"Check the spelling: `" + first[1] + "` should be `" + guess + "`.",
+                     fix:() => raw.replace(new RegExp("\\b" + first[1] + "\\b"), guess) });
+  }
+  /* Capital letters on a word Python only knows in small letters, and the
+     other way round for True and False. */
+  const seen = {};
+  (t.match(/\b[A-Za-z_]\w*\b/g) || []).forEach(w => {
+    if (seen[w] || made.has(w)) return;
+    seen[w] = true;
+    if (w === "Print" || w === "Input") return;          // the typo check above has these
+    if (w !== w.toLowerCase() && HELP_ALL.includes(w.toLowerCase())){
+      add({ msg:"`" + w + "` should be all small letters: `" + w.toLowerCase() + "`.",
+            how:"Python cares about capital letters. It knows `" + w.toLowerCase() + "` but not `" + w + "`.",
+            fix:() => raw.replace(new RegExp("\\b" + w + "\\b"), w.toLowerCase()) });
+    } else if (w === "true" || w === "false"){
+      const right = w.charAt(0).toUpperCase() + w.slice(1);
+      add({ msg:"`" + right + "` needs a capital letter.",
+            how:"Python only knows `" + right + "` with a capital " + right.charAt(0) + ".",
+            fix:() => raw.replace(new RegExp("\\b" + w + "\\b"), right) });
+    }
+  });
+  /* A call to something that does not exist but is nearly print or input. */
+  if (!typoFound){
+    const calls = t.match(/(?<![.\w])[A-Za-z_]\w*(?=\s*\()/g) || [];
+    calls.forEach(c => {
+      if (made.has(c) || HELP_ALL.includes(c) || HELP_ALL.includes(c.toLowerCase())) return;
+      const guess = nearest(c, HELP_FUNCS);
+      if (guess) add({ msg:"Did you mean `" + guess + "`?",
+                       how:"Python does not know a word called `" + c + "`. Check the spelling: it should be `" + guess + "`.",
+                       fix:() => raw.replace(new RegExp("\\b" + c + "\\b"), guess) });
+    });
+  }
+}
+
+/* ---------- what Python said, in words a student can use ----------
+   `err` is what _hub_run in pyhub.js hands back when a program stops:
+   { type, msg, kind, line, name }. Comes back with the line it is about and
+   two sentences, what went wrong and what to do, or null when there is
+   nothing worth adding to Python's own message. */
+function explainError(err, code){
+  if (!err) return null;
+  const lines = String(code || "").split("\n");
+  const line = err.line ? err.line - 1 : null;
+  const text = line !== null && lines[line] !== undefined ? lines[line] : "";
+  const msg = String(err.msg || "");
+  const say = (title, what, how) => ({ line, text, title, what, how });
+
+  /* Python stops a loop wherever it happens to be, usually on a line inside
+     it. The while line is the one with the check that never turns false, so
+     that is the line pointed at. */
+  if (err.kind === "slow" && line !== null){
+    for (let i = line; i >= 0; i--){
+      if (/^\s*while\b/.test(lines[i]) && (i === line || /^\s*/.exec(lines[i])[0].length < /^\s*/.exec(lines[line])[0].length))
+        return Object.assign(explainError(Object.assign({}, err, { line: null }), code), { line: i, text: lines[i] });
+    }
+  }
+  if (err.kind === "slow")
+    return say("Your program never stopped",
+      "It was still going after 10 seconds, so it was stopped. There is probably a `while` loop that goes round for ever.",
+      "Look at the check on your `while` line. Something inside the loop has to change so that check can become false. If the loop asks a question, the `input` line has to be pushed in under the `while`.");
+
+  if (err.kind === "syntax"){
+    if (/expected ':'/.test(msg))
+      return say("A colon is missing",
+        "Lines that start with `if`, `elif`, `else` or `while` must end with a colon.",
+        "Type `:` at the very end of line " + err.line + ".");
+    if (/unterminated (triple-quoted )?string/.test(msg))
+      return say("A quote mark is missing",
+        "Some text starts with a quote mark but never ends with one.",
+        'Put a quote mark at the end of the text too, so it is inside a pair: `"like this"`.');
+    if (/was never closed/.test(msg))
+      return say("A bracket is never closed",
+        "A bracket was opened on this line and there is no bracket to close it.",
+        "Count the `(` and the `)` on this line. They should be the same number. `int(input(\"...\"))` needs two `)` at the end.");
+    if (/does not match opening parenthesis/.test(msg))
+      return say("The brackets do not match",
+        "A bracket has been closed with a different kind of bracket.",
+        "Close `(` with `)`, `[` with `]` and `{` with `}`.");
+    if (/unmatched/.test(msg))
+      return say("There is one bracket too many",
+        "There is a closing bracket with nothing to close.",
+        "Count the `(` and `)` on this line and take out the extra one.");
+    if (/expected an indented block/.test(msg))
+      return say("A line needs pushing in",
+        "The line above ends with a colon, so the next line has to be pushed in under it.",
+        "Click at the start of line " + err.line + " and press Tab.");
+    if (/unexpected indent/.test(msg))
+      return say("This line is pushed in too far",
+        "This line starts further in than it should. Only lines under an `if`, `elif`, `else` or `while` get pushed in.",
+        "Take the gap at the start of line " + err.line + " away so it lines up with the line above.");
+    if (/unindent does not match|inconsistent use of tabs/.test(msg))
+      return say("This line does not line up",
+        "Lines that belong together must start at exactly the same place.",
+        "Line it up with the line it belongs with, using Tab and Backspace.");
+    if (/Missing parentheses in call to 'print'/.test(msg))
+      return say("`print` needs brackets",
+        "In Python 3, what you print goes inside brackets.",
+        'Write it like `print("Hello")`.');
+    if (/Maybe you meant '==' |cannot assign to/.test(msg))
+      return say("Use `==` to compare",
+        "One `=` puts a value into a variable. To check if two things are the same you need two.",
+        'Write it like `if answer == "B":`');
+    const bad = /invalid character '(.)'/.exec(msg);
+    if (bad){
+      const curly = /[“”‘’]/.test(bad[1]);
+      return say("Python cannot read the `" + bad[1] + "` character",
+        curly ? "That is a curly quote mark, probably copied from a document." : "That character is not part of Python.",
+        curly ? 'Type your own straight quote marks instead: `"like this"`.' : "Delete it and type what you meant.");
+    }
+    if (/forgot a comma/.test(msg))
+      return say("Something is missing between two things",
+        "Python found two things next to each other with nothing joining them, often some text and a variable.",
+        'Put a comma between them, like `print("Your score is", score)`, or check a quote mark is not missing.');
+    if (/invalid decimal literal/.test(msg))
+      return say("A name cannot start with a number",
+        "Variable names can have numbers in them, but not at the start.",
+        "Rename it, for example `question1` rather than `1question`.");
+    const lonely = /^\s*(elif|else)\b/.exec(text);
+    if (lonely)
+      return say("This `" + lonely[1] + "` has no `if` to belong to",
+        "`elif` and `else` have to come straight after an `if` and the lines pushed in under it.",
+        "Line it up exactly with its `if`, and check nothing that is not pushed in comes between them.");
+    return say("Python could not understand this line",
+      "Something on line " + (err.line || "?") + " is not written the way Python expects.",
+      "Check the spelling, the brackets, the quote marks and the colon. Sometimes the mistake is on the line just above.");
+  }
+
+  if (err.type === "NameError"){
+    const name = err.name || ((/name '(\w+)'/.exec(msg) || [])[1]) || "";
+    const known = HELP_ALL.concat(["True","False"]);
+    const right = known.find(w => w !== name && w.toLowerCase() === name.toLowerCase());
+    if (right)
+      return say("Python does not know `" + name + "`",
+        "Python cares about capital letters. It knows `" + right + "` but not `" + name + "`.",
+        "Change `" + name + "` to `" + right + "`.");
+    const laterAt = lines.findIndex((l, i) => i > line && new RegExp("^\\s*" + name + "\\s*=(?!=)").test(l));
+    if (laterAt >= 0)
+      return say("`" + name + "` has not been given a value yet",
+        "You use `" + name + "` on line " + err.line + ", but it is only made on line " + (laterAt + 1) + ". Python reads from the top down.",
+        "Move the line that makes `" + name + "` above line " + err.line + ".");
+    const guess = nearest(name, Array.from(namesMade(lines)).concat(HELP_FUNCS));
+    if (guess)
+      return say("Python does not know `" + name + "`",
+        "There is nothing called `" + name + "`, but there is something called `" + guess + "`.",
+        "Check the spelling. Did you mean `" + guess + "`?");
+    return say("Python does not know `" + name + "`",
+      "Nothing called `" + name + "` has been made yet.",
+      "If " + name + " is meant to be text, put quote marks round it: `\"" + name + "\"`. If it is a variable, give it a value first, like `" + name + " = input(\"...\")`.");
+  }
+
+  if (err.type === "TypeError"){
+    if (/can only concatenate str|unsupported operand type\(s\) for \+: '(int|float)' and 'str'/.test(msg))
+      return say("Text and a number cannot be joined with `+`",
+        "`+` can join two bits of text, or add two numbers, but not one of each.",
+        'Use a comma instead, like `print("Your score is", score)`, or turn the number into text with `str(score)`.');
+    if (/not supported between instances of '(str|int)' and '(str|int)'/.test(msg))
+      return say("Comparing text with a number",
+        "`input()` always gives back text, even when someone types a number, so it cannot be compared with a number.",
+        "Put `int()` round the input, like `age = int(input(\"How old are you? \"))`, or compare with text in quote marks.");
+    if (/unsupported operand type\(s\)/.test(msg))
+      return say("Doing maths with text",
+        "One of the things in this sum is text, not a number.",
+        "If it came from `input()`, put `int()` round the input to turn it into a whole number.");
+    if (/'(str|int)' object is not callable/.test(msg))
+      return say("A command has been used as a variable name",
+        "Something like `print` or `input` has been given a value, so it no longer works as a command.",
+        "Look for a line like `print = ...` or `input = ...` and give that variable a different name.");
+    return say("Two things that do not go together", msg,
+      "Check what kind of thing each part of this line is: text, a whole number or a decimal.");
+  }
+  if (err.type === "ValueError" && /invalid literal for int\(\)/.test(msg)){
+    const got = (/: '(.*)'$/.exec(msg) || [])[1];
+    return say("That was not a whole number",
+      "The program wanted a whole number" + (got !== undefined ? ", but was given “" + got + "”" : "") + ".",
+      "When it asks for a number, type digits only. If the answer should be a letter or a word, take the `int()` off that input.");
+  }
+  if (err.type === "ZeroDivisionError")
+    return say("Dividing by zero", "Nothing can be divided by zero, not even by Python.",
+      "Check the number you are dividing by cannot be 0.");
+  if (err.type === "AttributeError"){
+    const m = /has no attribute '(\w+)'/.exec(msg);
+    return say("Python does not know `." + (m ? m[1] : "that") + "`",
+      "The word after the dot is not one Python knows for this.",
+      "Check the spelling, like `.upper()` or `.lower()`, and that it is all small letters.");
+  }
+  if (err.type === "IndexError")
+    return say("There is nothing at that position", "The list is not as long as the number asked for.",
+      "Remember the first item is at `0`, not `1`.");
+  return null;
 }
 
 /* ---------------- what to offer while they type ----------------
@@ -560,11 +962,32 @@ function attach(opts){
   let issues = [];
   const showProbs = opts.problems !== false;
   const showFixes = opts.fixes !== false;
+  /* The Helpful IDE: one mistake at a time, in a card that says what is wrong
+     and how to put it right, and the same card for whatever stopped the last
+     run. For a student who cannot read Python's own errors yet. */
+  const helpful = !!opts.helpful;
+  if (helpful) probs.classList.add("helpful");
+  let runErr = null;          // the explained error from the last run, if any
+  let helpAt = 0;             // which of several mistakes the card is showing
+  let helpTimer = null;
+  /* How many goes a student has had at each mistake, so Fix it for me is
+     only offered once they have tried and not managed: the card showing it,
+     each change to that line that leaves it still wrong, and each Run with it
+     still there. Offered straight away, it was pressed instead of read. Kept
+     by what the mistake is, not by line number, because adding a line above
+     moves it. */
+  const FIX_AFTER = 3;
+  const tries = {};
+  let ranSince = false;
 
   function repaint(){
     const lines = ta.value.split("\n");
-    issues = lang.find(ta.value) || [];
+    issues = lang.find(ta.value, helpful) || [];
+    /* An error from the last run is about the code as it was. Once the line
+       it points at has been changed, it is about something that has gone. */
+    if (runErr && runErr.line !== null && lines[runErr.line] !== runErr.text) runErr = null;
     const bad = new Set(issues.map(x => x.line));
+    if (runErr && runErr.line !== null) bad.add(runErr.line);
     const state = lang.state();
     hl.innerHTML = lines.map((l, n) =>
       '<div class="hl-line' + (bad.has(n) ? " bad" : "") + '">' +
@@ -572,13 +995,20 @@ function attach(opts){
     gutter.innerHTML = lines.map((_, n) =>
       '<div class="gl' + (bad.has(n) ? " bad" : "") + '">' + (n + 1) + "</div>").join("");
     if (!showProbs){ probs.hidden = true; return; }
+    if (helpful){
+      /* Not on every key: a card leaping up halfway through typing a line
+         is telling them off for something they were about to finish. */
+      clearTimeout(helpTimer);
+      helpTimer = setTimeout(paintHelp, 700);
+      return;
+    }
     probs.innerHTML = "";
     if (!issues.length){ probs.hidden = true; return; }
     probs.hidden = false;
     issues.slice(0, 4).forEach(iss => {
       const row = el("div","ide-prob");
       row.appendChild(tel("span","ide-probline","Line " + (iss.line + 1)));
-      row.appendChild(tel("span","ide-probmsg", iss.msg));
+      row.appendChild(codeWords(el("span","ide-probmsg"), iss.msg));
       if (iss.fix && showFixes){
         const fixBtn = tel("button","ide-chip","Fix it");
         fixBtn.addEventListener("click", () => {
@@ -592,6 +1022,107 @@ function attach(opts){
       }
       probs.appendChild(row);
     });
+  }
+
+  function fixLine(iss){
+    const ls = ta.value.split("\n");
+    ls[iss.line] = iss.fix();
+    ta.value = ls.join("\n");
+    repaint();
+    if (opts.onInput) opts.onInput();
+  }
+  /* Puts the caret on a line, picks out what is written on it, and makes
+     sure it can be seen. */
+  function showLine(n){
+    const ls = ta.value.split("\n");
+    if (n < 0 || n >= ls.length) return;
+    let at = 0;
+    for (let i = 0; i < n; i++) at += ls[i].length + 1;
+    const indent = (/^\s*/.exec(ls[n]) || [""])[0].length;
+    ta.focus();
+    ta.setSelectionRange(at + indent, at + ls[n].length);
+    const rowH = parseFloat(getComputedStyle(ta).lineHeight) || 24;
+    ta.scrollTop = Math.max(0, (n - 2) * rowH);
+    hl.scrollTop = ta.scrollTop; gutter.scrollTop = ta.scrollTop;
+    const row = hl.children[n];
+    if (row){ row.classList.remove("flash"); void row.offsetWidth; row.classList.add("flash"); }
+    if (editor.scrollIntoView) editor.scrollIntoView({ block:"nearest", behavior:"smooth" });
+  }
+  function paintHelp(){
+    clearTimeout(helpTimer);
+    probs.innerHTML = "";
+    /* What is wrong with the code now comes before what went wrong the last
+       time it ran: it is usually the cause, and it is about the code they
+       can see. */
+    const items = issues.map(iss => ({ line: iss.line, title: iss.msg, how: iss.how || "", fix: iss.fix }));
+    if (!items.length && runErr) items.push({ line: runErr.line, title: runErr.title, what: runErr.what,
+                                               how: runErr.how, ran: true });
+    if (!items.length){ probs.hidden = true; return; }
+    probs.hidden = false;
+    if (helpAt >= items.length) helpAt = 0;
+    const it = items[helpAt];
+    if (!it.ran){
+      const now = ta.value.split("\n")[it.line];
+      const t = tries[it.title];
+      if (!t || t.text !== now || ranSince) tries[it.title] = { n: (t ? t.n : 0) + 1, text: now };
+    }
+    ranSince = false;
+    const hasLine = it.line !== null && it.line !== undefined;
+    const card = el("div","ide-fix" + (it.ran ? " ran" : ""));
+    const head = el("div","ide-fix-head");
+    head.appendChild(tel("span","ide-fix-icon", it.ran ? "⚠" : "!"));
+    const words = el("div","ide-fix-words");
+    words.appendChild(tel("span","ide-fix-eyebrow",
+      (it.ran ? "Your program stopped" : "Something to fix") + (hasLine ? " on line " + (it.line + 1) : "")));
+    words.appendChild(codeWords(el("b","ide-fix-title"), it.title));
+    head.appendChild(words);
+    if (items.length > 1) head.appendChild(tel("span","ide-fix-count", (helpAt + 1) + " of " + items.length));
+    card.appendChild(head);
+    const ls = ta.value.split("\n");
+    if (hasLine && ls[it.line] !== undefined && ls[it.line].trim()){
+      const code = el("div","ide-fix-code");
+      code.appendChild(tel("span","ide-fix-ln", String(it.line + 1)));
+      code.appendChild(tel("code","", ls[it.line].replace(/^\s+/, "")));
+      card.appendChild(code);
+    }
+    if (it.what){
+      const p = el("p","ide-fix-text");
+      p.appendChild(tel("b","","What happened: ")); codeWords(p, it.what);
+      card.appendChild(p);
+    }
+    if (it.how){
+      const p = el("p","ide-fix-text");
+      p.appendChild(tel("b","","How to fix it: ")); codeWords(p, it.how);
+      card.appendChild(p);
+    }
+    const btns = el("div","ide-fix-btns");
+    if (hasLine){
+      const go = tel("button","ide-fix-btn","Show me the line");
+      go.addEventListener("click", () => showLine(it.line));
+      btns.appendChild(go);
+    }
+    if (it.fix && showFixes && !ta.readOnly && tries[it.title].n > FIX_AFTER){
+      const fx = tel("button","ide-fix-btn main","Fix it for me");
+      fx.addEventListener("click", () => fixLine(it));
+      btns.appendChild(fx);
+    }
+    if (items.length > 1){
+      const nx = tel("button","ide-fix-btn","Next problem →");
+      nx.addEventListener("click", () => { helpAt = (helpAt + 1) % items.length; paintHelp(); });
+      btns.appendChild(nx);
+    }
+    card.appendChild(btns);
+    probs.appendChild(card);
+  }
+  /* The lesson hands over whatever stopped the program, or null as a run
+     starts. Shown at once rather than after the pause typing gets. */
+  function setRunError(err){
+    if (!helpful) return;
+    runErr = err ? explainError(err, ta.value) : null;
+    if (!err) ranSince = true;      // a Run starting is another go at whatever is showing
+    helpAt = 0;
+    repaint();
+    paintHelp();
   }
 
   /* ---------- typing ----------
@@ -831,7 +1362,7 @@ function attach(opts){
      sandbox's web editor does when it moves between its three files. */
   function setLang(next){ lang = next || pythonLang; acHide(); repaint(); }
 
-  return { editor, gutter, codeWrap, hl, ta, probs, repaint, setLang,
+  return { editor, gutter, codeWrap, hl, ta, probs, repaint, setLang, setRunError,
            issues: () => issues };
 }
 
@@ -1011,7 +1542,7 @@ const PY_HELP = {
    asks, because the two would otherwise be drawn one on top of the other. */
 function suggesting(){ return !!(theBox && theBox.up()); }
 
-window.pyEdit = { attach, checkPython, hlLine, strip, escHtml, themeFromSite, follow, suggesting,
+window.pyEdit = { attach, checkPython, explainError, hlLine, strip, escHtml, themeFromSite, follow, suggesting,
                   idePanel, idePrefs, saveIdePrefs, pythonLang, webLang, plainLang,
                   PY_KW, PY_FN, PY_HELP };
 
