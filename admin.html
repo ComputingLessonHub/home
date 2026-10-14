@@ -2185,19 +2185,35 @@ function confirmSwitch(from, to){
       + "already done on “" + versionOfId(from) + "” stays where it is and comes back if you "
       + "move them back, but they will not see it while they are on this version."));
     const msg = el("p","hint","");
-    const yes = el("button","btn-primary modal-cta","Move them over");
-    yes.addEventListener("click", async () => {
+    const move = async (carryWork) => {
       msg.textContent = "Moving…";
       try{
-        await catPost({ op:"switch-version", from: from, to: to, group: cls });
+        const r = await catPost({ op:"switch-version", from: from, to: to, group: cls, carryWork: carryWork });
         await loadCatalogue();
         closeModal(); await loadClassLocks().catch(() => {}); paintLessonGrid();
+        if (carryWork) say("Moved, with their work",
+          (r.moved === 1 ? "One student's work" : (r.moved || "No") + " students' work")
+          + " is now on “" + versionOfId(to) + "”, and will be marked against it. "
+          + "Move them back the same way to undo this.");
       }catch(e){ msg.textContent = e.message; }
-    });
+    };
+    const yes = el("button","btn-primary modal-cta","Move them over");
+    yes.addEventListener("click", () => move(false));
     box.appendChild(yes);
-    const no = el("button","btn-ghost modal-stay","Leave them where they are");
-    no.addEventListener("click", closeModal);
-    box.appendChild(no); box.appendChild(msg);
+    /* For a lesson changed after a class had done it. Their ticks were saved
+       one per checklist line, in order, so read against a checklist that has
+       gained a line or changed its counts they say things the student never
+       did. Moving the work to a version holding what they actually saw puts
+       that right. Anything already on that version comes back the other way,
+       so this loses nothing and doing it twice undoes it. */
+    box.appendChild(el("p","hint",
+      "Changed this lesson after " + cls + " did it? Choose “Move them over, with their work”, and "
+      + "what they did is marked against “" + versionOfId(to) + "” instead. Only do that if it is "
+      + "the version they worked on."));
+    const carry = el("button","btn-ghost modal-cta","Move them over, with their work");
+    carry.addEventListener("click", () => move(true));
+    box.appendChild(carry);
+    box.appendChild(msg);
   });
 }
 
@@ -4142,7 +4158,9 @@ async function catPost(payload){
   catLoaded = false;                 // whatever this changes, the copy we hold is stale
   const r = await fetch(API + "/api/catalog", { method: "POST", headers: HJ(), body: JSON.stringify(payload) });
   if (!r.ok) throw new Error((await r.json()).error || "Could not save.");
+  const said = await r.json().catch(() => ({}));
   await loadCatalogue();
+  return said;
 }
 
 on("openLessons", "click", async () => {
