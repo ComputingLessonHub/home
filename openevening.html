@@ -193,7 +193,6 @@ main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
 
 @keyframes pop { from { transform: scale(.95); opacity: 0; } }
 
-.code-panel { margin-top: 18px; }
 .code-panel[hidden] { display: none; }
 .panel { background: var(--card); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
 .panel-head {
@@ -284,6 +283,35 @@ footer { text-align: center; color: var(--muted); font-size: 14px; padding: 0 16
   .big-run { font-size: 32px; padding: 14px 40px; }
   .make .row { grid-template-columns: 1fr; }
 }
+
+/* On a computer the whole page fits inside 1000px tall, with nothing to
+   scroll to, so it works on a projector or a screen left running. The code
+   sits beside the program rather than under it for the same reason, and the
+   program and the code are the same height. Phones and tablets are left
+   alone above, where scrolling is normal. */
+@media (min-width: 901px) {
+  .hero { padding: 20px 16px 52px; }
+  .hero h1 { margin: 2px 0 6px; }
+  .hero p { max-width: 900px; }
+  main { padding: 16px 16px 12px; }
+  .intro { margin-bottom: 10px; }
+  /* As tall as it is with Stop or Run again in it, so the page does not
+     grow the moment something runs. */
+  .work .panel-head { min-height: 65px; }
+  .console { height: 410px; }
+  .console.short { height: 70px; }
+  #turtle-target { max-width: 453px; }
+  .editor { height: 411px; }
+  .work.code-open { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  footer { padding-bottom: 12px; }
+}
+/* Narrower computer screens wrap the heading words onto more lines, so the
+   program gives that height back. */
+@media (min-width: 901px) and (max-width: 1250px) {
+  .console { height: 400px; }
+  #turtle-target { max-width: 440px; }
+  .editor { height: 401px; }
+}
 </style>
 </head>
 <body>
@@ -329,6 +357,17 @@ footer { text-align: center; color: var(--muted); font-size: 14px; padding: 0 16
       </div>
     </section>
 
+    <section class="panel code-panel" id="code-panel" hidden>
+      <div class="panel-head">
+        <span class="label">📝 The code</span>
+        <span class="loading-note">The real Python. You can type in it too!</span>
+      </div>
+      <div class="editor" id="editor">
+        <div class="gutter" id="gutter"></div>
+        <pre id="painted" aria-hidden="true"></pre>
+        <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Python code"></textarea>
+      </div>
+    </section>
   </div>
 
   <dialog class="make-dialog" id="make-dialog" aria-labelledby="make-title">
@@ -340,17 +379,6 @@ footer { text-align: center; color: var(--muted); font-size: 14px; padding: 0 16
     <div class="dialog-body" id="make-result" hidden></div>
   </dialog>
 
-  <section class="panel code-panel" id="code-panel" hidden>
-    <div class="panel-head">
-      <span class="label">📝 The code</span>
-      <span class="loading-note">This is the real Python that runs the program. You can type in it too!</span>
-    </div>
-    <div class="editor" id="editor">
-      <div class="gutter" id="gutter"></div>
-      <pre id="painted" aria-hidden="true"></pre>
-      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Python code"></textarea>
-    </div>
-  </section>
 
 </main>
 
@@ -577,11 +605,11 @@ print("See you at Prince Henry's, " + name + "! 👋")
   {
     id: "secret",
     emoji: "🕵️",
-    name: "Secret Codes",
-    what: "Turn a message into spy code",
-    title: "Secret Agent Code Machine",
+    name: "Secret Messages",
+    what: "Turn a message into spy writing",
+    title: "Secret Agent Message Machine",
     blurb: "Every letter moves along the alphabet by your secret number. Only someone who knows the number can crack it!",
-    idle: "Press Run to make a secret code!",
+    idle: "Press Run to make a secret message!",
     make: [{
       heading: "🕶️ Give yourself an agent name",
       intro: "Every secret message will be signed with your agent name.",
@@ -606,14 +634,14 @@ print("See you at Prince Henry's, " + name + "! 👋")
         return result;
       }
     }],
-    code: `# Secret Agent Code Machine 🕵️
-# Making a code slides each letter forward along the alphabet by your number.
+    code: `# Secret Agent Message Machine 🕵️
+# Making a secret message slides each letter forward along the alphabet by your number.
 # With 3, A becomes D, B becomes E ... and Z goes round to C.
-# Cracking a code slides each letter back again by the same number.
+# Cracking a secret message slides each letter back again by the same number.
 
 alphabet = "abcdefghijklmnopqrstuvwxyz"
 
-choice = input("Are you making a code or cracking one? (make / crack) ").strip().lower()
+choice = input("Are you making a secret message or cracking one? (make / crack) ").strip().lower()
 cracking = choice.startswith("c")
 message = input("Type your message: ")
 key = int(input("What is the secret number? (1 to 25) "))
@@ -638,7 +666,7 @@ print()
 if cracking:
     print("🔓 The hidden message is: " + result)
 else:
-    print("🔒 Your secret code is: " + result)
+    print("🔒 Your secret message is: " + result)
     print("To read it, run this again, type crack, and use the number " + str(key) + ".")
 `
   },
@@ -646,25 +674,25 @@ else:
     id: "quiz",
     emoji: "🧠",
     name: "The Big Quiz",
-    what: "Otley, Leeds, games and computers",
-    title: "The Big Otley Quiz",
-    blurb: "Python asks the questions, checks your answers and keeps your score.",
+    what: "How well do you know Prince Henry's?",
+    title: "The Big Prince Henry's Quiz",
+    blurb: "Python asks the questions, mixes up the answers and keeps your score. Type A, B or C, or the answer itself!",
     idle: "Press Run to start the quiz!",
     make: [{
       heading: "✍️ Add your own question",
-      intro: "Think of a question for the quiz. Python will ask it at the end.",
+      intro: "Think of a question, one right answer and two wrong ones. Python will mix them up and ask it at the end.",
       fields: [
         { name: "question", label: "Your question", placeholder: "What is the best flavour of crisps?" },
-        { name: "answer", label: "The right answer", placeholder: "Salt and vinegar" },
-        { name: "also", label: "Another answer that is also right", hint: "(you can leave this empty)", placeholder: "Salt & vinegar" },
+        { name: "right", label: "The right answer", placeholder: "Salt and vinegar" },
+        { name: "wrong1", label: "A wrong answer", placeholder: "Sprouts" },
+        { name: "wrong2", label: "Another wrong answer", placeholder: "Toothpaste" },
       ],
       button: "➕ Add my question",
       apply(code, v) {
-        const question = v.question.trim(), answer = v.answer.trim(), also = v.also.trim();
-        if (!question || !answer) return { error: "Type a question and its answer first." };
+        const question = v.question.trim(), right = v.right.trim(), wrong1 = v.wrong1.trim(), wrong2 = v.wrong2.trim();
+        if (!question || !right || !wrong1 || !wrong2) return { error: "Fill in all four boxes: the question, the right answer and two wrong ones." };
         const number = (code.match(/^ask\(/gm) || []).length + 1;
-        const answers = [answer, also].filter(Boolean).map(a => py(a.toLowerCase()));
-        const line = "ask(" + py(number + ". " + question) + ", [" + answers.join(", ") + "])\n";
+        const line = "ask(" + [number + ". " + question, right, wrong1, wrong2].map(py).join(", ") + ")\n";
         const asked = [...code.matchAll(/^ask\(.*$/gm)];
         if (asked.length) {
           const last = asked[asked.length - 1];
@@ -673,43 +701,64 @@ else:
         return insertBefore(code, 'print("You scored', line);
       }
     }],
-    code: `# The Big Otley Quiz!
-# Python asks a question, waits for your answer, then checks it.
+    code: `# The Big Prince Henry's Quiz!
+# Python asks a question, mixes up the answers, then checks which one you picked.
+import random
 
 score = 0
 total = 0
+letters = ["a", "b", "c"]
 
-def ask(question, answers):
+# Keeps only letters and numbers, so "b." or "Otley!" still count
+def tidy(text):
+    kept = ""
+    for letter in text.lower():
+        if letter in "abcdefghijklmnopqrstuvwxyz0123456789":
+            kept = kept + letter
+    return kept
+
+def ask(question, right, wrong1, wrong2):
     global score, total
     total = total + 1
-    guess = input(question + " ").strip().lower()
-    if guess in answers:
+    choices = [right, wrong1, wrong2]
+    random.shuffle(choices)
+    print(question)
+    print("   A) " + choices[0])
+    print("   B) " + choices[1])
+    print("   C) " + choices[2])
+    guess = tidy(input("Type A, B or C, or the answer: "))
+    # A letter means the answer next to it
+    if guess in letters:
+        guess = tidy(choices[letters.index(guess)])
+    # Typing just part of it counts too, like "wharfe" for "The River Wharfe"
+    if guess == tidy(right) or (len(guess) >= 4 and guess in tidy(right)):
         print("✅ Correct!")
         score = score + 1
     else:
-        print("❌ Not quite! It was: " + answers[0].title())
+        print("❌ Not quite! It was: " + right)
     print()
 
-print("Welcome to the Big Otley Quiz! 🎉")
+print("Welcome to the Big Prince Henry's Quiz! 🎉")
 name = input("What is your name? ")
 print("Good luck, " + name + "!")
 print()
 
-ask("1. Which town is Prince Henry's Grammar School in?", ["otley"])
-ask("2. Which river flows through Otley?", ["wharfe", "river wharfe", "the wharfe", "the river wharfe"])
-ask("3. What is the big hill above Otley called? (Clue: The Ch...)", ["chevin", "the chevin"])
-ask("4. Which big city is just down the road from Otley?", ["leeds"])
-ask("5. What is the capital city of the UK?", ["london"])
-ask("6. How many countries are in the UK?", ["4", "four"])
-ask("7. In Minecraft, what green monster goes 'ssss' then BOOM?", ["creeper", "a creeper"])
-ask("8. What colour is Pac-Man?", ["yellow"])
-ask("9. What do you click with that has the same name as a small animal?", ["mouse", "a mouse"])
-ask("10. Computers count with only two numbers: 0 and ...?", ["1", "one"])
-ask("11. This quiz is written in a language named after a snake. What is it?", ["python"])
+ask("1. Which town is Prince Henry's Grammar School in?", "Otley", "Paris", "The Moon")
+ask("2. What colour are the blazers at Prince Henry's?", "Navy blue", "Bright pink", "Lime green")
+ask("3. The school is named after a prince. What was his name?", "Henry", "Shrek", "Mario")
+ask("4. Which year group will you join at Prince Henry's?", "Year 7", "Year 1", "Year 100")
+ask("5. Prince Henry's is very old! When did it start?", "1607", "Last Tuesday", "2025")
+ask("6. What is the picture on a Prince Henry's tie?", "Feathers", "Pizza slices", "Rubber ducks")
+ask("7. Prince Henry's teaches lots of languages. Which of these is a language?", "French", "Football", "Fish fingers")
+ask("8. Lizzie Armitstead went to Prince Henry's and won an Olympic medal. What sport?", "Cycling", "Darts", "Hide and seek")
+ask("9. Danny Care went to Prince Henry's and played for England. What sport?", "Rugby", "Ballet", "Chess")
+ask("10. What is the big hill next to Otley called?", "The Chevin", "Mount Everest", "Big Bumpy Hill")
+ask("11. Which river flows through Otley?", "The River Wharfe", "The River Nile", "The Chocolate River")
+ask("12. This quiz is written in a language named after a snake. What is it?", "Python", "Sssssnake", "Banana")
 
 print("You scored " + str(score) + " out of " + str(total) + ", " + name + "!")
 if score == total:
-    print("🏆 PERFECT SCORE! You are a genius!")
+    print("🏆 PERFECT SCORE! You know Prince Henry's already!")
 elif score >= total / 2:
     print("🌟 Brilliant work!")
 else:
@@ -991,6 +1040,7 @@ $("make-dialog").addEventListener("click", e => { if (e.target === $("make-dialo
 
 function setCodeShown(on) {
   $("code-panel").hidden = !on;
+  $("code-panel").closest(".work").classList.toggle("code-open", on);
   $("show-code").setAttribute("aria-expanded", on);
   $("show-code").textContent = on ? "🙈 Hide the code" : "👀 See the code";
   if (on) repaint();
