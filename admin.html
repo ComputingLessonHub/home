@@ -4506,6 +4506,10 @@ function paintLessonGrid(){
       card.appendChild(vrow);
     }
     if (lessonLocks[l.lesson_id]) card.appendChild(el("p","lp-note","Locked for " + cls));
+    /* Marking happens between lessons, and an assessment a class can still
+       open is one that can change while it is being marked. Only an
+       assessment has anything to mark this way. */
+    if (l.assessment) card.appendChild(markingLockRow(l.lesson_id));
     const acts = el("div","lp-acts");
     const pub = el("button", live ? "btn-ghost" : "btn-primary", live ? "Unpublish" : "Publish");
     pub.addEventListener("click", () => {
@@ -4822,6 +4826,55 @@ async function addWholeUnit(name){
   }catch(e){ say("Could not add that unit", e.message); }
 }
 
+/* ---------- locking an assessment for marking ----------
+   The class can still open it and read their work, and see their mark once
+   it is there, but nothing they hand in is accepted until it is unlocked.
+   The server refuses the write, so a page left open from last lesson cannot
+   slip a change in either. Per class, like every other lock. */
+let markingLocks = {};       // lesson_id -> locked for marking for this class
+function markingLockRow(id){
+  const on = !!markingLocks[id];
+  const row = el("p","lp-note verpick");
+  row.appendChild(document.createTextNode("Lock for marking "));
+  const chip = el("button","statechip chip-live " + (on ? "wait" : "shut"),
+                  on ? "\u{1F512} On" : "Off");
+  chip.type = "button";
+  chip.title = on ? "Locked: " + cls + " can see this but cannot change it. Click to unlock."
+                  : "Stop " + cls + " changing this while you mark it";
+  chip.addEventListener("click", (e) => { e.stopPropagation(); setMarkingLock(id, !on); });
+  row.appendChild(chip);
+  return row;
+}
+async function setMarkingLock(id, on){
+  try{
+    const r = await fetch(API + "/api/release", { method:"POST", headers: HJ(),
+      body: JSON.stringify({ lesson: id, group: cls, markingLocked: on }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || "Could not change that.");
+    markingLocks[id] = !!d.markingLocked;
+  }catch(e){ say(on ? "Could not lock it" : "Could not unlock it", e.message); return; }
+  paintLessonGrid();
+  /* Manage draws the same switch, so it has to show the change too */
+  const inManage = $("markingLockBox");
+  if (inManage && lessonId === id) paintMarkingBox(inManage);
+}
+/* The same switch near the top of Manage, with the words to say what it does. */
+function paintMarkingBox(box){
+  box.innerHTML = "";
+  const on = !!markingLocks[lessonId];
+  box.className = "marklock" + (on ? " on" : "");
+  const words = el("div","marklock-words");
+  words.appendChild(el("b","", on ? "\u{1F512} Locked for marking" : "Lock for marking"));
+  words.appendChild(el("span","", on
+    ? cls + " can see their work but cannot change it. Unlock it when you have finished marking."
+    : "Stops " + cls + " changing their work while you mark it. They can still see it."));
+  box.appendChild(words);
+  const btn = el("button", on ? "btn-ghost" : "btn-primary", on ? "Unlock" : "Lock for marking");
+  btn.type = "button";
+  btn.addEventListener("click", () => { btn.textContent = "…"; setMarkingLock(lessonId, !on); });
+  box.appendChild(btn);
+}
+
 /* ---------- managing one lesson (big pop-up) ---------- */
 let lessonLocks = {};        // lesson_id -> whole-lesson lock for this class
 let locks = new Set();       // task locks for the lesson being managed
@@ -4853,7 +4906,11 @@ async function loadClassLocks(){
     const r = await fetch(API + "/api/release?all=1&group=" + encodeURIComponent(cls) + "&t=" + Date.now(), { headers: H(), cache: "no-store" });
     const d = await r.json();
     lessonLocks = {};
-    (d.rows || []).forEach(row => { lessonLocks[row.lesson] = !!row.lessonLocked; });
+    markingLocks = {};
+    (d.rows || []).forEach(row => {
+      lessonLocks[row.lesson] = !!row.lessonLocked;
+      markingLocks[row.lesson] = !!row.markingLocked;
+    });
   }catch(e){
     /* The padlock on a lesson card is extra detail, and this must not reject:
        restoreSpot awaits it and sends a teacher to Home when it throws, and
@@ -4892,6 +4949,13 @@ function openManage(){
     const x = el("button","btn-ghost iconbtn modal-x","\u2715"); x.title = "Close";
     x.addEventListener("click", closeModal);
     box.appendChild(x);
+    /* First, because it is the thing a teacher opens Manage for once the
+       class has handed in. */
+    if (lessonJson && lessonJson.assessment){
+      const mlb = el("div"); mlb.id = "markingLockBox";
+      paintMarkingBox(mlb);
+      box.appendChild(mlb);
+    }
     const bar = el("div","toolrow");
     const mine = assigns.find(a => a.lesson_id === lessonId && a.group_name.toLowerCase() === cls.toLowerCase());
     const isLive = mine ? !!mine.published : !!catOf(lessonId).published;
@@ -4938,7 +5002,18 @@ function openManage(){
 }
 async function refreshRelease(){
   if (!lessonId) return;
-  if (lessonJson && lessonJson.assessment){ locks = new Set(); paintTasks(); return; }
+  if (lessonJson && lessonJson.assessment){
+    locks = new Set();
+    /* Its questions are never locked, but it can be locked for marking, and
+       Manage has to open showing whether it is. */
+    try{
+      const r = await fetch(API + "/api/release?lesson=" + encodeURIComponent(lessonId) + "&group=" + encodeURIComponent(cls) + "&t=" + Date.now(), { cache: "no-store" });
+      const d = await r.json();
+      markingLocks[lessonId] = !!d.markingLocked;
+    }catch(e){ /* the grid's answer stands */ }
+    paintTasks();
+    return;
+  }
   try{
     const r = await fetch(API + "/api/release?lesson=" + encodeURIComponent(lessonId) + "&group=" + encodeURIComponent(cls) + "&t=" + Date.now(), { cache: "no-store" });
     const d = await r.json();
@@ -4950,6 +5025,7 @@ async function refreshRelease(){
       usingDefaults = false;
     } else { locks = new Set(); usingDefaults = false; }
     lessonLocks[lessonId] = !!d.lessonLocked;
+    markingLocks[lessonId] = !!d.markingLocked;
     locksUnknown = false;
   }catch(e){
     /* The pop-up still opens: manageLesson awaits this one, so throwing here

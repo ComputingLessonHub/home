@@ -967,6 +967,12 @@ function attach(opts){
      run. For a student who cannot read Python's own errors yet. */
   const helpful = !!opts.helpful;
   if (helpful) probs.classList.add("helpful");
+  /* Checked when Run is pressed rather than as they type. A card arriving
+     after "if" and before the rest of the line told students off for a line
+     they had not finished, so the code is looked at when they say it is
+     ready, the way Python itself looks at it. Until then nothing is marked. */
+  const onRun = helpful && !!opts.checkOnRun;
+  let atRun = [];             // what was wrong when Run was last pressed, with the line as it was
   let runErr = null;          // the explained error from the last run, if any
   let helpAt = 0;             // which of several mistakes the card is showing
   let helpTimer = null;
@@ -982,10 +988,22 @@ function attach(opts){
 
   function repaint(){
     const lines = ta.value.split("\n");
-    issues = lang.find(ta.value, helpful) || [];
+    if (onRun){
+      /* Only what Run found, and only while the line it was found on still
+         reads the same: a line they have changed is a line they are fixing,
+         and its card goes the moment they do. Nothing new is found until the
+         next Run. */
+      const before = atRun.length;
+      atRun = atRun.filter(x => lines[x.line] === x.text);
+      issues = atRun;
+      if (atRun.length !== before) setTimeout(paintHelp, 0);
+    } else issues = lang.find(ta.value, helpful) || [];
     /* An error from the last run is about the code as it was. Once the line
        it points at has been changed, it is about something that has gone. */
-    if (runErr && runErr.line !== null && lines[runErr.line] !== runErr.text) runErr = null;
+    if (runErr && runErr.line !== null && lines[runErr.line] !== runErr.text){
+      runErr = null;
+      if (onRun) setTimeout(paintHelp, 0);
+    }
     const bad = new Set(issues.map(x => x.line));
     if (runErr && runErr.line !== null) bad.add(runErr.line);
     const state = lang.state();
@@ -995,6 +1013,7 @@ function attach(opts){
     gutter.innerHTML = lines.map((_, n) =>
       '<div class="gl' + (bad.has(n) ? " bad" : "") + '">' + (n + 1) + "</div>").join("");
     if (!showProbs){ probs.hidden = true; return; }
+    if (onRun) return;          // painted by Run, and by a fixed line above
     if (helpful){
       /* Not on every key: a card leaping up halfway through typing a line
          is telling them off for something they were about to finish. */
@@ -1120,6 +1139,11 @@ function attach(opts){
     if (!helpful) return;
     runErr = err ? explainError(err, ta.value) : null;
     if (!err) ranSince = true;      // a Run starting is another go at whatever is showing
+    /* A Run starting is the moment the code is looked at. */
+    if (!err && onRun){
+      const lines = ta.value.split("\n");
+      atRun = (lang.find(ta.value, true) || []).map(x => Object.assign({}, x, { text: lines[x.line] }));
+    }
     helpAt = 0;
     repaint();
     paintHelp();
@@ -1362,7 +1386,14 @@ function attach(opts){
      sandbox's web editor does when it moves between its three files. */
   function setLang(next){ lang = next || pythonLang; acHide(); repaint(); }
 
-  return { editor, gutter, codeWrap, hl, ta, probs, repaint, setLang, setRunError,
+  /* Whether a mistake is being pointed out right now: what Run found or what
+     stopped the program in the Helpful IDE, or the list of mistakes in the
+     plain one. A checklist does not tick anything off over the top of it. */
+  function flagged(){
+    if (onRun) return atRun.length > 0 || !!runErr;
+    return showProbs && issues.length > 0;
+  }
+  return { editor, gutter, codeWrap, hl, ta, probs, repaint, setLang, setRunError, flagged,
            issues: () => issues };
 }
 

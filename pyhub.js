@@ -586,8 +586,12 @@ def _hub_where(err):
 def _hub_note(err, kind):
     try:
         syntax = kind == "syntax"
+        # How much the program had printed before it stopped, counted before
+        # the note about the error is printed, so a page explaining the error
+        # its own way can show the program's output without Python's note.
+        _flush_text()
         _hub_err[0] = {"type": type(err).__name__, "msg": str(getattr(err, "msg", "") if syntax else err),
-                       "kind": kind,
+                       "kind": kind, "at": len(_events),
                        "line": getattr(err, "lineno", None) if syntax else _hub_where(err),
                        "offset": getattr(err, "offset", None) if syntax else None,
                        "name": getattr(err, "name", None) if isinstance(err, NameError) else None}

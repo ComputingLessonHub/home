@@ -670,6 +670,9 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:var
 @keyframes tickpop{from{transform:scale(.2); opacity:0} to{transform:scale(1); opacity:1}}
 .done-title{font-family:var(--display); font-size:var(--text-6xl); font-weight:700; margin:0 0 6px}
 .done-sub{color:var(--muted); font-size:var(--text-xl); margin:0 0 10px}
+/* where Back to my work would be, while the teacher has it locked */
+.done-locked{margin:0 0 6px; padding:10px 14px; border-radius:10px; font-weight:700;
+  border-left:4px solid var(--amber); background:color-mix(in srgb, var(--amber) 10%, transparent)}
 .done-score{font-family:var(--display); font-size:var(--text-7xl); font-weight:700; line-height:1; margin-top:6px}
 .done-pct{font-family:var(--mono); font-size:var(--text-lg); color:var(--muted); margin:8px 0 4px}
 .done-save{font-size:var(--text-2xl); padding:15px 34px; border-radius:var(--rad-md); margin:14px auto 0; display:inline-block}
@@ -979,6 +982,14 @@ body.spectating.embedded{padding-top:0}
 .lp-head{display:flex; align-items:flex-start; gap:10px; margin-bottom:6px}
 .lp-head b{font-size:var(--text-xl); flex:1; line-height:1.3}
 .lp-note{margin:0 0 10px; font-size:var(--text-md); color:var(--amber-dark); font-weight:700}
+/* Lock for marking, at the top of Manage. Louder once it is on, because a
+   lock left on after marking is a class that cannot hand anything in. */
+.marklock{display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  margin:4px 0 14px; padding:12px 14px; border-radius:12px;
+  border:1.5px solid var(--line); background:var(--panel-2)}
+.marklock.on{border-color:var(--amber); background:color-mix(in srgb, var(--amber) 10%, var(--panel))}
+.marklock-words{flex:1 1 260px; display:flex; flex-direction:column; gap:2px}
+.marklock-words span{font-size:14px; color:var(--muted)}
 .lp-acts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px}
 .lp-acts button{padding:9px 14px}
 .modal.wide{max-width:1500px; text-align:left}
@@ -1241,6 +1252,14 @@ html.builder .loadscreen{z-index:90}
   color:var(--ed-fg); white-space:pre-wrap; word-break:break-word}
 .ide-out.has-error{color:#F0A6A1}
 .ide-out:empty::before{content:"Press Run to see what your program does."; color:var(--ed-gut)}
+/* The Helpful IDE's card inside the console, held to the bottom of what the
+   console shows. It never makes the console taller: whatever the program
+   printed scrolls above it, so nothing has to be scrolled down the page to
+   find out what went wrong. */
+.ide-probs.in-console{position:sticky; bottom:-10px; margin:10px -12px -10px;
+  padding:8px 10px 10px; border-top:1px solid var(--ed-line); background:var(--ed-bg)}
+.ide-console:has(.ide-probs.in-console:not([hidden])) .ide-out:empty::before{content:none}
+.ide-console:has(.ide-probs.in-console:not([hidden])) .ide-out:empty{display:none}
 .ide-ask{display:flex; align-items:center; gap:6px; margin-top:2px}
 .ide-askprompt{font-family:var(--mono); font-size:var(--ed-size); color:var(--ed-fg); white-space:pre}
 .ide-askin{flex:1; font-family:var(--mono) !important; font-size:var(--ed-size) !important;

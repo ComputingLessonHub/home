@@ -131,6 +131,10 @@ let wasDone = false;           // the saved copy says this lesson was completed
 let lockedSet = new Set();     // task indexes the teacher has locked shut
 let linkBroken = false;        // a handed-in link arrived damaged
 let relManaged = false;
+/* Set by the teacher, per class, while they mark an assessment. The class
+   can read their work and see their mark; nothing they hand in is accepted,
+   which the server enforces, so the page stops them before they try. */
+let markingLocked = false;
 if (!localStorage.getItem("hub_token") && location.search.indexOf("builder=") < 0
     && location.search.indexOf("preview=") < 0 && location.search.indexOf("view=") < 0) {
   document.addEventListener("DOMContentLoaded", () => {
@@ -843,6 +847,9 @@ async function fetchRelease(){
       if (d.managed) for (let i = d.released; i < steps.length; i++) lockedSet.add(i);
     } else return null;
     relManaged = !!d.managed;
+    const lockedNow = !!d.markingLocked && !!lesson && !!lesson.assessment;
+    if (lockedNow && !markingLocked && restoreDone && !spectate) setTimeout(enterMarkingLock, 0);
+    markingLocked = lockedNow;
     try{ localStorage.setItem(RELEASE_KEY, JSON.stringify([...lockedSet])); }catch(e){}
     return lockedSet;
   }catch(e){
@@ -1185,7 +1192,9 @@ const handedOver = handedLesson();
          machine that has never opened this lesson there is nothing cached to
          fall back on, and every locked page looked like an ordinary finished
          one. */
-      if (!lesson.assessment) await fetchRelease();
+      /* An assessment has no pages to lock, but it can be locked for
+         marking, which the summary has to know before it is drawn. */
+      await fetchRelease();
       hideLoader();
       if (lesson.assessment){ renderAssessmentComplete(false); }
       else { showLessonComplete(true); }
@@ -1194,6 +1203,7 @@ const handedOver = handedLesson();
     hideLoader("Checking your work\u2026");
     await fetchRelease();      // know the state before we show anything
     hideLoader();
+    if (markingLocked && !spectate){ showMarkingLocked(); return; }
     if (!steps.length){
       $("briefTitle").textContent = "This lesson is empty";
       $("briefText").textContent = "There are no tasks in it yet.";
@@ -1430,6 +1440,7 @@ async function loadSaved(){
 /* ---------- shell ---------- */
 /* Leaving the summary, whether by the button on it or by the progress bar. */
 function leaveSummary(i){
+  if (markingLocked && !spectate) return;
   /* A pop-up may still be holding a task's section, and the page it came
      from is blank without it. */
   returnAllSections();
@@ -2369,6 +2380,13 @@ async function submitWork(){
        now, after queueing as long as it can. That is not the same as not
        reaching it, and the child is told so, with a way to try again. */
     if (r.status === 503) return "busy";
+    if (r.status === 423){
+      /* Locked for marking since this page opened. */
+      markingLocked = true;
+      unsavedTyping = false;
+      setTimeout(enterMarkingLock, 0);
+      return "failed";
+    }
     if (!r.ok) return "failed";
     lastSubmittedPayload = payload;
     if (typedAt === mark) unsavedTyping = false;   // it has reached the teacher
@@ -4659,6 +4677,7 @@ function rIDE(b){
     tips: wantTips,
     autocomplete: b.autocomplete !== false,
     helpful: helpful,
+    checkOnRun: helpful,
     /* Once they have typed here it is their work, and nothing carries into it
        again. See carryIn below. */
     onInput: () => { lastCarried = null; markDirty(); if (checklist) checklist.typed(); }
@@ -4684,7 +4703,12 @@ function rIDE(b){
   }
   if (b.key){ codeKeys[b.key] = b.id; codeBlocks[b.key] = b; }
   pane.appendChild(editor);
-  pane.appendChild(probs);
+  /* The Helpful IDE's card goes in the console, further down, because Run is
+     what finds the mistake and the console is where they are looking when
+     it does. Under the code it pushed the page down and had to be scrolled
+     to. Without a console there is nowhere else for it. */
+  const cardInConsole = helpful && canRun;
+  if (!cardInConsole) pane.appendChild(probs);
   wrap.appendChild(pane);
 
   /* --- output side --- */
@@ -4736,6 +4760,7 @@ function rIDE(b){
   askIn.type = "text"; askIn.autocomplete = "off"; askIn.spellcheck = false;
   askRow.appendChild(askText); askRow.appendChild(askIn);
   consoleBox.appendChild(out); consoleBox.appendChild(askRow);
+  if (cardInConsole){ probs.classList.add("in-console"); consoleBox.appendChild(probs); }
   side.appendChild(consoleBox);
   side.appendChild(helpBox);
   function showTab(which){
@@ -4816,19 +4841,27 @@ function rIDE(b){
     py.runPython("_hub_set_inputs(_hub_next_inputs.split(chr(0)) if _hub_next_inputs != '' else [])");
     py.globals.set("_hub_src", ta.value);
     const res = JSON.parse(py.runPython("_hub_run(_hub_src, 5.0)"));
-    lastOut = res.out || "";
-    if (!await playback(res.events)) return true;   // something newer is running now
-    out.classList.toggle("has-error", res.status === "done" && !res.ok);
+    /* With the Helpful IDE's card in the console, the console shows what the
+       program printed and stops where the program stopped. Python's own note
+       about the error, under it, said what the card says, worse, and right
+       above it. A typo Python cannot get past stops the program before its
+       first line, so then the card is all there is. */
+    const cut = cardInConsole && res.status === "done" && !res.ok && res.err && typeof res.err.at === "number";
+    const shown = cut ? (res.events || []).slice(0, res.err.at) : res.events;
+    lastOut = cut ? shown.filter(e => e[0] === "out").map(e => e[1]).join("") : (res.out || "");
+    if (!await playback(shown)) return true;   // something newer is running now
+    out.classList.toggle("has-error", res.status === "done" && !res.ok && !cut);
     if (res.status === "input"){
       askText.textContent = res.prompt || ">";
       askRow.hidden = false; askIn.value = ""; askIn.focus();
       return false;
     }
     askRow.hidden = true;
-    if (!lastOut) out.textContent = "(your program printed nothing)";
+    if (!lastOut && !cut) out.textContent = "(your program printed nothing)";
     /* the Helpful IDE explains whatever stopped it, under the code */
     if (ed.setRunError) ed.setRunError(res.ok ? null : (res.err || null));
     ran = true; runs++;
+    runFailed = !res.ok;
     if (checklist) checklist.refresh(cheerNext ? side : null);
     cheerNext = false;
     markDirty();
@@ -4836,13 +4869,25 @@ function rIDE(b){
   }
   /* the teacher's checklist, if this task has one. Declared before run()
      so it can tick itself off when the code has finished. */
-  const checklist = attachChecklist(s, b.checks,
-      () => window.runPythonChecks(b.checks, ta.value, lastOut, runs), b.id, b);
-    /* A response task with nothing left from the tasks it reads says so,
-       rather than showing an empty space where a checklist would be. */
-    if (allDone && !b.checks.length)
-      s.insertBefore(el("p","ide-alldone","You ticked off everything on the checklist. " +
-        "Use this time to make your program even better."), s.firstChild);
+  /* Nothing new is ticked off while a mistake is being pointed out, whether
+     Python stopped on it or the Helpful IDE's card found it. Code with a
+     mistake in it has not done the thing yet, however much of the right
+     text it contains, and a tick there opened the next level on a program
+     that does not run. Lines already ticked from an earlier run stay ticked:
+     a mistake made since is not a reason to take back what was done. */
+  let runFailed = false;
+  const mistakeShowing = () => runFailed || !!(ed.flagged && ed.flagged());
+  const checklist = attachChecklist(s, b.checks, () => {
+    const results = window.runPythonChecks(b.checks, ta.value, lastOut, runs);
+    if (!Array.isArray(results) || !mistakeShowing() || !checklist) return results;
+    const had = checklist.list.ticked();
+    return results.map((r, i) => (r && r.ok && !r.manual && !had[i]) ? Object.assign({}, r, { ok:false }) : r);
+  }, b.id, b);
+  /* A response task with nothing left from the tasks it reads says so,
+     rather than showing an empty space where a checklist would be. */
+  if (allDone && !b.checks.length)
+    s.insertBefore(el("p","ide-alldone","You ticked off everything on the checklist. " +
+      "Use this time to make your program even better."), s.firstChild);
 
   async function run(cheer){
     cheerNext = !!cheer;
@@ -7041,10 +7086,9 @@ function renderPracticalComplete(){
     hero.appendChild(rb);
   }
 
-  /* the same way into their work as a marked assessment has */
-  const seeBtn = el("button", (OFFLINE && !graded ? "btn-ghost" : "btn-primary") + " done-save fadein", "View my work");
-  seeBtn.addEventListener("click", () => openWorkPopup());
-  hero.appendChild(seeBtn);
+  /* No View my work here. Back to my work at the top is the way into it, a
+     practical's work is the whole program rather than a list of answers,
+     and two ways in read as two different things. */
 
   /* Online this work is already with the teacher. Offline nothing has gone
      anywhere until they hand it over, and a practical is the one screen that
@@ -7077,11 +7121,34 @@ function renderPracticalComplete(){
     renderResponses(holder, (teacherNote && teacherNote.targetTopic) || null, null);
     if (holder.children.length) box.appendChild(holder);
   }
-  /* Offline there is no home to go back to, only a code box. */
-  if (!OFFLINE){
-    const back = el("a","done-back","\u2190 Back to Home"); back.href = "index.html";
-    box.appendChild(back);
-  }
+  /* No Back to Home either: Home is in the bar along the top, and a second
+     one under the work was the button pressed instead of Back to my work. */
+}
+
+/* Locked for marking before they had finished. There is nothing to show
+   but where things stand, and no way back into the tasks. */
+function showMarkingLocked(){
+  const box = doneShell("Locked for marking");
+  /* doneShell says they have finished, and that is saved with the work the
+     moment the page is hidden. They have not, and once it is unlocked the
+     home page would have shown it as complete. */
+  finished = false; paintTracker();
+  const hero = heroBits("Locked for marking",
+    "Your teacher is marking this. You can carry on with it once they unlock it.");
+  /* a padlock rather than the tick: nothing here has been finished */
+  const mark = hero.querySelector(".done-tick");
+  if (mark) mark.textContent = "\u{1F512}";
+  box.appendChild(hero);
+}
+/* The lock arriving while the page is open: from the save being refused, or
+   from the release check on Continue. */
+function enterMarkingLock(){
+  if (spectate || !lesson || !lesson.assessment) return;
+  /* Already saying so: the page that opened locked drew this itself. */
+  const ds = $("doneScreen");
+  if (ds && !ds.hidden && ds.querySelector(".done-locked")) return;
+  if (finished) renderAssessmentComplete(false);
+  else showMarkingLocked();
 }
 
 function renderAssessmentComplete(justFinished, res, st, sent){
@@ -7566,7 +7633,10 @@ function doneShell(title){
   box.hidden = false; box.innerHTML = "";
   /* A way back into the work. Someone who has finished still wants to reread
      what they wrote, and without this the only way back was to reload. */
-  if (steps.length){
+  if (markingLocked && !spectate){
+    box.appendChild(el("p","done-locked",
+      "🔒 Your teacher has locked this while they mark it, so it cannot be changed just now."));
+  } else if (steps.length){
     const back = el("button","btn-ghost done-back","← Back to my work");
     back.addEventListener("click", () => leaveSummary(Math.max(0, steps.length - 1)));
     box.appendChild(back);

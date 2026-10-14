@@ -367,6 +367,7 @@ function pruneStorage(validIds){
 let lessonTitles = {};
 let catalogue = null;      // what the teacher has published, and in which unit
 let lockedLessons = new Set();
+let markingLessons = new Set();   // assessments the teacher is marking: open, but read only
 let doneLessons = new Set();
 let showing = "active";
 
@@ -428,7 +429,11 @@ async function fetchLessons(){
 
     lockedLessons = new Set();
     const rel = await lockedComing;
-    if (rel) (rel.rows || []).forEach(r => { if (r.lessonLocked) lockedLessons.add(r.lesson); });
+    markingLessons = new Set();
+    if (rel) (rel.rows || []).forEach(r => {
+      if (r.lessonLocked) lockedLessons.add(r.lesson);
+      if (r.markingLocked) markingLessons.add(r.lesson);
+    });
 
     doneLessons = new Set();
     Object.keys(byId).forEach(id => {         // this machine's own record
@@ -603,6 +608,13 @@ function paintLessons(byId){
         const badge = document.createElement("span");
         badge.className = "badge"; badge.textContent = "Assessment";
         a.appendChild(badge);
+        /* Still opens, to their work and their mark, but says up front that
+           it cannot be changed, rather than letting them find out inside. */
+        if (markingLessons.has(l.id)){
+          const shut = document.createElement("span");
+          shut.className = "badge"; shut.textContent = "\u{1F512} Being marked";
+          a.appendChild(shut);
+        }
       } else if (l.homework || c.homework){
         const badge = document.createElement("span");
         badge.className = "badge badge-home"; badge.textContent = "Home Learning";
@@ -663,6 +675,7 @@ function forgetEverything(){
   lessonTitles = {};
   doneLessons = new Set();
   lockedLessons = new Set();
+  markingLessons = new Set();
   catalogue = null;
   showing = "active";
   openTab = "lessons";
