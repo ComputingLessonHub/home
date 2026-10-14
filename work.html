@@ -91,11 +91,15 @@
       <div class="bfield" id="fbCommentWrap"><label>General comment</label><textarea id="fbComment" rows="2"></textarea></div>
       <!-- Marking a class is one student after another, so moving on is the
            button most pressed; Save on its own is for coming back to later. -->
-      <div class="fbsave" id="fbSaveRow">
-        <button class="btn-ghost" id="saveFb">Save</button>
-        <button class="btn-primary" id="saveNext" title="Ctrl + Enter">Save and next</button>
+      <!-- Held at the foot of the column however far down it is scrolled, with
+           the message that says whether it saved. -->
+      <div class="fbfoot">
+        <div class="fbsave" id="fbSaveRow">
+          <button class="btn-ghost" id="saveFb">Save</button>
+          <button class="btn-primary" id="saveNext" title="Ctrl + Enter">Save and next</button>
+        </div>
+        <p class="hint" id="fbMsg"></p>
       </div>
-      <p class="hint" id="fbMsg"></p>
     </aside>
   </div>
 </div>
@@ -195,6 +199,7 @@ let idx = 0;
 let allPages = false;
 let lastStep = 0;                                     // the page being looked at
 let lastScroll = 0;                                   // and how far down it
+let lastFull = "";                                    // the task whose picture is open full screen
 
 /* ---------------- getting everything ---------------- */
 
@@ -1005,7 +1010,17 @@ function paintPicker(){
   sel.value = String(idx);
 }
 window.addEventListener("message", (e) => {
-  if (e && e.data && typeof e.data.hubWorkStep === "number") lastStep = e.data.hubWorkStep;
+  if (e && e.data && typeof e.data.hubWorkStep === "number"){
+    /* A different page has no picture of that task on it, and keeping the
+       note would pop the picture open again on whichever student is opened
+       after the teacher comes back to its page. */
+    if (e.data.hubWorkStep !== lastStep) lastFull = "";
+    lastStep = e.data.hubWorkStep;
+  }
+  /* only from the frame the students are paged through, not the pop-ups
+     opened from Progress, which are the same page embedded */
+  if (e && e.data && typeof e.data.hubWorkFull === "string" &&
+      e.source === $("workFrame").contentWindow) lastFull = e.data.hubWorkFull;
   if (e && e.data && typeof e.data.hubWorkScroll === "number") lastScroll = e.data.hubWorkScroll;
 });
 function showStudent(i, step){
@@ -1051,7 +1066,11 @@ function showStudent(i, step){
     (step !== undefined && !allPages && !onSummary ? "&step=" + step : "") +
     /* the same distance down as well as the same page, so the question being
        read down the class stays where the eye already is */
-    (lastScroll > 0 ? "&scroll=" + lastScroll : ""));
+    (lastScroll > 0 ? "&scroll=" + lastScroll : "") +
+    /* A screenshot open full screen stays open, now showing this student's,
+       so a class's pictures can be read one after another at full size. The
+       frame is a new page for every student and would otherwise close it. */
+    (lastFull ? "&full=" + encodeURIComponent(lastFull) : ""));
   $("fbWho").textContent = st.display_name + " · " + st.username + (row ? "" : ", nothing saved yet");
   /* a practical assessment is marked by hand, so the boxes appear */
   paintMarking(st.username);

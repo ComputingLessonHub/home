@@ -2060,12 +2060,26 @@ body.workpage .grow{flex:1}
 .workside{background:var(--panel); border:1.5px solid var(--line); border-radius:var(--rad-md);
   padding:18px; overflow-y:auto; min-height:0}
 .workside h3{margin:0 0 4px; font-family:var(--display); font-size:var(--text-2xl)}
-.workside textarea{width:100%; box-sizing:border-box}
+/* block, because an inline textarea sits on a line of text and leaves the
+   room for letters' tails under it, which doubled the gap to the bank link */
+.workside textarea{width:100%; box-sizing:border-box; display:block}
+.workside .bank{margin-top:5px; line-height:1.2}
+.workside .bank:empty{display:none}
 .btn-primary.wide{width:100%; margin-top:6px}
 /* Save and next is the one pressed down a class, so it takes more of the row */
 .fbsave{display:flex; gap:8px; margin-top:6px}
 .fbsave button{flex:1 1 0; min-width:0; white-space:nowrap}
 .fbsave .btn-primary{flex-grow:2}
+/* Save and Save and next stay on screen at the foot of the column, however
+   long the questions or the boxes above them make it. The negative margins
+   take it out to the column's edges, and the bottom offset matches the
+   column's padding, so what scrolls behind it is hidden right to the border
+   rather than showing through a gap underneath. */
+.fbfoot{position:sticky; bottom:-18px; z-index:2; margin:0 -18px -18px; padding:10px 18px 18px;
+  background:var(--panel); border-radius:0 0 14px 14px}
+.fbfoot .fbsave{margin-top:0}
+.fbfoot #fbMsg{margin:6px 0 0}
+.fbfoot #fbMsg:empty{display:none}
 
 @media (max-width:1000px){
   body.workpage{height:auto; overflow:auto}
@@ -3738,12 +3752,18 @@ html[data-build=compact][data-preview=full] .homebar{display:none}
    flex:none hands the height back.
    ===================================================================== */
 @media (max-width:1000px){
-  body.workpage{ height:auto; overflow:auto; display:block }
+  /* overflow:visible, not auto: html has overflow-x hidden, so the body's
+     own overflow is not handed to the window and made it a scroll box that
+     never scrolls, which the Save buttons then stuck to instead of the screen */
+  body.workpage{ height:auto; overflow:visible; display:block }
   .workwrap{ overflow:visible; padding:12px 14px 18px }
   .worksplit{ display:flex; flex-direction:column; gap:14px }
   .workmain{ display:block }
   .workframe{ flex:none; height:72vh; height:72dvh; min-height:420px }
   .workside{ overflow:visible; max-height:none }
+  /* The page scrolls here rather than the column, so the buttons hold to the
+     bottom of the screen while the column is on it, clear of the home bar. */
+  .fbfoot{ bottom:0; padding-bottom:calc(12px + env(safe-area-inset-bottom)); border-radius:0 }
   /* Progress's own table needs the same push: .workwrap going overflow:visible
      just above is what let the whole markbook grow as tall as its rows and
      scroll with the page, which is exactly what stopped its header sticking
@@ -5127,7 +5147,8 @@ section.bank{padding:0 20px 40px}
   .bank-list{max-height:34vh; max-height:min(34dvh, 320px)}
 }
 @media (max-width:640px){
-  .bank{padding:0 12px 40px}
+  /* section.bank, as above: the marking column's banks are .bank too */
+  section.bank{padding:0 12px 40px}
   .bank-filter{gap:8px}
   /* min-width:0 as well as width:100%: 190px is over half of a 320px
      screen, and a minimum wins over a width. */

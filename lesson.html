@@ -1241,7 +1241,7 @@ const handedOver = handedLesson();
          no room is kept for one: it was an empty band above every student's
          work in the marking screen, one page at a time or all on one. */
       if (embedParam !== null) document.body.classList.add("embedded");
-      if (embedParam !== null) keepPlaceForParent();
+      if (embedParam !== null){ keepPlaceForParent(); reopenFullPicture(); }
       if (allParam !== null){ showEverything(); return; }
       if (keepStep !== null && keepStep >= 0 && keepStep < steps.length) step = keepStep;
       if (embedParam !== null){
@@ -7022,10 +7022,37 @@ function fullScreenButton(getSrc){
   btn.type = "button";
   btn.title = "Full screen";
   btn.setAttribute("aria-label", "Show the picture full screen");
-  btn.addEventListener("click", () => { const src = getSrc(); if (src) showPictureFull(src); });
+  btn.addEventListener("click", () => {
+    const src = getSrc();
+    const item = btn.closest(".pg-item");
+    if (src) showPictureFull(src, item ? item.dataset.blockId : "");
+  });
   return btn;
 }
-function showPictureFull(src){
+/* View Work loads this page afresh for every student, so it is told which
+   task's picture was open (&full=) and opens this student's. One who has not
+   handed a picture in for it is simply shown their page. Tried a few times
+   because the work is put into the tasks after they are drawn. */
+function reopenFullPicture(){
+  const id = qs.get("full");
+  if (!id) return;
+  let tries = 0;
+  const go = () => {
+    const item = Array.from(document.querySelectorAll(".pg-item")).find(x => x.dataset.blockId === id);
+    const btn = item && item.querySelector(".shot-full-btn");
+    const shot = btn && btn.closest(".shot");
+    if (shot && !shot.hidden && item.offsetParent !== null){ btn.click(); return; }
+    if (++tries < 10) setTimeout(go, 100);
+  };
+  setTimeout(go, 0);
+}
+function showPictureFull(src, blockId){
+  /* the marking screen around an embedded view keeps it open between students */
+  const tellParent = (id) => {
+    if (embedParam === null || !blockId) return;
+    try{ parent.postMessage({ hubWorkFull: id }, "*"); }catch(e){}
+  };
+  tellParent(blockId);
   const view = el("div","shot-viewer");
   view.setAttribute("role","dialog");
   view.setAttribute("aria-label","Picture, full screen");
@@ -7043,6 +7070,7 @@ function showPictureFull(src){
     document.removeEventListener("fullscreenchange", onFsChange);
     if (document.fullscreenElement === view && document.exitFullscreen) document.exitFullscreen().catch(() => {});
     view.remove();
+    tellParent("");
   }
   function onKey(e){ if (e.key === "Escape"){ e.stopPropagation(); close(); } }
   // Esc in real full screen is taken by the browser, which only leaves full screen
