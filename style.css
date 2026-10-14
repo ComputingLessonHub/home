@@ -2091,6 +2091,8 @@ body.workpage .grow{flex:1}
 .fbfoot .fbsave{margin-top:0}
 .fbfoot #fbMsg{margin:6px 0 0}
 .fbfoot #fbMsg:empty{display:none}
+.fbmarked{margin:6px 0 0; font-size:13px; font-weight:600; color:var(--mint)}
+.fbfoot:not(.marked) .fbmarked, .fbfoot.marked #fbMsg{display:none}
 /* Marking a class is the column read thirty times over, so it is kept short
    enough to need as little scrolling as it can: whose work it is goes on the
    heading's line, at the heading's size, and the level and the buttons are
