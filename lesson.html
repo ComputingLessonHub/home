@@ -3007,7 +3007,8 @@ function startTeacherTicking(){
     tickBar = el("div","tickbar no-print");
     tickBar.setAttribute("role","status");
     tickBar.appendChild(el("span","tickbar-text",
-      "<b>Teacher ticking is on.</b> <span class=\"tickbar-more\">Click a checklist line to tick it off for this student, or click it again to untick it.</span>"));
+      "<b>Teacher ticking is on.</b> <span class=\"tickbar-more\">Click a checklist line to tick it off for this student, or click it again to untick it." +
+      (spectate ? " This is a preview, so nothing is saved." : "") + "</span>"));
     const done = el("button","btn-primary tickbar-done","Finished ticking");
     done.addEventListener("click", stopTeacherTicking);
     tickBar.appendChild(done);
@@ -3057,9 +3058,15 @@ function askBypass(){
     const wanted = (lesson && lesson.bypassHash) || 2667650483;   // default: SKIP-2026
     const word = typed.toUpperCase();
     if (strHash(word) === TICK_HASH){
-      /* Reading somebody's work afterwards saves nothing, so a tick there
-         would look done and then vanish. */
-      if (spectate){ msg.textContent = "Ticking only works in the student's own lesson."; return; }
+      /* Reading one student's work has its own ticking that needs no code,
+         and a printout or every page at once is not anybody's lesson. A
+         preview, in the builder or of a class's lesson, is allowed, so a
+         teacher can try it out before doing it in front of a class; nothing
+         is saved there, which the bar says. */
+      if (viewParam !== null || pdfParam !== null || allParam !== null){
+        msg.textContent = "In View Work you can click the checklist lines straight away, with no code.";
+        return;
+      }
       back.remove(); startTeacherTicking();
       return;
     }
