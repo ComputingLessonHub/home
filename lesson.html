@@ -56,6 +56,7 @@
 
 <div class="stage" id="stage">
   <p class="signin-hint no-print" id="signinHint" hidden data-online-only>Not signed in, work stays on this computer only. <a href="index.html">Sign in</a></p>
+  <p class="banner banner-frozen no-print" id="frozenNote" hidden>This is your original work. Your teacher has given you feedback on it, so it can be looked at but not changed.</p>
   <div class="banner banner-ok no-print" id="resumeNote" hidden>
     ↩︎ Welcome back, your saved work has been put back on the page.
   </div>
@@ -497,8 +498,119 @@ let restoreDone = false;
 
 function snapshot(){
   const data = { __step: step, __saved: new Date().toISOString(), __done: finished };
-  Object.entries(fields).forEach(([id, f]) => { data[id] = f.get(); });
+  Object.entries(fields).forEach(([id, f]) => {
+    data[id] = (workFrozen && Object.prototype.hasOwnProperty.call(workFrozen, id))
+      ? workFrozen[id] : f.get();
+  });
   return data;
+}
+
+/* ---------- work a teacher has given feedback on ----------
+   Once a Strength or a Target has come back, the work it is about stays as
+   it was: the feedback is about that work, and work that has changed since
+   is work the feedback no longer describes. Every task in the lesson is held
+   at what it was when the feedback arrived. The response tasks on the
+   summary are what is done next, and are not touched.
+
+   Three layers, so it holds for every kind of task without each one having
+   to learn about it:
+     saving     snapshot() writes the held value, whatever the page shows,
+                which is the part that actually matters;
+     typing     every box to type in is made read only;
+     the rest   a click, a drag or a pick that changes a task's answer is
+                put straight back, and a line says why.
+   Looking is still allowed: revealing a reminder, Run, a hint, the model
+   program, the Help tab. */
+let workFrozen = null;               // task id -> the value it is held at
+function lessonTaskIds(){
+  const ids = [];
+  const walk = (b) => {
+    if (!b) return;
+    if (b.id && fields[b.id]) ids.push(b.id);
+    (b.blocks || []).forEach(walk);
+    (b.options || []).forEach(o => (o.blocks || []).forEach(walk));
+  };
+  ((lesson && lesson.blocks) || []).forEach(walk);
+  return ids;
+}
+function hasFeedback(){
+  return !!(teacherNote && (String(teacherNote.strength || "").trim() || String(teacherNote.target || "").trim()));
+}
+function freezeIfFed(){
+  if (workFrozen || spectate || !hasFeedback()) return;
+  workFrozen = {};
+  lessonTaskIds().forEach(id => {
+    try{ workFrozen[id] = JSON.parse(JSON.stringify(fields[id].get())); }catch(e){}
+  });
+  document.body.classList.add("work-frozen");
+  steps.forEach(st => lockTyping(st.section));
+}
+/* Boxes to type in, made read only. The input a running program asks for
+   and the Help tab's search box are not work, so they stay usable. */
+function lockTyping(root){
+  if (!root) return;
+  root.querySelectorAll("textarea, input").forEach(n => {
+    if (n.classList.contains("ide-askin") || n.classList.contains("ide-helpsearch")) return;
+    const t = (n.type || "").toLowerCase();
+    if (t === "checkbox" || t === "radio" || t === "button" || t === "submit") return;
+    n.readOnly = true;
+  });
+  root.querySelectorAll("select").forEach(n => { n.disabled = true; });
+  root.querySelectorAll("[contenteditable=true], [contenteditable='']").forEach(n => n.setAttribute("contenteditable", "false"));
+}
+/* What counts as having changed a task. A coding task runs and prints and
+   ticks without its work changing, so only its code is compared; a choice
+   only says which option is open. */
+function frozenKey(id, v){
+  const b = blockById(id);
+  if (b && b.type === "choice") return "";
+  if (b && b.type === "ide") return String((v && v.code) || "");
+  if (b && b.type === "web") return JSON.stringify([v && v.html, v && v.css, v && v.js, v && v.extra]);
+  return JSON.stringify(v === undefined ? null : v);
+}
+function blockById(id){
+  let found = null;
+  const walk = (b) => {
+    if (!b || found) return;
+    if (b.id === id){ found = b; return; }
+    (b.blocks || []).forEach(walk);
+    (b.options || []).forEach(o => (o.blocks || []).forEach(walk));
+  };
+  ((lesson && lesson.blocks) || []).forEach(walk);
+  return found;
+}
+let frozenCheck = null;
+function revertFrozen(){
+  frozenCheck = null;
+  if (!workFrozen) return;
+  let changed = false;
+  Object.keys(workFrozen).forEach(id => {
+    const f = fields[id];
+    if (!f) return;
+    let now;
+    try{ now = f.get(); }catch(e){ return; }
+    if (frozenKey(id, now) === frozenKey(id, workFrozen[id])) return;
+    try{ f.set(JSON.parse(JSON.stringify(workFrozen[id]))); changed = true; }catch(e){}
+  });
+  if (changed) frozenToast();
+}
+["click","change","input","drop","pointerup","keyup"].forEach(type =>
+  document.addEventListener(type, () => {
+    if (!workFrozen || frozenCheck) return;
+    frozenCheck = setTimeout(revertFrozen, 0);
+  }, true));
+let toastTimer = null;
+function frozenToast(){
+  let t = $("frozenToast");
+  if (!t){ t = el("p","frozen-toast no-print"); t.id = "frozenToast"; t.setAttribute("role","status"); document.body.appendChild(t); }
+  t.textContent = "Your teacher has given you feedback on this, so it stays as it was.";
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+}
+function paintFrozenNote(onSummaryNow){
+  const n = $("frozenNote");
+  if (n) n.hidden = !workFrozen || !!onSummaryNow;
 }
 /* Bumped on every edit. submitWork takes a copy before it sends and checks it
    again afterwards: a request carries the work as it was when it left, so
@@ -1218,6 +1330,7 @@ const handedOver = handedLesson();
          the summary is drawn, or it shows as though nothing was left. */
       if (lesson.practical) await loadMyMark();
       if (!teacherNote) await loadMyFeedback();
+      freezeIfFed();
       /* The progress bar on the summary says which pages the teacher kept
          shut, so it needs the same answer the lesson itself starts with. On a
          machine that has never opened this lesson there is nothing cached to
@@ -1478,6 +1591,7 @@ function leaveSummary(i){
   const done = $("doneScreen");
   if (done) done.hidden = true;
   $("dock").classList.remove("gone", "on-summary");
+  paintFrozenNote(false);
   showStep(i);
 }
 /* Whether the summary keeps the bottom bar: only to open the rubric, and not
@@ -1658,7 +1772,7 @@ function showStep(i){
      the moment they press it. */
   const scoredNow = lesson && lesson.assessment && !lesson.practical;
   $("nextBtn").textContent = step === steps.length - 1
-    ? (scoredNow ? "Finish & see my score" : "Finish 🏁")
+    ? (workFrozen ? "STAR Feedback" : scoredNow ? "Finish & see my score" : "Finish 🏁")
     : "Continue →";
   $("stage").scrollTop = 0;
   /* After the brief above the stage has been written, not before. The bar is
@@ -2809,6 +2923,7 @@ async function manualSave(){
    open yet? The summary is that next thing. Nothing is disabled, they are
    told to wait, the same as a locked page. */
 async function tryFinish(){
+  if (workFrozen){ backToFeedback(); return; }
   if (bypassed || !apiReady || !token){ finishLesson(); return; }
   if (lesson && lesson.assessment){ finishLesson(); return; }   // never hold up a test
   if (askingToMoveOn) return;                  // see tryContinue: one at a time
@@ -2827,8 +2942,16 @@ async function tryFinish(){
   }
   finishLesson();
 }
-async function finishLesson(){
-  if (rocketUp) return;              // already on its way: a second press waits with it
+  /* Their feedback is already waiting on the summary, and finishing again
+     would hand the work in again and, in an assessment, send its score again. */
+  function backToFeedback(){
+    returnAllSections();
+    if (lesson && lesson.assessment) renderAssessmentComplete(false);
+    else showLessonComplete(true);
+  }
+  async function finishLesson(){
+    if (workFrozen){ backToFeedback(); return; }
+    if (rocketUp) return;              // already on its way: a second press waits with it
   if (lesson && lesson.assessment){ assessmentFinish(); return; }
   finished = true;
   save();
@@ -7746,7 +7869,7 @@ function doneShell(title){
     box.appendChild(el("p","done-locked",
       "🔒 Your teacher has locked this while they mark it, so it cannot be changed just now."));
   } else if (steps.length){
-    const back = el("button","btn-ghost done-back","← Back to my work");
+    const back = el("button","btn-ghost done-back", workFrozen ? "← View my original work" : "← Back to my work");
     back.addEventListener("click", () => leaveSummary(Math.max(0, steps.length - 1)));
     box.appendChild(back);
   }
@@ -7760,6 +7883,7 @@ function doneShell(title){
   const dock = $("dock");
   dock.classList.add("on-summary");
   dock.classList.toggle("gone", !rubricOnSummary());
+  paintFrozenNote(true);
   /* drawn by showStep, which somebody opening a finished lesson never reaches */
   paintRubricButton();
   $("stage").scrollTop = 0;

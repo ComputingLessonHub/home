@@ -487,7 +487,10 @@ function paintLessons(byId){
   const box = $("lessonList"); box.innerHTML = "";
   const cat = (catalogue && catalogue.lessons) || [];
   // published, not locked for this class, and known in the lesson files
-  let visible = cat.filter(c => byId[c.lesson_id] && !lockedLessons.has(c.lesson_id));   // the server already filtered by class
+  /* the server already filtered by class. Assessments of every kind are
+     opened from Assessments & STAR Feedback, where their marks and feedback
+     come back, and not from here. */
+  let visible = cat.filter(c => byId[c.lesson_id] && !lockedLessons.has(c.lesson_id) && !c.assessment);
   /* A lesson is in the past once its closing date has gone by, or once the
      student has finished it. Closed lessons can still be opened and edited.
      Half finished work does not hold one back: the date closes it either way. */
@@ -604,18 +607,7 @@ function paintLessons(byId){
         badge.className = "badge badge-done"; badge.textContent = "\u2713 Complete";
         a.appendChild(badge);
       }
-      if (l.assessment || c.assessment){
-        const badge = document.createElement("span");
-        badge.className = "badge"; badge.textContent = c.practical ? "Practical" : "Assessment";
-        a.appendChild(badge);
-        /* Still opens, to their work and their mark, but says up front that
-           it cannot be changed, rather than letting them find out inside. */
-        if (markingLessons.has(l.id)){
-          const shut = document.createElement("span");
-          shut.className = "badge"; shut.textContent = "\u{1F512} Being marked";
-          a.appendChild(shut);
-        }
-      } else if (l.homework || c.homework){
+      if (l.homework || c.homework){
         const badge = document.createElement("span");
         badge.className = "badge badge-home"; badge.textContent = "Home Learning";
         a.appendChild(badge);
@@ -870,119 +862,157 @@ async function loadResults(force){
   await fetchResults();
   resultsLoaded = true;
 }
-/* Lessons that are practice practicals: sat like an assessment, but not
-   graded, so what comes back is STAR feedback rather than a result. */
-function practiceIds(){
-  const out = new Set();
-  ((catalogue && catalogue.lessons) || []).forEach(c => { if (c.practice) out.add(c.lesson_id); });
-  return out;
-}
+/* ---------- Assessments & STAR Feedback ----------
+   Everything that comes back to a student, and every assessment they have
+   been given, grouped by unit like the Past list. This tab is the one way
+   into an assessment of any kind: the Lessons tab leaves them out.
 
+   One card per lesson, in the teacher's order within its unit:
+     an assessment with a mark or grade     the mark, and its Strength and Target
+     a practice practical                   a star and the feedback, never a mark
+     an assessment not marked yet           where it stands, and the way in
+     a lesson of exam questions             its mark, as before
+     any other lesson with feedback         a star and the feedback
+
+   The unit holding whatever came back most recently is opened; the others
+   are folded away, because a year of them is a long list. */
+function parseFeedback(raw){
+  let f = {};
+  try{ f = JSON.parse(raw); }catch(e){ f = { comment: raw }; }
+  return (f && typeof f === "object") ? f : {};
+}
 function paintResults(box, d, fb){
-box.innerHTML = "";
-  /* Two lists, because they are two different things. An assessment is a
-     test somebody sat; exam practice is a lesson of past paper questions
-     that happened to add up to a mark. A row saved before there was a
-     difference has no kind on it and is an assessment, which is what it
-     was. A practice practical is neither: it has no mark to show, and is
-     listed with the STAR feedback below. */
-  const practiceSet = practiceIds();
-  const all = (d.results || []).filter(r => !practiceSet.has(r.lesson_id));
-  const assessments = all.filter(r => String(r.kind || "") !== "exam");
-  const practice = all.filter(r => String(r.kind || "") === "exam");
-  const star = starRows(d.results || [], fb || [], practiceSet);
-  if (!all.length && !star.length) box.appendChild(el("p","hint","No assessment results or feedback yet."));
-  if (assessments.length) box.appendChild(el("p","unit-head","Assessments"));
-  paintResultRows(box, assessments);
-  if (practice.length) box.appendChild(el("p","unit-head","Exam questions"));
-  paintResultRows(box, practice);
-  if (star.length) box.appendChild(el("p","unit-head","STAR feedback"));
-  paintStarRows(box, star);
-}
-/* What goes under STAR feedback: every lesson a teacher has written a
-   Strength or Target on, practice practicals included, except a graded
-   assessment, whose card above already carries its own. The teacher's own
-   words win; a practice practical marked before those were kept falls back
-   to the Strength and Target on its results row. */
-function starRows(results, fb, practiceSet){
-  const graded = new Set(results.filter(r => !practiceSet.has(r.lesson_id)).map(r => r.lesson_id));
-  const byLesson = new Map();
-  fb.forEach(row => {
-    if (graded.has(row.lesson_id)) return;
-    let f = {};
-    try{ f = JSON.parse(row.feedback); }catch(e){ f = { comment: row.feedback }; }
-    if (!f || typeof f !== "object") return;
-    byLesson.set(row.lesson_id, { lesson_id: row.lesson_id, strength: f.strength || "",
-                                  target: f.target || "", comment: f.comment || "" });
+  box.innerHTML = "";
+  const cat = ((catalogue && catalogue.lessons) || []).filter(c => !lockedLessons.has(c.lesson_id));
+  const catIds = new Set(cat.map(c => c.lesson_id));
+  const results = d.results || [];
+  const resOf = new Map(results.map(r => [r.lesson_id, r]));
+  const fbOf = new Map();
+  (fb || []).forEach(row => {
+    const f = parseFeedback(row.feedback);
+    if (f.strength || f.target || f.comment) fbOf.set(row.lesson_id, Object.assign({ updated_at: row.updated_at }, f));
   });
+
+  const entries = [];
+  cat.forEach(c => {
+    const r = resOf.get(c.lesson_id), f = fbOf.get(c.lesson_id);
+    const exam = r && String(r.kind || "") === "exam";
+    if (c.assessment || exam || f) entries.push({ c, r, f });
+  });
+  /* A mark for a lesson no longer published still belongs to them. */
   results.forEach(r => {
-    if (!practiceSet.has(r.lesson_id)) return;
-    const have = byLesson.get(r.lesson_id) || { lesson_id: r.lesson_id, strength: "", target: "", comment: "" };
-    if (!have.strength) have.strength = r.strength || "";
-    if (!have.target) have.target = r.target || "";
-    have.updated_at = r.updated_at;
-    byLesson.set(r.lesson_id, have);
+    if (!catIds.has(r.lesson_id)) entries.push({ c: { lesson_id: r.lesson_id, unit: "" }, r, f: fbOf.get(r.lesson_id) });
   });
-  return [...byLesson.values()].filter(x => x.strength || x.target || x.comment);
-}
-/* A star where a mark would be: there is no mark, and nothing here should
-   read as one. Written with textContent, because these are a teacher's own
-   words and are not markup. */
-function paintStarRows(box, rows){
-  rows.forEach(fbRow => {
-    const card = document.createElement("a"); card.className = "result-card star-card";
-    card.href = "lesson.html?id=" + encodeURIComponent(fbRow.lesson_id);
-    const sc = el("span","sc sc-star"); sc.textContent = "★";
-    const body = el("span","body");
-    const name = document.createElement("b");
-    name.textContent = lessonTitles[fbRow.lesson_id] || fbRow.lesson_id;
-    body.appendChild(name);
-    if (fbRow.updated_at){
-      const when = document.createElement("span");
-      when.textContent = new Date(fbRow.updated_at + "Z").toLocaleDateString("en-GB");
-      body.appendChild(when);
-    }
-    const st = el("span","st");
-    const line = (label, cls, text) => {
-      if (!text) return;
-      const p = el("span","st-line " + cls);
-      const tag = document.createElement(cls === "s" ? "b" : "i");
-      tag.textContent = label + ": ";
-      p.appendChild(tag);
-      p.appendChild(document.createTextNode(text));
-      st.appendChild(p);
-    };
-    line("Strength", "s", fbRow.strength);
-    line("Target", "t", fbRow.target);
-    line("Comment", "c", fbRow.comment);
-    card.appendChild(sc); card.appendChild(body); card.appendChild(st);
-    box.appendChild(card);
+  if (!entries.length){
+    box.appendChild(el("p","hint","No assessments or feedback yet."));
+    return;
+  }
+
+  const when = (e) => {
+    const t = [e.r && e.r.updated_at, e.f && e.f.updated_at].filter(Boolean).sort().pop();
+    return t || "";
+  };
+  const groups = {};
+  entries.forEach(e => { const u = e.c.unit || ""; (groups[u] = groups[u] || []).push(e); });
+  const unitOrder = ((catalogue && catalogue.units) || []).map(u => u.name);
+  const names = Object.keys(groups).sort((a, b) => {
+    if (!a) return 1; if (!b) return -1;
+    const ia = unitOrder.indexOf(a), ib = unitOrder.indexOf(b);
+    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b);
+  });
+  /* the unit of the newest thing to come back, or, before anything has, the
+     first unit with an assessment still to do */
+  let latest = "", latestAt = "";
+  entries.forEach(e => { const t = when(e); if (t > latestAt){ latestAt = t; latest = e.c.unit || ""; } });
+  if (!latestAt){
+    const waiting = entries.find(e => e.c.assessment && !e.r);
+    latest = waiting ? (waiting.c.unit || "") : names[0];
+  }
+
+  names.forEach(unit => {
+    const holder = el("div","pastunit");
+    const head = document.createElement("button");
+    head.className = "pastunit-head"; head.type = "button";
+    head.appendChild(Object.assign(document.createElement("span"), { textContent: unit || "Other" }));
+    const count = el("span","pastunit-count");
+    count.textContent = groups[unit].length + (groups[unit].length === 1 ? " item" : " items");
+    head.appendChild(count);
+    const inner = el("div","pastunit-body");
+    const open = unit === latest;
+    inner.hidden = !open;
+    head.classList.toggle("open", open);
+    head.addEventListener("click", () => { inner.hidden = !inner.hidden; head.classList.toggle("open", !inner.hidden); });
+    holder.appendChild(head); holder.appendChild(inner);
+    box.appendChild(holder);
+    groups[unit].forEach(e => inner.appendChild(resultCard(e)));
   });
 }
-function paintResultRows(box, rows){
-  rows.forEach(res => {
-    const card = document.createElement("a"); card.className = "result-card";
-    card.href = "lesson.html?id=" + encodeURIComponent(res.lesson_id);
-    card.innerHTML = '<span class="sc"></span><span class="body"><b></b><span></span></span><span class="st"></span>';
-    const when = new Date(res.updated_at + "Z").toLocaleDateString("en-GB");
-    /* A grade stands on its own: there is no percentage to work out. */
-    if (res.grade){
-      card.querySelector(".sc").textContent = res.grade;
-      card.querySelector(".sc").classList.add("sc-grade");
-      card.querySelector(".body span").textContent = when;
+/* One card. Every word on it is set as text: Strengths, Targets and
+   comments are a teacher's own words, not markup. */
+function resultCard(e){
+  const id = e.c.lesson_id;
+  const card = document.createElement("a");
+  card.className = "result-card";
+  card.href = "lesson.html?id=" + encodeURIComponent(id);
+  const sc = el("span","sc");
+  const body = el("span","body");
+  const name = document.createElement("b");
+  name.textContent = lessonTitles[id] || id;
+  body.appendChild(name);
+  const sub = document.createElement("span");
+  body.appendChild(sub);
+  const date = (t) => t ? new Date(t + "Z").toLocaleDateString("en-GB") : "";
+  const r = e.r, f = e.f || {};
+  const practice = !!e.c.practice;
+  let strength = f.strength || "", target = f.target || "";
+  if (practice || !e.c.assessment && !r){
+    /* no mark to show here, and nothing that could be read as one */
+    card.classList.add("star-card");
+    sc.classList.add("sc-star"); sc.textContent = "★";
+    if (r){ strength = strength || r.strength || ""; target = target || r.target || ""; }
+    const feedbackIn = strength || target || f.comment;
+    sub.textContent = feedbackIn ? date(f.updated_at || (r && r.updated_at))
+      : doneLessons.has(id) ? "Handed in. Your teacher will give you feedback." : "Ready to start";
+    if (!feedbackIn) card.classList.add("waiting");
+  } else if (r){
+    if (r.grade){
+      sc.textContent = r.grade; sc.classList.add("sc-grade");
+      sub.textContent = date(r.updated_at);
     } else {
-      const pct = Math.round(100 * res.score / Math.max(1, res.out_of));
-      card.querySelector(".sc").textContent = res.score + " / " + res.out_of;
-      card.querySelector(".body span").textContent = pct + "% \u00b7 " + when;
+      const pct = Math.round(100 * r.score / Math.max(1, r.out_of));
+      sc.textContent = r.score + " / " + r.out_of;
+      sub.textContent = pct + "% · " + date(r.updated_at);
     }
-    card.querySelector("b").textContent = lessonTitles[res.lesson_id] || res.lesson_id;
-    const st = card.querySelector(".st");
-    if (res.strength || res.target){
-      st.innerHTML = (res.strength ? "<b>Strength:</b> " : "") + (res.strength || "") +
-                     (res.target ? "<br><i>Target:</i> " + res.target : "");
-    }
-    box.appendChild(card);
-  });
+    strength = strength || r.strength || ""; target = target || r.target || "";
+  } else {
+    /* an assessment with no mark yet: sat and waiting, or still to do */
+    card.classList.add("waiting");
+    sc.classList.add("sc-star"); sc.textContent = doneLessons.has(id) ? "✓" : "▶";
+    sub.textContent = doneLessons.has(id) ? "Handed in. Your teacher will mark it." : "Ready to start";
+  }
+  if (e.c.assessment){
+    const kind = el("span","badge"); kind.textContent = e.c.practical ? "Practical" : "Assessment";
+    body.appendChild(kind);
+  }
+  if (markingLessons.has(id)){
+    const shut = el("span","badge"); shut.textContent = "\u{1F512} Being marked";
+    body.appendChild(shut);
+  }
+  const st = el("span","st");
+  const line = (label, cls, text) => {
+    if (!text) return;
+    const p = el("span","st-line " + cls);
+    const tag = document.createElement(cls === "s" ? "b" : "i");
+    tag.textContent = label + ": ";
+    p.appendChild(tag);
+    p.appendChild(document.createTextNode(text));
+    st.appendChild(p);
+  };
+  line("Strength", "s", strength);
+  line("Target", "t", target);
+  line("Comment", "c", f.comment || "");
+  card.appendChild(sc); card.appendChild(body); card.appendChild(st);
+  return card;
 }
 
 async function fetchResults(){

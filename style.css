@@ -658,11 +658,21 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:var
 .result-card .st b{color:var(--mint)} .result-card .st i{color:var(--amber); font-style:normal}
 /* STAR feedback: a star where a mark would be, and the words given the room
    a mark would have taken, because on these the words are the whole point */
-.result-card .sc-star{color:var(--amber); text-align:center}
+/* Only as wide as the star: the 86px a mark needs left a gap beside it. */
+.result-card .sc-star{color:var(--amber); text-align:center; min-width:0; width:auto; font-size:22px}
+.result-card:has(.sc-star){gap:10px; padding-left:16px}
 .star-card .st{max-width:55%}
-.star-card .st-line{display:block}
-.star-card .st-line + .st-line{margin-top:4px}
-.star-card .st-line.c i{color:var(--muted)}
+.result-card .st-line{display:block}
+.result-card .st-line + .st-line{margin-top:4px}
+/* the Target in the red the summary page uses for it */
+.result-card .st i{color:var(--red)}
+html[data-bg=night] .result-card .st i{color:#F0938E}
+.result-card .st-line.c i{color:var(--muted)}
+.result-card .body .badge{display:inline-block; margin:6px 6px 0 0; font-size:10.5px; color:var(--amber)}
+.result-card .body span + .badge{margin-left:0}
+/* an assessment still to do or waiting to be marked: the way in, quieter */
+.result-card.waiting .sc{color:var(--muted)}
+.result-card.waiting .body > span:not(.badge){display:block}
 
 
 /* ---- completion ---- */
@@ -838,6 +848,14 @@ textarea.code{background:var(--code-bg) !important; color:var(--code-fg) !import
 .banner{background:var(--panel) !important; border:1.5px solid var(--line-2); color:var(--text) !important;
   border-radius:var(--rad-md); box-shadow:0 1px 3px rgba(0,0,0,.07)}
 .banner-ok{border-color:var(--mint)}
+/* work a teacher has given feedback on: what it is, said once at the top */
+.banner-frozen{border-color:var(--amber); border-left-width:5px; font-size:15px; padding:10px 14px; margin-bottom:14px}
+/* ...and when a change is put back, a line that goes by itself */
+.frozen-toast{position:fixed; left:50%; bottom:calc(76px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%);
+  z-index:950; max-width:min(520px, calc(100vw - 32px)); margin:0; padding:10px 16px; border-radius:10px;
+  background:var(--text); color:var(--panel); font-size:14.5px; font-weight:600; text-align:center;
+  box-shadow:0 8px 24px rgba(0,0,0,.25); pointer-events:none}
+.frozen-toast[hidden]{display:none}
 .signin-hint{background:var(--panel); border:1.5px solid var(--line-2); color:var(--text);
   border-radius:var(--rad-md); padding:8px 14px; display:inline-block}
 .handin{font-weight:700}
