@@ -55,6 +55,10 @@
   --mint-dim:#D6E8DF;
   --red:#CF1111;
   --red-dim:#F6D9D9;
+  /* A star's gold. The same on every background, because no theme's
+     --amber is yellow; used for what a response task added to a checklist. */
+  --gold:#F2B705;
+  --gold-ink:#3B2A00;
 
   --display:'Poppins','Segoe UI',system-ui,sans-serif;
   --body:'Poppins','Segoe UI',system-ui,-apple-system,sans-serif;
@@ -4088,6 +4092,15 @@ html[data-bg=dark] .seg-n{background:#2A303B}
    that say who ticked it. Specific enough to beat the green above. The words
    are inline-block so the crossing-out on the line does not run through them. */
 .check.by-teacher[data-state=yes] .check-mark{background:var(--amber); border-color:var(--amber); color:var(--amber-ink)}
+/* A line a response task ticked that the lesson had not: gold, like a star
+   on the work, so what the response added stands out from what it carried
+   over. */
+.check.new-tick[data-state=yes] .check-mark{background:var(--gold); border-color:var(--gold); color:var(--gold-ink)}
+@keyframes checkglowgold{
+  0%,22%{background:color-mix(in srgb, var(--gold) 34%, transparent)}
+  100%{background:transparent}
+}
+.check.new-tick.justticked{--tick-glow:checkglowgold 2.2s ease-out}
 .check-byteacher{display:inline-block; margin-left:8px; font-size:11.5px; font-weight:600;
   font-style:italic; text-decoration:none}
 /* While a teacher is ticking, any line not ticked by the code can be clicked. */

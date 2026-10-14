@@ -1069,6 +1069,11 @@
                    hint, hintBtn, hintText, hintReady: false });
     });
 
+    /* Which lines were already ticked in the lesson task a response task
+       stands in for, by position. Null on every other list, which is never
+       gold. */
+    let carried = null;
+
     /* ---------- one at a time ---------- */
     let one = several && !o.showAll;
     let current = 0;
@@ -1124,6 +1129,11 @@
         it.li.hidden = one && i !== current;
         it.dot.classList.toggle("on", one && i === current);
         it.dot.dataset.state = it.li.dataset.state || "";
+        /* On a response task, a line ticked here that was not already ticked
+           in the lesson is gold, so the student and the teacher reading it can
+           both see what the response added. A teacher's own tick keeps its own
+           colour, because "Ticked by your teacher" is what it has to say. */
+        it.li.classList.toggle("new-tick", !!carried && !it.manual && done(it) && !carried[i] && !teacherTicks[i]);
         it.dot.title = "Line " + (i + 1) + (done(it) ? ", ticked off" : "");
         it.dot.setAttribute("aria-label", it.dot.title);
         it.dot.setAttribute("aria-current", one && i === current ? "true" : "false");
@@ -1381,6 +1391,14 @@
          Whichever way the student had it comes back when ticking is done. */
       if (teacherOn){ if (oneBeforeTicking === null) oneBeforeTicking = one; one = false; }
       else if (oneBeforeTicking !== null){ one = oneBeforeTicking; oneBeforeTicking = null; follow(); }
+      paintOne();
+    };
+    /* Given once, as a response task is built, with what the lesson task
+       had ticked. Kept apart from the ticks themselves, which the response's
+       own saved work replaces straight afterwards. */
+    wrap.setCarried = function(flags){
+      carried = {};
+      (flags || []).forEach((on, i) => { if (on) carried[i] = true; });
       paintOne();
     };
     wrap.allowManual = function(on){

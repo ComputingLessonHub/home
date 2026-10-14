@@ -5568,6 +5568,15 @@ function rIDE(b){
     if (v && Array.isArray(v.checks)) checklist.list.show(v.checks.map(ok => ({ ok: !!ok })));
     if (v && v.manual && checklist.list.setManual) checklist.list.setManual(v.manual);
     if (v && v.teacher && checklist.list.setTeacher) checklist.list.setTeacher(v.teacher);
+    /* Anything ticked in the lesson, however it was ticked, is not new here.
+       A level never reached in the lesson has nothing carried, so every tick
+       on it is the response's own. */
+    if (checklist.list.setCarried){
+      const had = [];
+      const mark = (flags) => Object.keys(flags || {}).forEach(k => { if (flags[k]) had[+k] = true; });
+      mark(v && v.checks); mark(v && v.manual); mark(v && v.teacher);
+      checklist.list.setCarried(had);
+    }
   }
 
   return { section:s,
