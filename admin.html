@@ -4524,10 +4524,7 @@ function paintLessonGrid(){
       if (!isAssessment){ openWorkPage(l.lesson_id); return; }
       lessonId = l.lesson_id;
       workCache = { key: "", rows: [], t: 0 };
-      openModal(box => { box.classList.add("wide"); modalTitle(box, titleOf(l.lesson_id));
-                         box.appendChild(waiting("Loading the markbook", true)); });
-      try{ lessonJson = await fetchLesson(l.lesson_id); openMarkbook(false); }
-      catch(e){ say("Could not open the markbook", e.message); }
+      openMarkbook(false, true);
     });
     const man = el("button","btn-ghost","Manage");
     man.addEventListener("click", () => manageLesson(l.lesson_id));
@@ -5278,16 +5275,23 @@ function assessmentQuestions(){
   return out;
 }
 
-async function openMarkbook(backToManage){
+/* needLesson: opened from a lesson's own card, where the lesson has not
+   been fetched yet. It is fetched in here, under the markbook's own title,
+   rather than in a pop-up of its own first: that one carried only the
+   lesson's name, and a teacher who pressed Markbook saw something else
+   arrive and then be swapped out. */
+async function openMarkbook(backToManage, needLesson){
   openModal(async (box) => {
-    box.classList.add("wide");
+    box.classList.add("wide", "markbook");
     const x = el("button","btn-ghost iconbtn modal-x","\u2715");
+    x.title = "Close";
     x.addEventListener("click", () => { closeModal(); if (backToManage) openManage(); });
     box.appendChild(x);
-    modalTitle(box, "Markbook, " + titleOf(lessonId) + " \u00b7 " + cls);
-    const holder = el("div"); box.appendChild(holder);
-    holder.appendChild(waiting("Loading the marks", true));
+    modalTitle(box, "Markbook \u00b7 " + titleOf(lessonId) + " \u00b7 " + cls);
+    const holder = el("div","mbholder"); box.appendChild(holder);
+    holder.appendChild(waiting(needLesson ? "Loading the markbook" : "Loading the marks", true));
     try{
+      if (needLesson) lessonJson = await fetchLesson(lessonId);
       const [roster, work, res] = [await getRoster(), await getWorkRows(), await getResults()];
       const pm = window.progressMath;
       const practical = !!(lessonJson && lessonJson.practical);
@@ -5378,13 +5382,9 @@ async function openMarkbook(backToManage){
       holder.innerHTML = "";
       paintMarkbook(holder);
     }catch(e){ holder.innerHTML = ""; holder.appendChild(el("p","hint", e.message)); }
-
-    const dl = el("button","btn-primary modal-cta","Save for Excel");
-    dl.addEventListener("click", exportMarkbook);
-    box.appendChild(dl);
-    const done2 = el("button","btn-ghost modal-stay","Close");
-    done2.addEventListener("click", () => { closeModal(); if (backToManage) openManage(); });
-    box.appendChild(done2);
+    /* No buttons along the bottom: the cross closes it, and Copy all and
+       Save for Excel sit beside the tabs, where they are on screen however
+       far down the table has been scrolled. */
   });
 }
 
@@ -5469,7 +5469,10 @@ function paintMarkbook(holder){
   });
   holder.appendChild(stats);
 
-  /* The markbook and the response tasks, a tab each. */
+  /* The markbook and the response tasks, a tab each, with what can be done
+     with the table at the other end of the same row: never scrolled away,
+     and small, because the table is what the pop-up is for. */
+  const bar = el("div","mbbar");
   const tabs = el("div","subtabs mbtabs");
   [["marks","Markbook"],["responses","Response tasks"]].forEach(pair => {
     const b = el("button", mbView === pair[0] ? "on" : "", pair[1]);
@@ -5481,7 +5484,26 @@ function paintMarkbook(holder){
     });
     tabs.appendChild(b);
   });
-  holder.appendChild(tabs);
+  bar.appendChild(tabs);
+  const tools = el("div","mbtools");
+  const copyAll = el("button","btn-ghost bmini2","Copy all");
+  copyAll.type = "button";
+  copyAll.title = "Copy the whole table, ready to paste into a spreadsheet";
+  copyAll.addEventListener("click", async () => {
+    const t = holder.querySelector(".mbtable");
+    if (!t) return;
+    mbSel = { table: t, a: [0, 0], b: [t.rows.length - 1, t.rows[0].cells.length - 1] };
+    mbPaintSel();
+    copyAll.textContent = (await mbCopyOut()) ? "Copied" : "Press Ctrl+C";
+    setTimeout(() => { copyAll.textContent = "Copy all"; }, 1600);
+  });
+  const excel = el("button","btn-ghost bmini2","Save for Excel");
+  excel.type = "button";
+  excel.addEventListener("click", exportMarkbook);
+  tools.appendChild(copyAll);
+  tools.appendChild(excel);
+  bar.appendChild(tools);
+  holder.appendChild(bar);
 
   const table = el("table","mbtable");
   const head = el("tr");
@@ -5554,21 +5576,8 @@ function paintMarkbook(holder){
   if (mbView === "marks" && mbShape.kind === "test" && !markbookQs.length)
     holder.appendChild(el("p","hint","No marked questions in this assessment."));
 
-  /* How to copy, said once under the table, with a button for all of it. */
-  const foot = el("div","mbcopyrow");
-  foot.appendChild(el("p","subnote","Click a cell, then drag or Shift-click to pick more. Ctrl+C copies them."));
-  const copyAll = el("button","btn-ghost bmini2","Copy the whole table");
-  copyAll.type = "button";
-  copyAll.addEventListener("click", async () => {
-    const t = holder.querySelector(".mbtable");
-    if (!t) return;
-    mbSel = { table: t, a: [0, 0], b: [t.rows.length - 1, t.rows[0].cells.length - 1] };
-    mbPaintSel();
-    copyAll.textContent = (await mbCopyOut()) ? "Copied" : "Press Ctrl+C to copy";
-    setTimeout(() => { copyAll.textContent = "Copy the whole table"; }, 1600);
-  });
-  foot.appendChild(copyAll);
-  holder.appendChild(foot);
+  /* how to copy part of it, said once under the table */
+  holder.appendChild(el("p","subnote mbhint","Click a cell, then drag or Shift-click to pick more. Ctrl+C copies them."));
 }
 
 /* ---------- picking cells to copy ----------

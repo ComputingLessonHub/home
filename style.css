@@ -1764,9 +1764,24 @@ html[data-bg=dark] .mbtick .yes{color:var(--mint)}
 .mbtable{user-select:none; -webkit-user-select:none}
 .mbtable td{cursor:cell}
 .mbtable th.mbsel,.mbtable td.mbsel{background:color-mix(in srgb, var(--amber) 22%, var(--panel))}
-.mbtabs{width:fit-content; margin:0 0 12px}
-.mbcopyrow{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:-8px 0 14px}
-.mbcopyrow .subnote{margin:0}
+/* the tabs, with Copy all and Save for Excel at the other end of the row */
+.mbbar{display:flex; align-items:center; justify-content:space-between; gap:10px 14px; flex-wrap:wrap; margin:0 0 12px}
+.mbtabs{width:fit-content; margin:0}
+.mbtools{display:flex; gap:8px; margin-left:auto}
+.mbhint{margin:-8px 0 0; font-size:13px}
+/* The markbook pop-up does not scroll; its table does. The middle of the
+   pop-up is made a column that the table fills, so a long class makes the
+   table scroll inside a pop-up that fits the screen, rather than the pop-up
+   scrolling the table, the figures and the tabs out of sight together. A
+   short class still gets a short pop-up: nothing here sets a height, only
+   lets the table give way when there is not room. Not on a screen too
+   short for the figures and tabs to leave the table any room at all. */
+@media (min-height:560px){
+  .modal.markbook > .modal-scroll{display:flex; flex-direction:column; overflow:hidden}
+  .modal.markbook .mbholder{display:flex; flex-direction:column; flex:1 1 auto; min-height:0}
+  .modal.markbook .mbholder > *{flex:0 0 auto}
+  .modal.markbook .mbholder > .mbscroll{flex:1 1 auto; min-height:120px; max-height:none}
+}
 /* Holds the picked cells for the moment the browser copies them. Off the
    screen rather than display:none, because nothing hidden can be selected. */
 .mbcopybox{position:fixed; left:-9999px; top:0; width:1px; height:1px; opacity:0}
