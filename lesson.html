@@ -3037,8 +3037,12 @@ function askBypass(){
   const x = el("button","btn-ghost iconbtn modal-x","✕");
   x.addEventListener("click", () => back.remove());
   box.appendChild(x);
-  box.appendChild(el("h2","","Teacher code"));
-  box.appendChild(el("p","modal-text","Type the code to let this student carry on."));
+  /* One pop-up for every teacher code, so it says what it is for before a
+     student who opened it by mistake starts guessing. */
+  box.appendChild(el("h2","","Teacher code console"));
+  box.appendChild(el("p","modal-text","<b>Only to be used by your teacher. Close this if you have opened it accidentally!</b>"));
+  box.appendChild(el("p","modal-text",
+    "Type in the correct code below to either skip a page, skip all pages, or enable teacher checklist marking."));
 
   const inp = el("input","bypassin");
   inp.type = "password";
