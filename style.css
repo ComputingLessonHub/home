@@ -3982,6 +3982,34 @@ html[data-bg=dark] .seg-n{background:#2A303B}
 .checklist.can-tick .check-manual:hover{background:var(--panel)}
 .checklist.can-tick .check-manual .check-mark{border-style:solid; border-color:var(--amber)}
 
+/* A line a teacher ticked during the lesson: done, but in the site's own
+   blue rather than the green a passing check gets, with a few small words
+   that say who ticked it. Specific enough to beat the green above. The words
+   are inline-block so the crossing-out on the line does not run through them. */
+.check.by-teacher[data-state=yes] .check-mark{background:var(--amber); border-color:var(--amber); color:var(--amber-ink)}
+.check-byteacher{display:inline-block; margin-left:8px; font-size:11.5px; font-weight:600;
+  font-style:italic; text-decoration:none}
+/* While a teacher is ticking, any line not ticked by the code can be clicked. */
+.checklist.teacher-ticking .check:not(.check-manual){cursor:pointer; border-radius:8px}
+.checklist.teacher-ticking .check:not(.check-manual):not([data-state=yes]):hover,
+.checklist.teacher-ticking .check.by-teacher:hover{background:var(--panel)}
+.checklist.teacher-ticking .check:not(.check-manual):not([data-state=yes]) .check-mark{border-style:dashed; border-color:var(--amber)}
+/* The bar that says ticking is on, so it is never left on without anyone
+   noticing. Fixed to the top, clear of the bottom bar and its buttons. */
+/* Centred with margins rather than left:50%, which left it only half the
+   screen to fit in, so on a phone it wrapped into a tall block. */
+.tickbar{position:fixed; left:12px; right:12px; margin:0 auto; width:fit-content; top:12px; z-index:60;
+  display:flex; align-items:center; gap:12px;
+  padding:10px 12px 10px 16px; border-radius:12px; background:var(--panel);
+  border:2px solid var(--amber); box-shadow:0 6px 24px rgba(0,0,0,.18); font-size:14px; color:var(--text)}
+.tickbar-done{flex:none; font-size:14px; padding:8px 14px}
+/* On a phone it is a slim strip, so it does not sit over the list being ticked. */
+@media (max-width:620px){
+  .tickbar{top:6px; gap:8px; padding:6px 6px 6px 12px; font-size:13px}
+  .tickbar-more{display:none}
+  .tickbar-done{font-size:13px; padding:6px 10px}
+}
+
 @media (max-width:620px){
   .checklist-body.split{grid-template-columns:1fr; gap:10px}
   .checklist-body.split .checklist-col.manual{border-left:none; padding-left:0;

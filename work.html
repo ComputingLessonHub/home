@@ -339,7 +339,10 @@ async function fetchWork(){
                         "&group=" + encodeURIComponent(cls), { headers: H(), cache:"no-store" });
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || "Could not load their work.");
-  return d.rows || [];
+  /* Lines ticked while marking live in the feedback. Laid over the work as
+     it arrives, so every total on this screen counts them. */
+  return (d.rows || []).map(row => Object.assign({}, row,
+    { data: window.progressMath.withMarkingTicks(row.data, row.feedback) }));
 }
 /* What has been marked so far. Pulled out of boot so Refresh can ask for it
    again: a colleague marking the same class in the next room is exactly the
@@ -1194,6 +1197,12 @@ function loadFeedback(row){
     try{ f = JSON.parse(row.feedback); }catch(e){ f = { comment: row.feedback }; }
   }
   $("fbComment").value = f.comment || "";
+  /* Lines ticked while marking this student, saved with their feedback. A
+     fresh copy for each student, so one child's ticks never travel with the
+     next one's feedback. */
+  markingTicks = (f.ticks && typeof f.ticks === "object") ? JSON.parse(JSON.stringify(f.ticks)) : {};
+  manualTicks = {};
+  Object.keys(markingTicks).forEach(id => { if (markingTicks[id].manual) manualTicks[id] = markingTicks[id].manual; });
   /* An assessment marks itself and writes a strength and a target as it does.
      A teacher is editing those rather than starting from nothing, so whatever
      the assessment came up with fills the boxes until they write their own. */
@@ -1210,6 +1219,45 @@ function loadFeedback(row){
   $("fbMsg").textContent = fromList && (fromList.strength || fromList.target)
     ? "Filled in from what this student ticked off. Change anything you like, then press Save feedback."
     : "";
+  /* What the checklist says now. While the boxes still read exactly this,
+     they are the checklist's words rather than the teacher's, and a tick
+     given while marking can change them. */
+  const now = checklistAuto(row) || {};
+  lastAuto = { strength: now.strength || "", target: now.target || "" };
+}
+/* A line has been ticked or unticked in the work beside the boxes. The
+   Strength and Target are worked out again, and replace what is there if it
+   is still the checklist's own wording. Anything the teacher wrote is kept,
+   with a button to take the new sentences instead. */
+let lastAuto = { strength: "", target: "" };
+function ticksChanged(row){
+  paintBank("Strength"); paintBank("Target");
+  paintMarking(row.username);               // a level read from the ticks may have moved
+  paintFb("idle");                          // the ticks are not saved yet
+  const fresh = checklistAuto(row);
+  if (!fresh) return;
+  const kept = [];
+  [["Strength","strength"],["Target","target"]].forEach(pair => {
+    const box = $("fb" + pair[0]);
+    const have = box.value.trim(), want = String(fresh[pair[1]] || "");
+    if (!have || have === lastAuto[pair[1]].trim()) box.value = want;
+    else if (want && have !== want.trim()) kept.push(pair[1]);
+  });
+  lastAuto = { strength: fresh.strength || "", target: fresh.target || "" };
+  const msg = $("fbMsg");
+  msg.textContent = kept.length
+    ? "The ticks have changed, and your own words are kept. "
+    : "Strength and Target updated from the ticks. Press Save feedback to keep them.";
+  if (kept.length){
+    const use = el("button","btn-ghost bmini2","Use the checklist's Strength and Target");
+    use.addEventListener("click", () => {
+      $("fbStrength").value = lastAuto.strength;
+      $("fbTarget").value = lastAuto.target;
+      msg.textContent = "Strength and Target updated from the ticks. Press Save feedback to keep them.";
+      paintFb("idle");
+    });
+    msg.appendChild(use);
+  }
 }
 /* The Strength and Target a practical's checklist lines add up to for one
    student. The Strength is from the two furthest lines they got done, which
@@ -1539,7 +1587,8 @@ async function saveFeedback(){
       body: JSON.stringify({ username: st.username, lesson: lessonId,
                              strength: showing("Strength") ? $("fbStrength").value : "",
                              target: showing("Target") ? $("fbTarget").value : "",
-                             text: $("fbComment").value }) });
+                             text: $("fbComment").value,
+                             ticks: Object.keys(markingTicks).length ? markingTicks : undefined }) });
     if (!r.ok) throw new Error((await r.json()).error || "Could not save it.");
     /* the mark or grade goes with the feedback; a practice one only has a
        level, and only when it has levels to pick from */
@@ -1565,7 +1614,8 @@ async function saveFeedback(){
     row.feedback = JSON.stringify({
       strength: showing("Strength") ? $("fbStrength").value : "",
       target: showing("Target") ? $("fbTarget").value : "",
-      comment: $("fbComment").value });
+      comment: $("fbComment").value,
+      ticks: Object.keys(markingTicks).length ? markingTicks : undefined });
     paintFb("saved");
   }catch(e){ paintFb("idle"); $("fbMsg").textContent = e.message; }
 }
@@ -1645,6 +1695,7 @@ async function handBack(){
     target: showing("Target") ? $("fbTarget").value : "",
     comment: $("fbComment").value
   };
+  if (Object.keys(markingTicks).length) fb.ticks = markingTicks;
   const box = { n: st.display_name, l: lessonId, d: row.data || {}, fb: fb };
 
   if (lessonJson && lessonJson.practical && (!practiceRun() || usesRubric())){
@@ -1716,6 +1767,9 @@ function showMarkedLink(){
 let markOverrides = null;
 /* and the checklist lines they ticked off by hand */
 let manualTicks = {};
+/* Every line ticked on each task while marking, the ones the code did not
+   tick and the ones only a teacher judges, saved with the feedback. */
+let markingTicks = {};
 window.addEventListener("message", (e) => {
   if (!e || !e.data) return;
   if (e.data.hubMarks) markOverrides = e.data.hubMarks;
@@ -1724,6 +1778,19 @@ window.addEventListener("message", (e) => {
   if (e.data.hubManual){
     const m = e.data.hubManual;
     if (m.id){ manualTicks[m.id] = m.flags || {}; }
+  }
+  /* Laid over the student's work in hand straight away, so the level, the
+     marks and the Strength and Target all count them before anything is
+     saved. */
+  if (e.data.hubTicks){
+    const m = e.data.hubTicks, st = roster[idx];
+    const row = st ? rows.find(r => r.username === st.username) : null;
+    if (m.id && row){
+      markingTicks[m.id] = { teacher: m.teacher || {}, manual: m.manual || {} };
+      manualTicks[m.id] = m.manual || {};
+      row.data = window.progressMath.withMarkingTicks(row.data, { ticks: { [m.id]: markingTicks[m.id] } });
+      ticksChanged(row);
+    }
   }
   /* An assessment marks itself and writes its own strength and target. They
      arrive here so a teacher opens the boxes already holding them, ready to

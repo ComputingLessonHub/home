@@ -181,7 +181,8 @@ function parseFeedback(raw){
   let f = null;
   try{ f = JSON.parse(raw); }catch(e){ f = { comment: String(raw) }; }
   if (!f || typeof f !== "object") f = { comment: String(raw) };
-  if (!f.strength && !f.target && !f.comment) return null;
+  /* a note can be only ticks, given while marking before anything was written */
+  if (!f.strength && !f.target && !f.comment && !f.ticks) return null;
   return f;
 }
 /* a practical is marked by hand, so the mark comes from the results list */
@@ -208,14 +209,16 @@ async function loadMyMark(){
     if (mine){
       myResult = { score: mine.score, outOf: mine.out_of, grade: mine.grade || "" };
       /* the sentences are kept here too, in case the work note is missing */
-      if (!teacherNote && (mine.strength || mine.target))
-        teacherNote = { strength: mine.strength || "", target: mine.target || "", comment: "" };
+      if (!hasFeedback() && (mine.strength || mine.target))
+        teacherNote = Object.assign({}, teacherNote || {}, { strength: mine.strength || "", target: mine.target || "", comment: (teacherNote && teacherNote.comment) || "" });
     }
   }catch(e){}
 }
 
 function showFeedback(raw){
   teacherNote = parseFeedback(raw);
+  /* feedback fetched after the work was put back: its ticks go on now */
+  if (restoreDone) applyMarkingTicks();
 }
 
 /* Putting a link's contents back on the page. Used by a teacher opening a
@@ -1153,7 +1156,7 @@ const handedOver = handedLesson();
         if (!(handedIn && handedIn.kind !== "broken")) await nameGate(l.title);
       }
     }
-    try{ await loadSaved(); }
+    try{ await loadSaved(); applyMarkingTicks(); }
     finally{ restoreDone = true; }      // saving is allowed from here on
     if (spectate){
       $("saveBtn").hidden = true;
@@ -2982,6 +2985,52 @@ $("bypassDot").addEventListener("keydown", (e) => { if (e.key === "Enter") askBy
    SKIP lets this student past the page they are stuck on. SKIPALL opens the
    lesson up, which is what the old single code did, and a code a teacher has
    set on the lesson still does the same. */
+/* ---------- a teacher ticking checklist lines off ----------
+   For a student who has done what a line asks when the check has not seen
+   it, so they are not held at a level they have really finished. Turned on
+   from the same pop-up as SKIP, with its own code, and only the code's hash
+   is here: this page is public, and SKIP and SKIPALL can be read straight
+   out of it. The code itself is in CREATE-A-LESSON.md, beside the site
+   rather than in it, and it is not fussy about capital letters.
+
+   It turns itself off three minutes after the last tick, and on Finished
+   ticking, so a computer handed back to a student is never left able to tick
+   its own list. Nothing is remembered: a reload needs the code again. */
+const TICK_HASH = 1344109433;
+const TICK_IDLE_MS = 180000;
+let teacherTicking = false, tickIdle = null, tickBar = null;
+function startTeacherTicking(){
+  teacherTicking = true;
+  document.body.classList.add("teacher-ticking");
+  allChecklists.forEach(l => { try{ if (l.allowTeacherTick) l.allowTeacherTick(true); }catch(e){} });
+  if (!tickBar){
+    tickBar = el("div","tickbar no-print");
+    tickBar.setAttribute("role","status");
+    tickBar.appendChild(el("span","tickbar-text",
+      "<b>Teacher ticking is on.</b> <span class=\"tickbar-more\">Click a checklist line to tick it off for this student, or click it again to untick it.</span>"));
+    const done = el("button","btn-primary tickbar-done","Finished ticking");
+    done.addEventListener("click", stopTeacherTicking);
+    tickBar.appendChild(done);
+  }
+  document.body.appendChild(tickBar);
+  noteTeacherTick();
+}
+function stopTeacherTicking(){
+  teacherTicking = false;
+  clearTimeout(tickIdle);
+  document.body.classList.remove("teacher-ticking");
+  allChecklists.forEach(l => { try{ if (l.allowTeacherTick) l.allowTeacherTick(false); }catch(e){} });
+  if (tickBar) tickBar.remove();
+  /* Now any level the ticks earned opens, with its level-up, for the student. */
+  attachedLists.forEach(a => { try{ a.teacherDone(); }catch(e){} });
+  holdWatchers.forEach(fn => { try{ fn(); }catch(e){} });
+}
+/* Each tick gives the teacher another three minutes. */
+function noteTeacherTick(){
+  clearTimeout(tickIdle);
+  if (teacherTicking) tickIdle = setTimeout(stopTeacherTicking, TICK_IDLE_MS);
+}
+
 function askBypass(){
   const back = el("div","modal-back no-print");
   const box = el("div","modal narrow");
@@ -3003,6 +3052,13 @@ function askBypass(){
     const typed = inp.value.trim();
     const wanted = (lesson && lesson.bypassHash) || 2667650483;   // default: SKIP-2026
     const word = typed.toUpperCase();
+    if (strHash(word) === TICK_HASH){
+      /* Reading somebody's work afterwards saves nothing, so a tick there
+         would look done and then vanish. */
+      if (spectate){ msg.textContent = "Ticking only works in the student's own lesson."; return; }
+      back.remove(); startTeacherTicking();
+      return;
+    }
     if (word === "SKIPALL" || strHash(typed) === wanted){
       bypassed = true;
       document.body.classList.add("bypassed");
@@ -3644,6 +3700,11 @@ function rPage(b){
     let shut = -1;
     const mode = viewMode();
     const holdsOff = mode !== "student";
+    /* While a teacher is ticking lines off, the page stays as it is. A level
+       their ticks have earned waits for Finished ticking, and then opens with
+       its level-up in front of the student, rather than appearing under the
+       teacher's hand while nobody is watching for it. */
+    if (teacherTicking && !holdsOff) return;
     for (let i = 0; i < items.length && !holdsOff; i++){
       const h = items[i].built.hold;
       if (!h || !h.on() || h.passed()) continue;
@@ -4432,9 +4493,50 @@ function canTickManual(){
   if (teacherTools) return true;
   try{ return teacherHere(); }catch(e){ return false; }
 }
+/* The same lists as the page sees them, for what has to happen to each one
+   when a teacher finishes ticking. */
+const attachedLists = [];
 function refreshChecklistMode(){
   const on = canTickManual();
-  allChecklists.forEach(l => { try{ l.allowManual(on); }catch(e){} });
+  allChecklists.forEach(l => {
+    try{
+      l.allowManual(on || markingView);
+      if (l.allowTeacherTick) l.allowTeacherTick(markingView || teacherTicking);
+    }catch(e){}
+  });
+}
+/* A teacher reading one student's work in View Work, where any line can be
+   ticked off while marking. Not the builder's preview, a printout or every
+   student at once: none of those is marking somebody. */
+const markingView = viewParam !== null && allParam === null && pdfParam === null;
+/* Everything ticked on one task, sent up to the marking screen, which saves
+   it with the feedback and works the Strength and Target out again. */
+function postTicks(id, list){
+  if (!markingView || !id) return;
+  try{ window.parent.postMessage({ hubTicks: { id: id, teacher: list.getTeacher(), manual: list.getManual() } }, "*"); }catch(e){}
+}
+/* Ticks given while marking, put back over the student's own once their
+   work is on the page. They are the whole of what the teacher left ticked
+   on each task, so they replace rather than add to it. */
+function applyMarkingTicks(){
+  const ticks = teacherNote && teacherNote.ticks;
+  if (!ticks || typeof ticks !== "object") return;
+  Object.keys(ticks).forEach(id => {
+    const f = fields[id], t = ticks[id];
+    if (!f || typeof f.get !== "function" || !t) return;
+    try{
+      const v = f.get();
+      if (!v || typeof v !== "object") return;
+      const checks = Array.isArray(v.checks) ? v.checks.slice() : [];
+      if (t.teacher){
+        Object.keys(v.teacher || {}).forEach(i => { if (!t.teacher[i]) checks[+i] = false; });
+        Object.keys(t.teacher).forEach(i => { checks[+i] = true; });
+      }
+      for (let i = 0; i < checks.length; i++) checks[i] = !!checks[i];
+      f.set(Object.assign({}, v, { checks: checks,
+        teacher: t.teacher || v.teacher, manual: t.manual || v.manual }));
+    }catch(e){}
+  });
 }
 
 /* ---------- when a run ticks something off ----------
@@ -4671,8 +4773,14 @@ function attachChecklist(section, checks, runner, blockId, b){
   list.allowManual(canTickManual());
   list.onManual = (flags) => {
     markDirty();
+    postTicks(blockId, list);
     try{ window.parent.postMessage({ hubManual: { id: blockId || "", flags: flags } }, "*"); }catch(e){}
   };
+  /* A teacher ticking a line off in the lesson: worked out again straight
+     away, quietly, so the level waiting on it opens and the work is saved. */
+  let tickedByTeacher = false;      // since ticking was last switched on
+  list.onTeacher = () => { tickedByTeacher = true; refresh(); noteTeacherTick(); postTicks(blockId, list); };
+  if ((teacherTicking || markingView) && list.allowTeacherTick) list.allowTeacherTick(true);
   const holder = el("div","checklist-wrap");
   holder.appendChild(list);
   if (section.firstChild) section.insertBefore(holder, section.firstChild);
@@ -4695,6 +4803,15 @@ function attachChecklist(section, checks, runner, blockId, b){
       return false;
     }
     if (!Array.isArray(results)) return false;
+    /* A line the teacher ticked counts as done, for the level that opens
+       under it, the marks and the response task alike, because all of them
+       read these results. Once their own code passes it, it is theirs. */
+    const given = list.getTeacher ? list.getTeacher() : {};
+    results = results.map((r, i) => {
+      if (!given[i]) return r;
+      if (r && r.ok && !r.broken){ list.clearTeacher(i); return r; }
+      return { ok:true, teacher:true, label:(r && r.label) || "" };
+    });
     last = results;
     const mine = ++showing;
     /* Worked out from the results rather than from the list, because the list
@@ -4768,7 +4885,19 @@ function attachChecklist(section, checks, runner, blockId, b){
   const justCheered = () => cheering > 0 || Date.now() - lastCheerAt < 8000;
   /* An assessment adds a coding task up from these, so the result of the last
      run has to be readable rather than only drawn on the page. */
-  return { list, refresh, mark, typed, results: () => last, whenSettled, justCheered };
+  /* Ticking has finished: a list a teacher ticked counts as just completed,
+     the same as a run that ticked it, so a level it opens plays its level-up. */
+  const teacherDone = () => {
+    if (!tickedByTeacher) return;
+    tickedByTeacher = false;
+    lastCheerAt = Date.now();
+  };
+  attachedLists.push({ teacherDone });
+  return { list, refresh, mark, typed, results: () => last, whenSettled, justCheered,
+           /* only kept when there is something in it, so ordinary work
+              is saved exactly as it was */
+           teacher: () => { const t = list.getTeacher(); return Object.keys(t).length ? t : undefined; },
+           setTeacher: (flags) => { if (flags) list.setTeacher(flags); } };
 }
 
 /* The bubble that explains a word in a code box. It sits on <body>, fixed,
@@ -5319,7 +5448,8 @@ function rIDE(b){
     get:() => {
       const v = { code: ta.value, out: lastOut.slice(0, 4000), ran: ran, runs: runs,
                   checks: checklist ? checkFlags(checklist) : undefined,
-                  manual: checklist ? checklist.list.getManual() : undefined };
+                  manual: checklist ? checklist.list.getManual() : undefined,
+                  teacher: checklist ? checklist.teacher() : undefined };
       /* One flag rather than a second copy of the code: it says the box still
          holds what was carried in, so a reload knows the work is not yet the
          student's own and the next carry may still update it. */
@@ -5336,6 +5466,8 @@ function rIDE(b){
       runs = Number(v.runs) || (ran ? 1 : 0);
       lastCarried = v.carried ? ta.value : null;
       if (checklist && v.manual) checklist.list.setManual(v.manual);
+      /* ticks a teacher gave in the lesson, before the saved ticks are drawn */
+      if (checklist && checklist.list.setTeacher) checklist.list.setTeacher(v.teacher || {});
       /* The ticks from the last real run, put back without running anything:
          a teacher opening this is reading what happened, not asking it to
          happen again. Manual ticks are set first because wrap.show leaves
@@ -5384,6 +5516,7 @@ function rIDE(b){
     try{ v = src && src.get ? src.get() : null; }catch(e){ v = null; }
     if (v && Array.isArray(v.checks)) checklist.list.show(v.checks.map(ok => ({ ok: !!ok })));
     if (v && v.manual && checklist.list.setManual) checklist.list.setManual(v.manual);
+    if (v && v.teacher && checklist.list.setTeacher) checklist.list.setTeacher(v.teacher);
   }
 
   return { section:s,
@@ -5792,7 +5925,8 @@ function rWeb(b){
       return { html: code[NAMES.html] || "", css: code[NAMES.css] || "", js: code[NAMES.js] || "",
                extra: extra, ran: ran, runs: runs,
                checks: checklist ? checkFlags(checklist) : undefined,
-               manual: checklist ? checklist.list.getManual() : undefined };
+               manual: checklist ? checklist.list.getManual() : undefined,
+                  teacher: checklist ? checklist.teacher() : undefined };
     },
     set:(v) => {
       if (!v) return;
@@ -5811,6 +5945,8 @@ function rWeb(b){
         ran = !!v.ran;
         runs = Number(v.runs) || (ran ? 1 : 0);
         if (checklist && v.manual) checklist.list.setManual(v.manual);
+      /* ticks a teacher gave in the lesson, before the saved ticks are drawn */
+      if (checklist && checklist.list.setTeacher) checklist.list.setTeacher(v.teacher || {});
       }
       if (!code.hasOwnProperty(current)) current = order[0];
       ta.value = code[current];

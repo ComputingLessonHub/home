@@ -88,6 +88,37 @@
     const manual = (v && v.manual && typeof v.manual === "object") ? v.manual : {};
     return !!(c && c.manual ? manual[i] === true : flags[i]);
   }
+  /* Checklist lines a teacher ticked while marking, laid over a student's
+     own work. They are saved in the feedback rather than in the work, which
+     is the student's, and are kept by task as the whole of what the teacher
+     left ticked: `teacher` for lines the code did not tick, `manual` for the
+     lines only a teacher judges. A line ticked by a teacher in the lesson and
+     taken back in marking goes back to not done. Every total on the site
+     reads checkDone, so laying these over the data first is all it takes for
+     the marks, the Progress tab and the Strength and Target to agree. */
+  function withMarkingTicks(data, feedback){
+    let f = feedback;
+    if (typeof f === "string"){ try{ f = JSON.parse(f); }catch(e){ f = null; } }
+    const ticks = f && f.ticks;
+    if (!ticks || typeof ticks !== "object") return data;
+    const out = Object.assign({}, data || {});
+    Object.keys(ticks).forEach(id => {
+      const t = ticks[id];
+      if (!t || typeof t !== "object") return;
+      const v = Object.assign({}, (out[id] && typeof out[id] === "object") ? out[id] : {});
+      const checks = Array.isArray(v.checks) ? v.checks.slice() : [];
+      if (t.teacher && typeof t.teacher === "object"){
+        Object.keys(v.teacher || {}).forEach(i => { if (!t.teacher[i]) checks[+i] = false; });
+        Object.keys(t.teacher).forEach(i => { if (t.teacher[i]) checks[+i] = true; });
+        v.teacher = Object.assign({}, t.teacher);
+      }
+      if (t.manual && typeof t.manual === "object") v.manual = Object.assign({}, t.manual);
+      for (let i = 0; i < checks.length; i++) checks[i] = !!checks[i];
+      v.checks = checks;
+      out[id] = v;
+    });
+    return out;
+  }
   function attempted(data, id){
     if (!data) return false;
     const v = data[id];
@@ -148,7 +179,8 @@
     let gotSum = 0, maxSum = 0;
     (roster || []).forEach(st => {
       const row = (rows || []).find(r => r.username === st.username) || null;
-      const data = row ? row.data : null;
+      /* with any lines a teacher ticked while marking, which live in the feedback */
+      const data = row ? withMarkingTicks(row.data, row.feedback) : null;
       let got = 0, max = 0;
       tasks.forEach(t => {
         const sc = scoreTask(t.block, data ? data[t.id] : undefined);
@@ -226,7 +258,7 @@
   }
 
   window.progressMath = { TASK_LABEL, plainText, normAns, taskInfo,
-                          quantifiableTasks, scoreTask, checkDone, attempted,
+                          quantifiableTasks, scoreTask, checkDone, attempted, withMarkingTicks,
                           defaultLocks, fetchLockedPages, markRoster,
                           levelChain, levelReached };
 })();
