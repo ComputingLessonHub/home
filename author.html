@@ -915,6 +915,8 @@ function compile(){
         /* The rubric level it belongs to, which is the order marking asks
            about it in. Dropped here, every lesson reopened would lose it. */
         if (lesson.practical && t.level) topics[k].level = t.level;
+        /* the few words it goes by on the marking list */
+        if (String(t.short || "").trim()) topics[k].short = String(t.short).trim();
       }
     });
     if (Object.keys(topics).length) out.topics = topics;
@@ -3535,6 +3537,7 @@ function paintTargets(into){
         inp.addEventListener("input", () => { t[pair[0]] = inp.value; saveDraft(); schedulePreview(); });
         w.appendChild(inp); body.appendChild(w);
       });
+    body.appendChild(shortNameField(t, "Variables"));
     /* Which level of the rubric this is part of. Marking asks about the
        topics a level at a time, lowest first, and stops once a level is
        shown not to be done, so this is what lets it say which level they
@@ -3587,7 +3590,7 @@ function checklistSentences(into){
   const head = el("div","brow checkst-head");
   head.appendChild(el("b","", "From the checklists"));
   head.appendChild(helpDot("Write what to say when a student has done this line, and what to say when they have not. " +
-                           "Both turn up in the bank when you are marking, with the lines each student got done listed first."));
+                           "When you mark, ticking the line off writes the Strength, and the first line not ticked writes the Target."));
   into.appendChild(head);
   if (!tasks.length){
     into.appendChild(el("p","hint","Add a checklist to a coding task and its lines will appear here."));
@@ -3618,11 +3621,31 @@ function checklistSentences(into){
         pair.appendChild(w);
       });
       line.appendChild(pair);
+      line.appendChild(shortNameField(c, "Welcome message"));
       body.appendChild(line);
     });
     card2.appendChild(body);
     into.appendChild(card2);
   });
+}
+/* The one to three words a checklist line or a topic goes by on the list a
+   teacher ticks while marking. The whole line is a sentence written for a
+   student; a list of thirty of those is a page to read rather than a list
+   to tick, so this is what the list shows, and the line itself is there
+   when the pointer rests on it. Left empty, the list uses the whole line. */
+function shortNameField(thing, example){
+  const w = el("div","bfield");
+  w.appendChild(el("label","", "Short name, for the marking list"));
+  const inp = el("input");
+  inp.value = thing.short || "";
+  inp.maxLength = 40;
+  inp.placeholder = "1 to 3 words, like “" + example + "”";
+  inp.addEventListener("input", () => {
+    if (inp.value.trim()) thing.short = inp.value; else delete thing.short;
+    saveDraft();
+  });
+  w.appendChild(inp);
+  return w;
 }
 
 /* The two sentences that belong to the whole assessment rather than to any

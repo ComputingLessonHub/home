@@ -218,6 +218,12 @@
       const done = back.querySelector("#setDone");
       if (done && done.parentNode) done.parentNode.insertBefore(extra, done);
     }
+    /* A page can add a group of settings of its own, drawn by the page, at
+       the end of the list: Mark work keeps how a Strength and Target are
+       written here. */
+    if (typeof window.settingsSection === "function"){
+      try{ window.settingsSection(back.querySelector(".modal-scroll")); }catch(e){}
+    }
     back.querySelector("#pwGo").addEventListener("click", async () => {
       const msg = back.querySelector("#pwMsg");
       const next = back.querySelector("#pwNew").value, again = back.querySelector("#pwNew2").value;

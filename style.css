@@ -894,9 +894,11 @@ textarea.code{background:var(--code-bg) !important; color:var(--code-fg) !import
 .swatch{width:44px; height:44px; border-radius:var(--rad-md); border:2px solid var(--line-2); cursor:pointer; padding:0}
 .swatch.on{border-color:var(--amber); box-shadow:0 0 0 3px rgba(220,138,62,.2)}
 .font-opts{display:grid; gap:8px}
-.font-opt{text-align:left; padding:11px 14px; border:1.5px solid var(--line-2); border-radius:var(--rad-md);
+/* .set-opt looks the same but is a page's own setting: settings.js repaints
+   every .font-opt from the font chosen, which would take its tick off */
+.font-opt,.set-opt{text-align:left; padding:11px 14px; border:1.5px solid var(--line-2); border-radius:var(--rad-md);
   background:var(--panel); font-size:var(--text-xl); cursor:pointer}
-.font-opt.on{border-color:var(--amber); box-shadow:0 0 0 2px rgba(220,138,62,.18)}
+.font-opt.on,.set-opt.on{border-color:var(--amber); box-shadow:0 0 0 2px rgba(220,138,62,.18)}
 .modal{background:var(--panel); border-color:var(--line)}
 
 .masthead{position:relative}
@@ -1011,7 +1013,7 @@ html[data-bg=dark] .who-row .st.yes{color:var(--mint)}
 /* ---- v2.4.2 fixes ---- */
 /* belt and braces: every text surface follows the theme */
 .station,.qtext,.opt,.lead,.qhead,.paste-sub,.lock-text{color:var(--text)}
-.classtile,.classtile b,.font-opt{color:var(--text)}
+.classtile,.classtile b,.font-opt,.set-opt{color:var(--text)}
 .classtile span{color:var(--muted)}
 
 /* the spectator strip floats, so the page grid keeps its shape (pill fix) */
@@ -2070,10 +2072,8 @@ body.workpage .grow{flex:1}
   padding:18px; overflow-y:auto; min-height:0}
 .workside h3{margin:0 0 4px; font-family:var(--display); font-size:var(--text-2xl)}
 /* block, because an inline textarea sits on a line of text and leaves the
-   room for letters' tails under it, which doubled the gap to the bank link */
+   room for letters' tails under it */
 .workside textarea{width:100%; box-sizing:border-box; display:block}
-.workside .bank{margin-top:5px; line-height:1.2}
-.workside .bank:empty{display:none}
 .btn-primary.wide{width:100%; margin-top:6px}
 /* Save and next is the one pressed down a class, so it takes more of the row */
 .fbsave{display:flex; gap:8px; margin-top:6px}
@@ -2089,6 +2089,43 @@ body.workpage .grow{flex:1}
 .fbfoot .fbsave{margin-top:0}
 .fbfoot #fbMsg{margin:6px 0 0}
 .fbfoot #fbMsg:empty{display:none}
+/* Marking a class is the column read thirty times over, so it is kept short
+   enough to need as little scrolling as it can: whose work it is goes on the
+   heading's line, at the heading's size, and the level and the buttons are
+   no bigger than they need to be. */
+.workside h3.fbhead{display:flex; flex-wrap:wrap; align-items:baseline; gap:0 8px; margin:0 0 10px; font-size:15px}
+.fbhead #fbWho{font-family:var(--body); font-size:15px; font-weight:500; color:var(--muted)}
+.workside #markWrap{margin-bottom:10px}
+.workside #markWrap label{margin-bottom:2px}
+.workside .levelshown{font-size:15px}
+.workside .levelshown.none{font-size:14px}
+.fbfoot .fbsave button{padding-top:7px; padding-bottom:7px; font-size:15px}
+.fbfoot #fbMsg{font-size:13px}
+/* The list of what a student has done, a level at a time. */
+.fblist{margin:0 0 12px}
+.fblist .bhelp{margin:0 0 6px}
+.fblist-step{display:flex; align-items:center; gap:6px; margin:4px 0 2px}
+.fblist-name{flex:1; min-width:0; display:flex; align-items:baseline; justify-content:center; gap:8px; text-align:center}
+.fblist-name b{font-size:14.5px; color:var(--amber-dark)}
+.fblist-count{font-size:12.5px; font-weight:600; color:var(--muted)}
+.fblist-go{flex:none; font-size:20px; line-height:1}
+.fblist-go:disabled{opacity:.35; cursor:default}
+.fblist-foot{margin-top:10px}
+.fbcomment-add{display:block; margin:0 0 12px; font-size:14px}
+.fblist-dots{display:flex; justify-content:center; gap:6px; margin:0 0 6px}
+.fblist-dot{position:relative; width:9px; height:9px; padding:0; border-radius:50%; border:1.5px solid var(--line-2);
+  background:transparent; cursor:pointer}
+.fblist-dot.full{background:var(--amber); border-color:var(--amber)}
+.fblist-dot.here{box-shadow:0 0 0 2px var(--amber-dark)}
+/* a 9px dot is no target for a finger: the tap area is made bigger, not the dot */
+.fblist-dot::after{content:""; position:absolute; left:-7px; right:-7px; top:-14px; bottom:-14px}
+@media (pointer:coarse){ .fblist-dot{min-height:0; min-width:0} }
+.fblist-row{display:flex; align-items:flex-start; gap:8px; padding:4px 0; font-size:14px; line-height:1.35; cursor:pointer}
+.fblist-row input{flex:none; width:17px; height:17px; margin:1px 0 0; accent-color:var(--amber-dark); cursor:pointer}
+.fblist-row input:disabled{cursor:default}
+.fblist-row.on .fblist-words{color:var(--text)}
+.fblist-words{color:var(--muted)}
+.fblist-by{font-size:12px; color:var(--dim)}
 
 @media (max-width:1000px){
   body.workpage{height:auto; overflow:auto}

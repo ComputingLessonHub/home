@@ -137,7 +137,10 @@
      own work. They are saved in the feedback rather than in the work, which
      is the student's, and are kept by task as the whole of what the teacher
      left ticked: `teacher` for lines the code did not tick, `manual` for the
-     lines only a teacher judges. A line ticked by a teacher in the lesson and
+     lines only a teacher judges, `code` for lines their code was found to do
+     when it was checked again in marking (opening it, or a teacher pressing
+     Run), which a student who never ran it or never pressed Finish had not
+     had ticked. A line ticked by a teacher in the lesson and
      taken back in marking goes back to not done. Every total on the site
      reads checkDone, so laying these over the data first is all it takes for
      the marks, the Progress tab and the Strength and Target to agree. */
@@ -158,6 +161,8 @@
         v.teacher = Object.assign({}, t.teacher);
       }
       if (t.manual && typeof t.manual === "object") v.manual = Object.assign({}, t.manual);
+      if (t.code && typeof t.code === "object")
+        Object.keys(t.code).forEach(i => { if (t.code[i]) checks[+i] = true; });
       for (let i = 0; i < checks.length; i++) checks[i] = !!checks[i];
       v.checks = checks;
       out[id] = v;

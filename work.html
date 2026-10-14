@@ -23,6 +23,7 @@
     <button class="on" id="tabWork">View work</button>
     <button id="tabProgress">Progress</button>
   </div>
+  <button class="btn-ghost iconbtn" id="setBtn" title="Settings">&#9881;&#65038;</button>
 </div>
 
 <div id="loadPane" class="workwrap loadpane">
@@ -58,8 +59,9 @@
       <div class="workframe"><iframe id="workFrame" title="Their work" allow="fullscreen"></iframe></div>
     </div>
     <aside class="workside">
-      <h3>Feedback</h3>
-      <p class="hint" id="fbWho"></p>
+      <!-- whose work it is, on the heading's own line, to leave the room for
+           the boxes -->
+      <h3 class="fbhead">Feedback <span id="fbWho"></span></h3>
       <!-- Practice only: a sandbox is several programs and feedback belongs
            to one of them, so the boxes below say which. It follows whatever
            is open in the frame, and opens one when it is changed here. -->
@@ -76,19 +78,22 @@
         <p class="levelshown" id="levelShown" hidden></p>
         <p class="bhelp" id="gradeHelp"></p>
       </div>
-      <!-- Where a lesson has a bank of Strengths and Targets, a few Yes or No
-           questions come first and write the boxes below. -->
+      <!-- Where a lesson has a bank of Strengths and Targets, a list of what
+           it asks for is ticked off and writes the boxes below. Settings can
+           swap it for a few Yes or No questions instead. -->
+      <div class="fblist" id="fbList" hidden></div>
       <div class="fbask" id="fbAsk" hidden></div>
       <div class="fbask-again" id="fbAskAgain" hidden></div>
       <div class="bfield" id="fbStrengthWrap">
-        <label>Strength</label><textarea id="fbStrength" rows="3"></textarea>
-        <div class="bank" id="bankStrength"></div>
+        <label>Strength</label><textarea id="fbStrength" rows="5"></textarea>
       </div>
       <div class="bfield" id="fbTargetWrap">
-        <label>Target</label><textarea id="fbTarget" rows="3"></textarea>
-        <div class="bank" id="bankTarget"></div>
+        <label>Target</label><textarea id="fbTarget" rows="5"></textarea>
       </div>
-      <div class="bfield" id="fbCommentWrap"><label>General comment</label><textarea id="fbComment" rows="2"></textarea></div>
+      <!-- Most work is marked with a Strength and a Target alone, so the
+           comment box waits behind a button until it is wanted. -->
+      <button class="bank-link fbcomment-add" id="fbCommentAdd" type="button" hidden>+ Additional comment</button>
+      <div class="bfield" id="fbCommentWrap"><label>Additional comment</label><textarea id="fbComment" rows="2"></textarea></div>
       <!-- Marking a class is one student after another, so moving on is the
            button most pressed; Save on its own is for coming back to later. -->
       <!-- Held at the foot of the column however far down it is scrolled, with
@@ -1071,7 +1076,7 @@ function showStudent(i, step){
        so a class's pictures can be read one after another at full size. The
        frame is a new page for every student and would otherwise close it. */
     (lastFull ? "&full=" + encodeURIComponent(lastFull) : ""));
-  $("fbWho").textContent = st.display_name + " · " + st.username + (row ? "" : ", nothing saved yet");
+  $("fbWho").textContent = st.display_name + " · " + st.username + (row ? "" : " · nothing saved");
   /* a practical assessment is marked by hand, so the boxes appear */
   paintMarking(st.username);
   loadFeedback(row);
@@ -1119,7 +1124,7 @@ function showPrograms(i){
       programs: progs, notes: progNotes, open: openProg }));
   }catch(e){}
   frameGo("sandbox.html?view=1&embed=1");
-  $("fbWho").textContent = st.display_name + " · " + st.username + (progs.length ? "" : ", no programs yet");
+  $("fbWho").textContent = st.display_name + " · " + st.username + (progs.length ? "" : " · no programs");
   $("markWrap").hidden = true;
   paintProgPick();
   loadProgFeedback();
@@ -1158,7 +1163,8 @@ function loadProgFeedback(){
   $("fbStrength").value = note.strength || "";
   $("fbTarget").value = note.target || "";
   $("fbComment").value = note.comment || "";
-  paintBank("Strength"); paintBank("Target");
+  commentOpen = false;
+  commentShow(true);
   $("fbMsg").textContent = "";
 }
 on("progPick", "change", () => {
@@ -1229,10 +1235,13 @@ function loadFeedback(row){
     try{ f = JSON.parse(row.feedback); }catch(e){ f = { comment: row.feedback }; }
   }
   $("fbComment").value = f.comment || "";
+  commentOpen = false;
   /* Lines ticked while marking this student, saved with their feedback. A
      fresh copy for each student, so one child's ticks never travel with the
      next one's feedback. */
   markingTicks = (f.ticks && typeof f.ticks === "object") ? JSON.parse(JSON.stringify(f.ticks)) : {};
+  /* and what was ticked on the list, kept with them for the same reason */
+  got = (f.got && typeof f.got === "object") ? Object.assign({}, f.got) : {};
   manualTicks = {};
   Object.keys(markingTicks).forEach(id => { if (markingTicks[id].manual) manualTicks[id] = markingTicks[id].manual; });
   /* An assessment marks itself and writes a strength and a target as it does.
@@ -1251,42 +1260,70 @@ function loadFeedback(row){
      boxes say they were not here instead, and the questions wait. */
   const away = nothingSaved && !!(lessonJson && lessonJson.practical) && !PRACTICE &&
                !window.progressMath.hasWork(lessonJson, row && row.data);
-  const fromList = (nothingSaved && !away) ? checklistAuto(row) : null;
+  const fromList = (nothingSaved && !away) ? autoFor(row) : null;
   const awayWords = away ? window.progressMath.absentFeedback(lessonJson) : null;
   $("fbStrength").value = f.strength || auto.strength || (awayWords ? awayWords.strength : fromList ? fromList.strength : "");
   $("fbTarget").value = f.target || auto.target || (awayWords ? awayWords.target : fromList ? fromList.target : "");
-  paintBank("Strength"); paintBank("Target");
   /* An assessment with STAR feedback switched off in the builder is given
      a mark and nothing more, so there is no Strength or Target to write.
      A comment still has its box. */
   const noStar = !!(lessonJson && lessonJson.assessment && !lessonJson.practical && lessonJson.star === false);
   ["fbStrengthWrap","fbTargetWrap"].forEach(id => { $(id).hidden = noStar; });
   $("fbMsg").textContent = away
-    ? "Nothing is saved in this practical for this student, so these say they were not here. Change them if that is not right, then press Save."
+    ? "Nothing saved, so these say they were away."
     : fromList && (fromList.strength || fromList.target)
-    ? "Filled in from what this student ticked off. Change anything you like, then press Save."
+    ? "Filled in from the ticks."
     : "";
-  /* What the checklist says now. While the boxes still read exactly this,
-     they are the checklist's words rather than the teacher's, and a tick
-     given while marking can change them. */
-  const now = checklistAuto(row) || {};
+  /* What the ticks say now. While the boxes still read exactly this, they
+     are the ticks' words rather than the teacher's, and a tick given while
+     marking can change them. */
+  const now = autoFor(row) || {};
   lastAuto = { strength: now.strength || "", target: now.target || "" };
   /* Feedback already saved for this student is shown as it was saved; the
      questions are for writing it the first time, and a button away after. */
-  startAsk(row, !!(f.strength || f.target) || away);
+  feedbackMode(row, !!(f.strength || f.target) || away);
+}
+/* The list, or the questions when Settings asks for them. */
+function feedbackMode(row, saved){
+  if (byQuestions()){
+    $("fbList").hidden = true;
+    startAsk(row, saved);
+    return;
+  }
+  ask = null;
+  showAsk(false);
+  listOpen = { user: (row && row.username) || "", at: null, phase: saved ? "done" : "levels" };
+  paintList(row);
+}
+/* What the boxes are filled in from: the list, or for the questions what a
+   practical's checklists say, as they always were. */
+function autoFor(row){
+  return byQuestions() ? checklistAuto(row) : listAuto(row);
 }
 /* A line has been ticked or unticked in the work beside the boxes. The
    Strength and Target are worked out again, and replace what is there if it
    is still the checklist's own wording. Anything the teacher wrote is kept,
    with a button to take the new sentences instead. */
 let lastAuto = { strength: "", target: "" };
-function ticksChanged(row){
-  paintBank("Strength"); paintBank("Target");
+/* `byHand` is a tick on the list here, as against one arriving from the
+   work: only the teacher's own tick moves a level picked from a list. */
+function ticksChanged(row, byHand){
   paintMarking(row.username);               // a level read from the ticks may have moved
   if (!$("fbAsk").hidden) $("markWrap").hidden = true;   // still asking: the questions decide it
   paintFb("idle");                          // the ticks are not saved yet
-  const fresh = checklistAuto(row);
+  if (!byQuestions()) paintList(row);
+  const fresh = autoFor(row);
   if (!fresh) return;
+  /* A practical graded by picking a level from a list has nothing to read
+     the level off but these ticks, so the picker follows them. Picked by
+     hand afterwards, it stays as picked until the next tick. */
+  const pick = $("fbGrade");
+  if (byHand && fresh.reached !== null && fresh.reached !== undefined && !pick.hidden && !$("markWrap").hidden){
+    const name = fresh.reached >= 0 ? fresh.ladder[fresh.reached] : "";
+    const match = Array.from(pick.options).find(o => o.value.trim().toLowerCase() === String(name).toLowerCase());
+    pick.value = match ? match.value : "";
+    showGradeHelp();
+  }
   const kept = [];
   [["Strength","strength"],["Target","target"]].forEach(pair => {
     const box = $("fb" + pair[0]);
@@ -1297,14 +1334,14 @@ function ticksChanged(row){
   lastAuto = { strength: fresh.strength || "", target: fresh.target || "" };
   const msg = $("fbMsg");
   msg.textContent = kept.length
-    ? "The ticks have changed, and your own words are kept. "
-    : "Strength and Target updated from the ticks. Press Save to keep them.";
+    ? "Ticks changed. Your own words are kept. "
+    : "Updated from the ticks. Not saved yet.";
   if (kept.length){
-    const use = el("button","btn-ghost bmini2","Use the checklist's Strength and Target");
+    const use = el("button","btn-ghost bmini2","Use the ticks' words");
     use.addEventListener("click", () => {
       $("fbStrength").value = lastAuto.strength;
       $("fbTarget").value = lastAuto.target;
-      msg.textContent = "Strength and Target updated from the ticks. Press Save to keep them.";
+      msg.textContent = "Updated from the ticks. Not saved yet.";
       paintFb("idle");
     });
     msg.appendChild(use);
@@ -1370,7 +1407,7 @@ function askItems(row, ladder){
   Object.keys(topics).forEach(k => {
     const t = topics[k] || {};
     if (t.strength || t.target)
-      out.push({ topic: t.label || k, strength: t.strength || "", target: t.target || "",
+      out.push({ key: k, topic: t.label || k, short: String(t.short || "").trim(), strength: t.strength || "", target: t.target || "",
                  level: ladder.indexOf(t.level) });
   });
   if (lessonJson.practical){
@@ -1382,8 +1419,14 @@ function askItems(row, ladder){
       (t.block.checks || []).forEach((c, i) => {
         const strength = String((c && c.strength) || "").trim(), target = String((c && c.target) || "").trim();
         if (!strength && !target) return;
-        out.push({ topic: String(c.label || "Checklist").trim(), strength, target, level: onLevel,
-                   met: window.progressMath.checkDone(c, i, data[t.id]) });
+        const v = data[t.id] || {};
+        out.push({ topic: String(c.label || "Checklist").trim(), short: String((c && c.short) || "").trim(),
+                   strength, target, level: onLevel,
+                   met: window.progressMath.checkDone(c, i, v),
+                   task: t.id, line: i, manual: !!(c && c.manual),
+                   /* ticked by their program rather than by a teacher */
+                   byCode: !(c && c.manual) && !!(Array.isArray(v.checks) && v.checks[i]) &&
+                           !(v.teacher && v.teacher[i]) });
       });
     });
   }
@@ -1395,7 +1438,8 @@ function askItems(row, ladder){
 
 function showAsk(asking){
   $("fbAsk").hidden = !asking;
-  ["fbStrengthWrap","fbTargetWrap","fbCommentWrap","fbSaveRow"].forEach(id => { $(id).hidden = asking; });
+  ["fbStrengthWrap","fbTargetWrap","fbSaveRow"].forEach(id => { $(id).hidden = asking; });
+  commentShow(!asking);
   /* The questions decide the level, so the picker waits until they have. */
   if (asking) $("markWrap").hidden = true;
   else if (ask && ask.row) paintMarking(ask.row.username);
@@ -1615,7 +1659,7 @@ function paintAsk(){
       showGradeHelp();
     }
     paintFb("idle");
-    $("fbMsg").textContent = "Filled in from your answers. Change anything you like, then press Save.";
+    $("fbMsg").textContent = "Filled in from your answers.";
   });
   const row = el("div","fbask-yesno");
   row.appendChild(change); row.appendChild(use);
@@ -1656,59 +1700,306 @@ function targetPopup(){
   });
 }
 
-/* The sentences written in the builder, offered as a starting point. Picking
-   one fills the box, which the teacher can then reword. */
-function bankFor(which){
-  const topics = (lessonJson && lessonJson.topics) || {};
-  const out = [];
-  Object.keys(topics).forEach(k => {
-    const t = topics[k] || {};
-    const line = which === "Strength" ? t.strength : t.target;
-    if (line) out.push({ topic: t.label || k, line: line });
-  });
-  if (which === "Target" && lessonJson && lessonJson.perfectTarget)
-    out.push({ topic: "Full marks", line: lessonJson.perfectTarget });
-  if (which === "Strength" && lessonJson && lessonJson.zeroStrength)
-    out.push({ topic: "Made a start", line: lessonJson.zeroStrength });
-  return out.concat(checklistBank(which));
+/* ---------------- feedback by ticking a list ----------------
+   The questions stopped at the first level with two Nos in it, so a student
+   who had done things further on never had them asked about, and never had
+   them said back to them. The list puts everything in front of the teacher
+   at once, a level at a time, and anything can be ticked: Level Up done and
+   a Go for Gold idea tried as well is something to praise.
+
+   A checklist line on the list is the same tick as the one on the work.
+   Ticking it here ticks it there, the level follows, and it is saved with
+   the feedback exactly as a tick given in the work is. A line their program
+   ticked is theirs, so it is shown ticked and left alone. Anything else, a
+   topic written for the lesson, is the teacher's word on what they saw. */
+let got = {};        // the topics ticked on the list for this student, by key
+
+/* Settings decides, and it is kept on this computer: how a teacher likes to
+   mark is theirs rather than the lesson's. */
+const QUESTIONS_KEY = "hub_mark_questions";
+function byQuestions(){
+  try{ return localStorage.getItem(QUESTIONS_KEY) === "1"; }catch(e){ return false; }
 }
-/* The sentences a practical's checklist lines carry, each one saying whether
-   the student in front of the teacher got that line done. Done is read the
-   way every checklist total on this site is, through checkDone, so the bank
-   never disagrees with the tick on the work beside it. The ones that fit
-   come first, a done line for a Strength and an undone one for a Target,
-   but none is hidden: a run can tick a line the teacher does not think was
-   really earned, and the teacher is the one who decides. */
-function checklistBank(which){
-  if (PRACTICE || !lessonJson) return [];
-  const st = roster[idx];
-  const row = st ? rows.find(r => r.username === st.username) : null;
-  const data = (row && row.data) || {};
-  const key = which === "Strength" ? "strength" : "target";
-  const fits = [], rest = [];
-  quantifiableTasks().forEach(t => {
-    if (t.type !== "ide" && t.type !== "web") return;
-    t.block.checks.forEach((c, i) => {
-      const line = String((c && c[key]) || "").trim();
-      if (!line) return;
-      const met = window.progressMath.checkDone(c, i, data[t.id]);
-      const item = { topic: String(c.label || "Checklist").trim(), line: line, met: met };
-      ((which === "Strength") === met ? fits : rest).push(item);
+window.settingsSection = (holder) => {
+  if (!holder || PRACTICE) return;
+  const grp = el("div","set-group");
+  grp.appendChild(el("span","set-label","Writing a Strength and Target"));
+  const opts = el("div","font-opts");
+  const choices = [[false, "Tick off a list of what they have done"],
+                   [true, "Answer Yes or No questions, a level at a time"]];
+  const paint = () => opts.querySelectorAll(".set-opt").forEach((b, k) =>
+    b.classList.toggle("on", choices[k][0] === byQuestions()));
+  choices.forEach(([on, label]) => {
+    const b = el("button","set-opt", label);
+    b.type = "button";
+    b.addEventListener("click", () => {
+      try{ localStorage.setItem(QUESTIONS_KEY, on ? "1" : "0"); }catch(e){}
+      paint();
+      /* the student on screen changes over now, not at the next one */
+      const st = roster[idx];
+      const row = st ? rows.find(r => r.username === st.username) : null;
+      if (st && lessonJson) feedbackMode(row, savedFeedback(row));
     });
+    opts.appendChild(b);
   });
-  return fits.concat(rest);
+  grp.appendChild(opts);
+  grp.appendChild(el("p","subnote","Kept on this computer."));
+  holder.appendChild(grp);
+  paint();
+};
+
+/* Whether a Strength or Target has actually been saved for them, as against
+   the boxes holding what the ticks wrote. */
+function savedFeedback(row){
+  let f = {};
+  try{ f = JSON.parse((row && row.feedback) || "{}") || {}; }catch(e){ f = {}; }
+  return !!(f.strength || f.target);
 }
-function paintBank(which){
-  const holder = $("bank" + which);
-  if (!holder) return;
-  holder.innerHTML = "";
-  if (!bankFor(which).length) return;
-  /* A small link under the box rather than a button: the boxes are already
-     filled in, so the bank is the thing to reach for now and then. */
-  const open2 = el("button","bank-link","From your bank\u2026");
-  open2.type = "button";
-  open2.addEventListener("click", () => bankPopup(which));
-  holder.appendChild(open2);
+/* Every line on the list with whether it is ticked for this student. */
+function listItems(row){
+  const ladder = window.progressMath.levelLadder(lessonJson);
+  const items = askItems(row, ladder).map(it => Object.assign({}, it,
+    { ticked: it.key !== undefined ? !!got[it.key] : !!it.met }));
+  return { ladder, items };
+}
+
+/* What the ticks add up to: the two furthest things done, in level order,
+   after a word of praise; the first thing not done as the target; and the
+   level reached, which is the level below the first gap. Something ticked
+   further on than that is in the Strength, not the level: a level is all
+   of it. */
+function listAuto(row){
+  if (PRACTICE || !lessonJson) return null;
+  const { ladder, items } = listItems(row);
+  if (!items.length) return null;
+  const done = items.filter(it => it.ticked && it.strength).map(it => it.strength).slice(-2);
+  const gap = items.find(it => !it.ticked && it.target);
+  const strength = done.length ? praiseFor(row) + " " + joinSentences(done) : (lessonJson.zeroStrength || "");
+  let target = gap ? gap.target : (items.some(it => !it.ticked) ? "" : (lessonJson.perfectTarget || ""));
+  let reached = null;
+  const levelled = items.filter(it => it.level >= 0);
+  if (ladder.length && levelled.length){
+    const first = levelled.find(it => !it.ticked);
+    reached = first ? first.level - 1 : Math.max.apply(null, levelled.map(it => it.level));
+  }
+  /* The target ends by pointing at the next level, the same as it always
+     has. A practical built in levels says where they are from the ticks
+     on the work; one graded from a list, from these. */
+  const user = row && row.username;
+  const lv = user ? levelFor(user) : null;
+  const more = lv ? !!lv.next : (reached !== null && reached < ladder.length - 1);
+  if (more && gap && target){
+    target = (/[.!?]$/.test(target) ? target : target + ".") + " Keep working to try to reach the next level.";
+  }
+  return { strength, target, reached, ladder };
+}
+
+/* The list goes the way the questions did, without stopping anywhere: the
+   levels one at a time, then the Strength the ticks wrote to read and agree
+   to, then the Target, and then the boxes, filled in. While it is being
+   ticked the boxes are put away, because the column is the length of one
+   level then rather than of everything, but Save and next stays: for a
+   class whose checklists have already decided it all, the boxes are already
+   right and stepping through thirty of them would be work for nothing.
+   Feedback already saved opens on the boxes, with a way back to the list. */
+function paintList(row){
+  const box = $("fbList");
+  box.innerHTML = "";
+  const { ladder, items } = (PRACTICE || !lessonJson) ? { ladder: [], items: [] } : listItems(row);
+  const user = (row && row.username) || "";
+  if (listOpen.user !== user) listOpen = { user, at: null, phase: "levels" };
+  const off = !items.length || byQuestions();
+  box.hidden = off || listOpen.phase === "done";
+  listBoxes(off || listOpen.phase === "done");
+  paintListAgain(row, !off && listOpen.phase === "done");
+  if (box.hidden) return;
+  if (listOpen.phase === "strength" || listOpen.phase === "target"){ paintListCheck(row); return; }
+  box.appendChild(el("p","bankhead","What have they done?"));
+  box.appendChild(el("p","bhelp","Tick anything you can see in their work, further on too."));
+  /* It opens on the level they are working on. The count beside each name
+     says how much of it is ticked, so a level done or one further on can be
+     read without going to it. The level shown is kept while this student is
+     on screen, because ticking repaints the list. */
+  const groups = [];
+  items.forEach(it => {
+    const last = groups[groups.length - 1];
+    if (last && last.level === it.level) last.items.push(it);
+    else groups.push({ level: it.level, items: [it] });
+  });
+  if (listOpen.at === null){
+    const working = groups.findIndex(g => g.items.some(it => !it.ticked));
+    listOpen.at = working < 0 ? groups.length - 1 : working;
+  }
+  const at = Math.min(Math.max(listOpen.at, 0), groups.length - 1);
+  const g = groups[at];
+  const nameOf = (grp) => grp.level >= 0 ? ladder[grp.level] : "Beyond the levels";
+  const countOf = (grp) => grp.items.filter(it => it.ticked).length + " of " + grp.items.length;
+  const step = el("div","fblist-step");
+  const go = (to, label, word) => {
+    const btn = el("button","btn-ghost iconbtn fblist-go", word);
+    btn.type = "button";
+    btn.disabled = to < 0 || to >= groups.length;
+    btn.title = btn.disabled ? "" : label + ": " + nameOf(groups[to]) + ", " + countOf(groups[to]);
+    btn.setAttribute("aria-label", btn.title || label);
+    btn.addEventListener("click", () => { listOpen.at = to; paintList(row); });
+    return btn;
+  };
+  step.appendChild(go(at - 1, "Previous level", "‹"));
+  const name = el("div","fblist-name");
+  name.appendChild(el("b","", nameOf(g)));
+  name.appendChild(el("span","fblist-count", countOf(g)));
+  step.appendChild(name);
+  step.appendChild(go(at + 1, "Next level", "›"));
+  box.appendChild(step);
+  /* where this level sits among them, each dot full once its level is */
+  const dots = el("div","fblist-dots");
+  groups.forEach((grp, k) => {
+    const all = grp.items.every(it => it.ticked);
+    const dot = el("button","fblist-dot" + (k === at ? " here" : "") + (all ? " full" : ""));
+    dot.type = "button";
+    dot.title = nameOf(grp) + ", " + countOf(grp);
+    dot.setAttribute("aria-label", dot.title);
+    dot.addEventListener("click", () => { listOpen.at = k; paintList(row); });
+    dots.appendChild(dot);
+  });
+  box.appendChild(dots);
+  g.items.forEach(it => box.appendChild(listRow(row, it)));
+  /* the last level leads on to reading what the ticks have written */
+  const last = at === groups.length - 1;
+  const foot = el("div","fbask-yesno fblist-foot");
+  const next = el("button", last ? "btn-primary" : "btn-ghost", last ? "Done ticking" : "Next level ›");
+  next.type = "button";
+  next.addEventListener("click", () => {
+    if (!last){ listOpen.at = at + 1; paintList(row); return; }
+    listOpen.phase = "strength"; paintList(row);
+  });
+  foot.appendChild(next);
+  box.appendChild(foot);
+}
+let listOpen = { user: null, at: null, phase: "levels" };
+
+/* The Strength, then the Target, as the student will read them, each to be
+   agreed to or changed. They are the boxes' own words, so a change here is
+   a change there, and a tick changed afterwards keeps it the way a change
+   typed into the box is kept. */
+function paintListCheck(row){
+  const box = $("fbList");
+  const strength = listOpen.phase === "strength";
+  const field = $(strength ? "fbStrength" : "fbTarget");
+  box.appendChild(el("p","fbask-count", strength ? "This is their Strength:" : "And this is their Target:"));
+  if (listOpen.editing){
+    const edit = el("textarea","fbask-edit");
+    edit.rows = 4;
+    edit.value = field.value;
+    edit.addEventListener("input", () => { field.value = edit.value; paintFb("idle"); });
+    box.appendChild(edit);
+    setTimeout(() => edit.focus(), 0);
+  } else {
+    const card = el("div","fbask-card");
+    card.appendChild(el("p","", field.value || "Nothing yet. Press Edit to write one."));
+    box.appendChild(card);
+  }
+  const buttons = el("div","fbask-yesno");
+  if (!listOpen.editing){
+    const change = el("button","btn-ghost", strength ? "Edit Strength" : "Edit Target");
+    change.type = "button";
+    change.addEventListener("click", () => { listOpen.editing = true; paintList(row); });
+    buttons.appendChild(change);
+  }
+  const ok = el("button","btn-primary","Looks good");
+  ok.type = "button";
+  ok.addEventListener("click", () => {
+    listOpen.editing = false;
+    listOpen.phase = strength ? "target" : "done";
+    paintList(row);
+    if (listOpen.phase === "done") $("fbMsg").textContent = "Filled in from the ticks.";
+  });
+  buttons.appendChild(ok);
+  box.appendChild(buttons);
+  const foot = el("div","fbask-foot");
+  const back = el("button","bank-link","Back");
+  back.type = "button";
+  back.addEventListener("click", () => {
+    listOpen.editing = false;
+    listOpen.phase = strength ? "levels" : "strength";
+    paintList(row);
+  });
+  foot.appendChild(back);
+  box.appendChild(foot);
+}
+/* The boxes, away while the list is being ticked. A lesson with STAR
+   feedback switched off never shows the first two either way. */
+function listBoxes(on){
+  const noStar = !!(lessonJson && lessonJson.assessment && !lessonJson.practical && lessonJson.star === false);
+  $("fbStrengthWrap").hidden = !on || noStar;
+  $("fbTargetWrap").hidden = !on || noStar;
+  commentShow(on);
+}
+/* The comment box, or the button that opens it. Open whenever there is a
+   comment already, so a saved one is never hidden behind the button. */
+let commentOpen = false;
+function commentShow(boxesOn){
+  const has = commentOpen || !!$("fbComment").value.trim();
+  $("fbCommentWrap").hidden = !boxesOn || !has;
+  $("fbCommentAdd").hidden = !boxesOn || has;
+}
+on("fbCommentAdd", "click", () => {
+  commentOpen = true;
+  commentShow(true);
+  $("fbComment").focus();
+});
+/* Once it is written, one small button back to the list. */
+function paintListAgain(row, on){
+  if (byQuestions()) return;          // the questions keep that button for themselves
+  const again = $("fbAskAgain");
+  again.innerHTML = "";
+  again.hidden = !on;
+  if (!on) return;
+  const btn = el("button","bank-link","Change the ticks");
+  btn.type = "button";
+  btn.addEventListener("click", () => { listOpen.phase = "levels"; listOpen.at = null; paintList(row); });
+  again.appendChild(btn);
+}
+function listRow(row, it){
+  const line = el("label","fblist-row" + (it.ticked ? " on" : ""));
+  const tick = el("input");
+  tick.type = "checkbox";
+  tick.checked = it.ticked;
+  /* Their program did this. Taking it back here would leave the work
+     beside it saying one thing and the feedback another. */
+  const locked = it.byCode && it.ticked;
+  tick.disabled = locked;
+  line.appendChild(tick);
+  /* the few words it goes by, and the whole line on hover */
+  const words = el("span","fblist-words", it.short || it.topic);
+  if (locked) words.appendChild(el("span","fblist-by"," by their code"));
+  line.appendChild(words);
+  line.title = it.topic;
+  tick.addEventListener("change", () => listTick(row, it, tick.checked));
+  return line;
+}
+
+function listTick(row, it, on){
+  if (!row) return;
+  if (it.key !== undefined){
+    if (on) got[it.key] = true; else delete got[it.key];
+    ticksChanged(row, true);
+    return;
+  }
+  /* A checklist line: the teacher's tick on the work, as if given there. */
+  const id = it.task, i = it.line;
+  const had = (row.data && row.data[id]) || {};
+  const mt = markingTicks[id] || { teacher: Object.assign({}, had.teacher || {}),
+                                   manual: Object.assign({}, had.manual || {}) };
+  mt.teacher = mt.teacher || {}; mt.manual = mt.manual || {};
+  const side = it.manual ? mt.manual : mt.teacher;
+  if (on) side[i] = true; else delete side[i];
+  markingTicks[id] = mt;
+  manualTicks[id] = mt.manual;
+  row.data = window.progressMath.withMarkingTicks(row.data, { ticks: { [id]: mt } });
+  const frame = $("workFrame");
+  try{ frame.contentWindow.postMessage({ hubApplyTicks: { id: id, ticks: mt } }, "*"); }catch(e){}
+  ticksChanged(row, true);
 }
 
 /* Joins chosen sentences into one that reads properly, rather than a run of
@@ -1735,75 +2026,6 @@ function joinSentences(lines){
   return out;
 }
 
-/* The bank, with a search box and tick boxes so several can be combined. */
-function bankPopup(which){
-  const items = bankFor(which);
-  const chosen = new Set();
-  openModal(box => {
-    box.classList.add("narrow");
-    box.appendChild(el("h2","", which === "Strength" ? "Strengths you have written"
-                                                     : "Targets you have written"));
-    box.appendChild(el("p","modal-text",
-      "Tick as many as you like. They are joined into one sentence, which you can then reword."));
-
-    const find = el("input","searchbox bankfind");
-    find.placeholder = "Search";
-    box.appendChild(find);
-
-    const list = el("div","banklist");
-    box.appendChild(list);
-
-    const preview = el("p","bankpreview","");
-    box.appendChild(preview);
-
-    function refresh(){
-      const text = joinSentences(items.filter(it => chosen.has(it.line)).map(it => it.line));
-      preview.textContent = text;
-      preview.hidden = !text;
-      add.disabled = !text;
-    }
-    function paint(){
-      const term = (find.value || "").trim().toLowerCase();
-      list.innerHTML = "";
-      const shown = items.filter(it =>
-        !term || it.line.toLowerCase().includes(term) || it.topic.toLowerCase().includes(term));
-      if (!shown.length) list.appendChild(el("p","hint","Nothing matches that."));
-      shown.forEach(it => {
-        const row = el("label","opt bankrow");
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = chosen.has(it.line);
-        cb.addEventListener("change", () => {
-          if (cb.checked) chosen.add(it.line); else chosen.delete(it.line);
-          refresh();
-        });
-        row.appendChild(cb);
-        const words = el("span","bankwords");
-        const name = el("b","", it.topic);
-        /* only a checklist line has a done or not done to say */
-        if (it.met !== undefined)
-          name.appendChild(el("i","bankmet" + (it.met ? " done" : ""), it.met ? "Done" : "Not done"));
-        words.appendChild(name);
-        words.appendChild(el("span","", it.line));
-        row.appendChild(words);
-        list.appendChild(row);
-      });
-    }
-    find.addEventListener("input", paint);
-
-    const add = el("button","btn-primary modal-cta","Add to the box");
-    add.disabled = true;
-    add.addEventListener("click", () => {
-      const target = $("fb" + which);
-      const text = joinSentences(items.filter(it => chosen.has(it.line)).map(it => it.line));
-      target.value = target.value.trim() ? joinSentences([target.value, text]) : text;
-      closeModal();
-      target.focus();
-    });
-    box.appendChild(add);
-    paint(); refresh();
-  });
-}
 /* There is nothing to save feedback against until a program is open, and it
    is asked here rather than only where the boxes are set up: paintFb runs
    after that as well as before it, and a plain `disabled = false` in the
@@ -1851,7 +2073,7 @@ async function submitFeedback(andNext){
 function afterSave(ok, andNext){
   if (!ok || !andNext) return;
   if (idx + 1 < roster.length) showStudent(idx + 1);
-  else $("fbMsg").textContent = "Saved. That was the last student.";
+  else $("fbMsg").textContent = "Saved. That was the last one.";
 }
 on("saveFb", "click", () => submitFeedback(false));
 on("saveNext", "click", () => submitFeedback(true));
@@ -1980,7 +2202,8 @@ async function saveFeedback(){
                              strength: showing("Strength") ? $("fbStrength").value : "",
                              target: showing("Target") ? $("fbTarget").value : "",
                              text: $("fbComment").value,
-                             ticks: Object.keys(markingTicks).length ? markingTicks : undefined }) });
+                             ticks: Object.keys(markingTicks).length ? markingTicks : undefined,
+                             got: Object.keys(got).length ? got : undefined }) });
     if (!r.ok) throw new Error((await r.json()).error || "Could not save it.");
     /* the mark or grade goes with the feedback; a practice one only has a
        level, and only when it has levels to pick from */
@@ -2007,7 +2230,8 @@ async function saveFeedback(){
       strength: showing("Strength") ? $("fbStrength").value : "",
       target: showing("Target") ? $("fbTarget").value : "",
       comment: $("fbComment").value,
-      ticks: Object.keys(markingTicks).length ? markingTicks : undefined });
+      ticks: Object.keys(markingTicks).length ? markingTicks : undefined,
+      got: Object.keys(got).length ? got : undefined });
     paintFb("saved");
     return true;
   }catch(e){ paintFb("idle"); $("fbMsg").textContent = e.message; return false; }
@@ -2089,6 +2313,7 @@ async function handBack(){
     comment: $("fbComment").value
   };
   if (Object.keys(markingTicks).length) fb.ticks = markingTicks;
+  if (Object.keys(got).length) fb.got = got;
   const box = { n: st.display_name, l: lessonId, d: row.data || {}, fb: fb };
 
   if (lessonJson && lessonJson.practical && (!practiceRun() || usesRubric())){
@@ -2180,7 +2405,11 @@ window.addEventListener("message", (e) => {
     const m = e.data.hubTicks, st = roster[idx];
     const row = st ? rows.find(r => r.username === st.username) : null;
     if (m.id && row){
+      /* Lines found by checking the code again only ever add up: one found
+         when the work opened stays found when a teacher's run comes after. */
+      const code = Object.assign({}, (markingTicks[m.id] && markingTicks[m.id].code) || {}, m.code || {});
       markingTicks[m.id] = { teacher: m.teacher || {}, manual: m.manual || {} };
+      if (Object.keys(code).length) markingTicks[m.id].code = code;
       manualTicks[m.id] = m.manual || {};
       row.data = window.progressMath.withMarkingTicks(row.data, { ticks: { [m.id]: markingTicks[m.id] } });
       ticksChanged(row);
@@ -2197,7 +2426,7 @@ window.addEventListener("message", (e) => {
   }
 });
 
-if (window.initSettings) initSettings(null);
+if (window.initSettings) initSettings($("setBtn"));
 boot();
 </script>
 <!-- keyboard marking, who is left, the comment bank and the answers panel -->
