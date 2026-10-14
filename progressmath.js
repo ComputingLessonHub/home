@@ -132,10 +132,23 @@
      task nobody could have attempted. The same heuristic work.html's own
      Progress tab uses when a lesson has no release row of its own: lock
      everything after the first page that is not pure text or a picture. */
+  /* Which kinds of lesson have pages that lock. A practical assessment is
+     sat a page at a time, so it does. A marked assessment has questions, not
+     pages, and they stay open. Home learning never locks: there is nobody at
+     home to open the next page. lesson.html keeps its own copy of this. */
+  function pagesLock(lesson){
+    return !!lesson && !lesson.homework && (!lesson.assessment || !!lesson.practical);
+  }
   function defaultLocks(lesson){
     const out = new Set();
-    if (!lesson || lesson.assessment) return out;
+    if (!pagesLock(lesson)) return out;
     const b = lesson.blocks || [];
+    /* An assessment's Finish hands it in and is never held up, so it has no
+       summary to lock and no guessing: only what the builder said. */
+    if (lesson.assessment){
+      b.forEach((x, i) => { if (x.startLocked) out.add(i); });
+      return out;
+    }
     out.add(b.length);          // the summary page
     const said = b.some(x => x.startLocked !== undefined);
     if (said){ b.forEach((x, i) => { if (x.startLocked) out.add(i); }); return out; }
@@ -153,6 +166,7 @@
      above when nothing has been set yet. Shared so a lesson's mark never
      counts a page here that its own Progress tab would have left out. */
   async function fetchLockedPages(api, lessonId, group, lesson){
+    if (!pagesLock(lesson)) return new Set();
     try{
       const r = await fetch(api + "/api/release?lesson=" + encodeURIComponent(lessonId) +
         "&group=" + encodeURIComponent(group) + "&t=" + Date.now(), { cache: "no-store" });
@@ -259,6 +273,6 @@
 
   window.progressMath = { TASK_LABEL, plainText, normAns, taskInfo,
                           quantifiableTasks, scoreTask, checkDone, attempted, withMarkingTicks,
-                          defaultLocks, fetchLockedPages, markRoster,
+                          pagesLock, defaultLocks, fetchLockedPages, markRoster,
                           levelChain, levelReached };
 })();

@@ -4846,6 +4846,10 @@ function paintMarkingBox(box){
 }
 
 /* ---------- managing one lesson (big pop-up) ---------- */
+/* Lessons and practical assessments have pages that lock; a marked
+   assessment and home learning do not. progressMath decides, so the console
+   and a lesson's mark agree on which pages count. */
+const canLockPages = () => window.progressMath.pagesLock(lessonJson);
 let lessonLocks = {};        // lesson_id -> whole-lesson lock for this class
 let locks = new Set();       // task locks for the lesson being managed
 let usingDefaults = false;
@@ -4857,8 +4861,12 @@ let locksUnknown = false;
 
 function defaultLocks(){
   const out = new Set();
-  if (!lessonJson || lessonJson.assessment) return out;
+  if (!canLockPages()) return out;
   const b = lessonJson.blocks || [];
+  if (lessonJson.assessment){
+    b.forEach((x, i) => { if (x.startLocked) out.add(i); });
+    return out;
+  }
   out.add(b.length);          // the summary page, see summaryRow()
   const said = b.some(x => x.startLocked !== undefined);
   if (said){ b.forEach((x, i) => { if (x.startLocked) out.add(i); }); return out; }
@@ -4954,9 +4962,12 @@ function openManage(){
     const sch = el("button","btn-ghost","Schedule");
     sch.addEventListener("click", () => { closeModal(); schedulePopup(lessonId); });
     bar.appendChild(sch);
-    if (!lessonJson.assessment){
+    if (canLockPages()){
+      /* An assessment has no summary page in the list to lock with the rest. */
+      const every = lessonJson.blocks.map((_, i) => i)
+        .concat(lessonJson.assessment ? [] : [lessonJson.blocks.length]);
       const oa = el("button","btn-ghost","Open all tasks"); oa.addEventListener("click", () => postLocks(new Set()));
-      const la = el("button","btn-ghost","Lock all tasks"); la.addEventListener("click", () => postLocks(new Set(lessonJson.blocks.map((_, i) => i).concat([lessonJson.blocks.length]))));
+      const la = el("button","btn-ghost","Lock all tasks"); la.addEventListener("click", () => postLocks(new Set(every)));
       bar.appendChild(oa); bar.appendChild(la);
     }
     box.appendChild(bar);
@@ -4972,8 +4983,9 @@ function openManage(){
 }
 async function refreshRelease(){
   if (!lessonId) return;
-  if (lessonJson && lessonJson.assessment){
+  if (!canLockPages()){
     locks = new Set();
+    if (!lessonJson || !lessonJson.assessment){ paintTasks(); return; }   // home learning
     /* Its questions are never locked, but it can be locked for marking, and
        Manage has to open showing whether it is. */
     try{
@@ -5038,7 +5050,9 @@ function paintTasks(){
   const msg = $("relMsg");
   if (msg){
     const rows = lessonJson.blocks.length + (lessonJson.assessment ? 0 : 1);   // + the summary
-    const base = locks.size === 0 ? "Every task is open for " + cls + "."
+    const base = (lessonJson.homework && !lessonJson.assessment)
+        ? "Home learning is never locked, so every page is open."
+      : locks.size === 0 ? "Every task is open for " + cls + "."
       : locks.size >= rows ? "Every task is locked for " + cls + "."
       : locks.size + " task" + (locks.size === 1 ? "" : "s") + " locked for " + cls + ".";
     msg.textContent = locksUnknown
@@ -5046,13 +5060,13 @@ function paintTasks(){
       : usingDefaults ? base + " (starting pattern, unlock as you teach)" : base;
   }
   lessonJson.blocks.forEach((b, i) => {
-    const open = lessonJson.assessment ? true : !locks.has(i);
+    const open = !canLockPages() || !locks.has(i);
     const row = el("div","taskrow" + (open ? "" : " shut"));
     row.appendChild(el("span","tn", (i+1) + "."));
     const t = el("span","", stepTitle(b, i)); t.style.flex = "1"; row.appendChild(t);
     row.appendChild(el("span","statechip " + (open ? "open" : "shut"), open ? "Open" : "Locked"));
     const btns = el("span","taskbtns");
-    const canLock = !(lessonJson && lessonJson.assessment);   // questions stay open
+    const canLock = canLockPages();
     const lock = el("button","btn-ghost iconbtn", open ? "\u{1F513}" : "\u{1F512}");
     lock.title = open ? "Lock this task" : "Unlock this task";
     lock.addEventListener("click", () => {
@@ -5084,7 +5098,8 @@ function paintTasks(){
    change. While it is locked, Finish tells them to wait. */
 function summaryRow(){
   const i = lessonJson.blocks.length;
-  const open = !locks.has(i);
+  const canLock = canLockPages();
+  const open = !canLock || !locks.has(i);
   const row = el("div","taskrow summary-row" + (open ? "" : " shut"));
   row.appendChild(el("span","tn","\u{1F3C1}"));
   const t = el("span",""); t.style.flex = "1";
@@ -5103,7 +5118,8 @@ function summaryRow(){
   const who = el("button","btn-ghost iconbtn","\u{1F465}");
   who.title = "Who has finished the lesson?";
   who.addEventListener("click", () => whoFinished(true));
-  btns.appendChild(lock); btns.appendChild(who);
+  if (canLock) btns.appendChild(lock);
+  btns.appendChild(who);
   row.appendChild(btns);
   return row;
 }

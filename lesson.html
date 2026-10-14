@@ -1003,13 +1003,28 @@ async function fetchRelease(){
   }
 }
 
+/* Which kinds of lesson have pages a teacher can hold shut. A practical
+   assessment is sat a page at a time like a lesson, so its pages lock. A
+   marked assessment has no pages, only questions, and they stay open. Home
+   learning is done at home with no teacher in the room to open anything, so
+   a lock there would leave a child stuck until the next lesson. */
+function pagesLock(l){
+  return !!l && !l.homework && (!l.assessment || !!l.practical);
+}
 /* With no teacher release saved, a lesson starts closed after its first real
-   task (any reading before that stays open) and an assessment starts fully
-   open. Teachers override this the moment they lock or unlock anything. */
+   task (any reading before that stays open) and an assessment starts with
+   only the pages the builder marked as locked. Teachers override this the
+   moment they lock or unlock anything. */
 function defaultLocks(){
   const out = new Set();
-  if (!lesson || lesson.assessment) return out;
+  if (!pagesLock(lesson)) return out;
   const blocks = lesson.blocks || [];
+  /* An assessment's Finish is the hand-in, which is never held up, so only
+     a lesson starts with its summary shut. */
+  if (lesson.assessment){
+    blocks.forEach((b, i) => { if (b.startLocked) out.add(i); });
+    return out;
+  }
   /* The summary counts as one more page on the end, so a class cannot finish
      until the teacher opens it. Same numbering as the console uses. */
   out.add(summaryIndex());
@@ -1033,12 +1048,13 @@ function defaultLocks(){
    lock it in the same list as the pages. Counted off lesson.blocks rather
    than steps so both ends agree even if a block fails to build. */
 function summaryIndex(){ return (lesson && lesson.blocks ? lesson.blocks : steps).length; }
-/* Offline or signed out, nothing is locked, never strand a student. */
-const isLocked = (i) => !waved(i) && !!apiReady && !!token && lockedSet.has(i);
+/* Offline or signed out, nothing is locked, never strand a student. Nor in
+   home learning, even where a lock was saved before it became home learning. */
+const isLocked = (i) => !waved(i) && !!apiReady && !!token && pagesLock(lesson) && lockedSet.has(i);
 /* Without a server a page is shut until its passcode has been typed. Kept
    apart from isLocked, which is about what a teacher has released. */
 function pageShut(i){
-  if (!OFFLINE || waved(i)) return false;
+  if (!OFFLINE || waved(i) || !pagesLock(lesson)) return false;
   const b = (lesson && lesson.blocks || [])[i];
   if (!b || !b.passHash) return false;
   try{ return localStorage.getItem("hub_page_" + lessonId + "_" + i) !== "1"; }catch(e){ return true; }
@@ -1232,7 +1248,7 @@ const handedOver = handedLesson();
              locked for this class; the achievement card on this same
              screen has to agree with it, which it can only do once this
              has actually been asked for. */
-          if (!lesson.assessment) await fetchRelease();
+          if (pagesLock(lesson)) await fetchRelease();
           if (lesson.assessment) renderAssessmentComplete(false);
           else showLessonComplete(true);
           return;
@@ -1929,7 +1945,7 @@ function pageUnlockKey(i){ return "hub_page_" + lessonId + "_" + i; }
 
 function passGate(target){
   const block = (lesson.blocks || [])[target];
-  const wanted = block && block.passHash;
+  const wanted = block && block.passHash && pagesLock(lesson);
   if (!wanted) return Promise.resolve(true);          // nothing set: nothing to ask
   try{ if (localStorage.getItem(pageUnlockKey(target)) === "1") return Promise.resolve(true); }catch(e){}
   if (waved(target)) return Promise.resolve(true);
@@ -8442,7 +8458,7 @@ function achievementTotals(){
     b.got += sc.got; b.max += sc.max;
   };
   ((lesson && lesson.blocks) || []).forEach((page, pageIndex) => {
-    if (lockedSet && lockedSet.has(pageIndex)) return;
+    if (pagesLock(lesson) && lockedSet && lockedSet.has(pageIndex)) return;
     const walk = (blocks, isExt) => (blocks || []).forEach(b => {
       if (b.type === "extension"){
         /* "Finished early?" is the one honest sign anything in here was

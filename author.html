@@ -2057,6 +2057,9 @@ function passMarkEditor(b){
 /* The padlock on a page, and without a server the passcode beside it. Drawn
    on a page's card in All pages and at the top of the page being edited. */
 function pageLockTools(b, tools){
+  /* Home learning has none: it is done at home, where there is no teacher
+     to open a page, so lesson.html never locks one. */
+  if (lesson.homework) return;
   const isFirst = lesson.blocks.indexOf(b) === 0;
   if (isFirst) b.startLocked = false;     // students must be able to begin
   const locked = b.startLocked !== false;
@@ -4023,6 +4026,7 @@ function askPasscode(b){
 /* Every locked page that has not got a passcode yet, by its number. */
 function pagesMissingPasscode(){
   const out = [];
+  if (lesson.homework) return out;        // nothing locks in home learning
   lesson.blocks.forEach((b, i) => {
     if (b.type !== "page" || i === 0) return;
     if (b.startLocked !== false && !b.passHash) out.push(i + 1);
@@ -6738,7 +6742,7 @@ async function downloadForFolder(){
        the passcodes down. */
     const gates = [];
     lesson.blocks.forEach((blk, i) => {
-      if (blk.type === "page" && i > 0 && blk.startLocked !== false && blk.passCode)
+      if (!lesson.homework && blk.type === "page" && i > 0 && blk.startLocked !== false && blk.passCode)
         gates.push("Page " + (i + 1) + ": " + blk.passCode);
     });
     if (gates.length){
