@@ -1315,9 +1315,13 @@ function checklistAuto(row){
    The boxes, and From your bank under them, are still there afterwards.
 
    Where the practical has levels, the questions go a level at a time,
-   lowest first, and the first No on a level ends them: a level not done is
-   a level not reached, and nothing above it can change that. What they did
-   reach is said, and picked for the teacher in Level reached. */
+   lowest first. A level with a No in it is not reached, and nothing above
+   it can change that, so the questions never go past it. One No is not
+   taken on its own, though: the question after it on the same level is
+   asked too. A second No straight after confirms it and ends there. A Yes
+   means part of that level is done, so the rest of it is asked, for the
+   Strength, and they end at the end of the level. What they did reach is
+   said, and picked for the teacher in Level reached. */
 let ask = null;      // { row, items, ladder, answers, at, phase, stop, target, targetChosen }
 
 /* One question per bank entry that says what doing it well looks like. A
@@ -1387,13 +1391,38 @@ function startAsk(row, saved){
    teacher, so a checklist's own answer sitting there counts for nothing. */
 const askedUpTo = () => ask.stop >= 0 ? ask.stop : ask.items.length - 1;
 
+/* The first question on a level answered No, up to and including the one
+   at upTo, or -1. Worked out from the answers each time rather than kept,
+   so going Back and changing an answer moves it. */
+function askFirstNo(upTo){
+  for (let k = 0; k <= upTo; k++)
+    if (ask.answers[k] === false && ask.items[k].level >= 0) return k;
+  return -1;
+}
+
+/* Where to go after the question at `at` has been answered: the index of
+   the next question, or -1 to stop. Nothing here knows how many levels or
+   questions a lesson has; it only compares each question's level with the
+   level of the first No. */
+function askNext(at){
+  const n = ask.items.length;
+  const first = askFirstNo(at);
+  if (first < 0) return at + 1 < n ? at + 1 : -1;   // no No yet: carry on
+  const level = ask.items[first].level;
+  /* Two Nos in a row on the level: confirmed, and nothing more to learn. */
+  if (at === first + 1 && ask.answers[at] === false && ask.items[at].level === level) return -1;
+  /* Otherwise on to the end of that level, and never past it. */
+  return at + 1 < n && ask.items[at + 1].level === level ? at + 1 : -1;
+}
+
 /* The level the answers add up to, as an index into the ladder: one below
-   the level the questions stopped on, or the highest level asked about
-   when they never stopped. -1 for none; null when there are no levels. */
+   the level of the first No, or the highest level asked about when there
+   was none. -1 for none; null when there are no levels. */
 function askReached(){
   const levelled = ask.items.filter(it => it.level >= 0);
   if (!ask.ladder.length || !levelled.length) return null;
-  if (ask.stop >= 0) return ask.items[ask.stop].level - 1;
+  const first = askFirstNo(askedUpTo());
+  if (first >= 0) return ask.items[first].level - 1;
   return Math.max.apply(null, levelled.map(it => it.level));
 }
 
@@ -1443,11 +1472,9 @@ function paintAsk(){
       b.addEventListener("click", () => {
         ask.answers[ask.at] = value;
         ask.targetChosen = false;          // the first No may have moved
-        /* A No on a level is where it ends. One on no level is a target
-           worth having but says nothing about the level, so it carries on. */
-        if (value === false && it.level >= 0){ ask.stop = ask.at; ask.phase = "target"; }
-        else if (ask.at < n - 1){ ask.stop = -1; ask.at++; }
-        else { ask.stop = -1; ask.phase = "target"; }
+        const next = askNext(ask.at);
+        if (next >= 0){ ask.stop = -1; ask.at = next; }
+        else { ask.stop = ask.at; ask.phase = "target"; }
         paintAsk();
       });
       row.appendChild(b);
