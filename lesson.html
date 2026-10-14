@@ -4842,11 +4842,24 @@ function ideTipWire(ta, tip, showTip){
    so there it is the builder's own preview frame and nothing else. */
 function teacherHere(){
   if (!spectate) return false;
-  try{ if (window.teacherAuth && window.teacherAuth.have()) return true; }catch(e){}
-  if (!OFFLINE || builderParam === null) return false;
-  /* the top, not the parent: preview.html sits between the two */
-  try{ return window.top !== window && /author\.html$/i.test(window.top.location.pathname); }
-  catch(e){ return false; }
+  /* The builder's own preview is the person building the lesson, whatever
+     their sign-in looks like from in here. It is in the builder's panel,
+     with author.html at the top (preview.html sits between the two), or it
+     has been popped out into a tab of its own, with preview.html at the
+     top. That tab is opened with noopener, so it starts with no sign-in of
+     its own: asked for one, a teacher who had signed in with a code from
+     their authenticator, which keeps no key in the browser, got a preview
+     with no teacher view at all. */
+  if (builderParam !== null){
+    try{ if (window.top !== window && /(author|preview)\.html$/i.test(window.top.location.pathname)) return true; }
+    catch(e){}
+  }
+  try{
+    const a = window.teacherAuth;
+    /* this tab's sign-in, or the one another tab left for a few hours */
+    if (a && (a.have() || (a.kept && a.kept()))) return true;
+  }catch(e){}
+  return false;
 }
 function readOnlyTag(){
   if (!teacherHere()) return { el: el("span","ide-tag","Read only"), wire: () => {} };
