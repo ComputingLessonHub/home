@@ -6964,6 +6964,55 @@ function shrinkImage(file, cb){
   img.src = url;
 }
 
+/* A screenshot squeezed into the page is often too small to read code in,
+   for the student checking it and the teacher marking it. View Work shows
+   this same page inside a frame, so this one button serves both. */
+function fullScreenButton(getSrc){
+  const btn = el("button","shot-full-btn",
+    '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>');
+  btn.type = "button";
+  btn.title = "Full screen";
+  btn.setAttribute("aria-label", "Show the picture full screen");
+  btn.addEventListener("click", () => { const src = getSrc(); if (src) showPictureFull(src); });
+  return btn;
+}
+function showPictureFull(src){
+  const view = el("div","shot-viewer");
+  view.setAttribute("role","dialog");
+  view.setAttribute("aria-label","Picture, full screen");
+  const big = el("img","shot-viewer-img");
+  big.src = src; big.alt = "Screenshot, full screen";
+  const x = el("button","shot-viewer-close","&times;");
+  x.type = "button"; x.title = "Close"; x.setAttribute("aria-label","Close full screen");
+  view.appendChild(big); view.appendChild(x);
+  document.body.appendChild(view);
+  let shut = false;
+  function close(){
+    if (shut) return;
+    shut = true;
+    document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("fullscreenchange", onFsChange);
+    if (document.fullscreenElement === view && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    view.remove();
+  }
+  function onKey(e){ if (e.key === "Escape"){ e.stopPropagation(); close(); } }
+  // Esc in real full screen is taken by the browser, which only leaves full screen
+  function onFsChange(){ if (document.fullscreenElement !== view) close(); }
+  document.addEventListener("keydown", onKey, true);
+  view.addEventListener("click", close);
+  x.focus();
+  /* The overlay alone already fills this page. Real full screen goes further
+     and fills the monitor, which matters in View Work, where this page is a
+     frame inside the marking screen; phones that refuse it keep the overlay. */
+  if (view.requestFullscreen){
+    view.requestFullscreen().then(() => {
+      if (shut) document.exitFullscreen().catch(() => {});
+      else document.addEventListener("fullscreenchange", onFsChange);
+    }).catch(() => {});
+  }
+}
+
 function rImage(b){
   const s = el("section");
   let dataUrl = "";
@@ -6980,11 +7029,17 @@ function rImage(b){
   s.appendChild(zone);
 
   const shot = el("div","shot"); shot.hidden = true;
+  /* The frame shrinks to the picture, so the full screen button sits on the
+     picture's own corner rather than the corner of the page. */
+  const shotFrame = el("div","shot-frame");
   const img = el("img","shot-img");
+  img.alt = "Your screenshot";
+  shotFrame.appendChild(img);
+  shotFrame.appendChild(fullScreenButton(() => img.src));
   const shotRow = el("div","row");
   const redo = el("button","btn-ghost","Replace picture");
   shotRow.appendChild(redo);
-  shot.appendChild(img); shot.appendChild(shotRow);
+  shot.appendChild(shotFrame); shot.appendChild(shotRow);
   s.appendChild(shot);
 
   const err = el("p","err");

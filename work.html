@@ -55,7 +55,7 @@
     <button class="btn-ghost" id="refreshWork" title="Fetch what has been saved since this page was opened">Refresh</button>
     <span class="hint" id="workFresh"></span>
   </div>
-      <div class="workframe"><iframe id="workFrame" title="Their work"></iframe></div>
+      <div class="workframe"><iframe id="workFrame" title="Their work" allow="fullscreen"></iframe></div>
     </div>
     <aside class="workside">
       <h3>Feedback</h3>
@@ -885,6 +885,7 @@ function openWorkPreview(src, frameTitle, buildFoot){
   box.appendChild(x);
   const frame = document.createElement("iframe");
   frame.className = "fullprev-frame";
+  frame.allow = "fullscreen";              // a screenshot can be opened full screen
   frame.title = frameTitle;
   frame.src = src;
   box.appendChild(frame);
