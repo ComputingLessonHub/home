@@ -1,0 +1,1156 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open Evening Python</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<!-- Skulpt rather than the Pyodide the rest of the site uses: it is a tenth
+     of the download on a school network full of visitors, and it has turtle
+     graphics built in, which Pyodide does not. -->
+<script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
+<style>
+:root {
+  --bg: #fff8ee;
+  --ink: #1f2140;
+  --muted: #5b5f82;
+  --card: #ffffff;
+  --line: #e7dfd2;
+  --hero1: #2b2d6e;
+  --hero2: #6b2fa0;
+  --accent: #ff6b3d;
+  --accent-ink: #ffffff;
+  --run: #18a058;
+  --run-dark: #11804a;
+  --stop: #d64545;
+  --code-bg: #1d1f3b;
+  --code-ink: #e8e9ff;
+  --code-gutter: #6b6f9e;
+  --tok-key: #ff8fb1;
+  --tok-str: #9ef0a4;
+  --tok-num: #ffd36b;
+  --tok-com: #8a8fc0;
+  --tok-fn: #7cc7ff;
+  --console-bg: #0f1026;
+  --console-ink: #f2f3ff;
+  --console-in: #ffd36b;
+  --console-err: #ff8a8a;
+  --chip: #fff1dc;
+  --chip-ink: #6a3d00;
+  --shadow: 0 10px 30px rgba(31, 33, 64, .12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14152b; --ink: #eef0ff; --muted: #a9acd6; --card: #1d1f3b; --line: #2e3160;
+    --chip: #2e2a1c; --chip-ink: #ffd99a; --shadow: 0 10px 30px rgba(0,0,0,.4);
+    --code-bg: #111229; --console-bg: #090a1a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14152b; --ink: #eef0ff; --muted: #a9acd6; --card: #1d1f3b; --line: #2e3160;
+  --chip: #2e2a1c; --chip-ink: #ffd99a; --shadow: 0 10px 30px rgba(0,0,0,.4);
+  --code-bg: #111229; --console-bg: #090a1a;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Nunito", system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+/* Header */
+.hero {
+  background: linear-gradient(120deg, var(--hero1), var(--hero2));
+  color: #fff;
+  padding: 28px 16px 64px;
+  position: relative;
+  overflow: hidden;
+}
+.hero-inner { max-width: 1200px; margin: 0 auto; position: relative; z-index: 1; }
+.hero .kicker {
+  font-family: "Fredoka", sans-serif; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; font-size: 14px; opacity: .85;
+}
+.hero h1 {
+  font-family: "Fredoka", sans-serif; font-weight: 700;
+  font-size: clamp(30px, 5.5vw, 56px); line-height: 1.08; margin: 6px 0 10px;
+}
+.hero h1 .snake { display: inline-block; animation: wiggle 2.4s ease-in-out infinite; }
+.hero p { margin: 0; max-width: 640px; font-size: 18px; opacity: .92; }
+.hero .bits {
+  position: absolute; inset: 0; pointer-events: none;
+  font-family: "JetBrains Mono", monospace; font-size: 15px; color: rgba(255,255,255,.08);
+  white-space: pre; line-height: 1.6; overflow: hidden;
+}
+@keyframes wiggle { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
+
+/* Activity picker */
+.picker {
+  max-width: 1200px; margin: -40px auto 0; padding: 0 16px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+  position: relative; z-index: 2;
+}
+.pick {
+  background: var(--card); color: var(--ink);
+  border: 3px solid transparent; border-radius: 18px;
+  padding: 14px 14px 12px; text-align: left; cursor: pointer;
+  box-shadow: var(--shadow); font: inherit;
+  transition: transform .15s ease, border-color .15s ease;
+}
+.pick:hover { transform: translateY(-3px); }
+.pick[aria-selected="true"] { border-color: var(--accent); }
+.pick .emoji { font-size: 32px; line-height: 1; }
+.pick .name { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 20px; margin-top: 6px; display: block; }
+.pick .what { color: var(--muted); font-size: 14px; display: block; }
+
+/* Workspace */
+main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+.intro { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-bottom: 14px; }
+.intro h2 { font-family: "Fredoka", sans-serif; font-weight: 700; font-size: 28px; margin: 0; }
+.intro p { margin: 0; color: var(--muted); }
+.intro-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); }
+
+.work { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.btn.make-btn {
+  background: var(--accent); color: var(--accent-ink); font-size: 19px; padding: 11px 22px;
+  box-shadow: 0 4px 0 #c94a22;
+}
+.btn.make-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #c94a22; }
+
+/* The Make it yours pop-up */
+.make-dialog {
+  border: 0; padding: 0; border-radius: 20px; background: var(--card); color: var(--ink);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
+}
+.make-dialog[open] { display: flex; flex-direction: column; }
+.make-dialog::backdrop { background: rgba(15, 16, 38, .6); }
+.dialog-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.dialog-head h2 { font-family: "Fredoka", sans-serif; font-weight: 700; font-size: 24px; margin: 0 auto 0 0; }
+.dialog-close {
+  font: inherit; font-size: 20px; width: 40px; height: 40px; border-radius: 50%; border: 0;
+  background: var(--chip); color: var(--chip-ink); cursor: pointer;
+}
+/* Everything between the title and the edge scrolls, so a long form on a
+   short screen is never cut off. */
+.dialog-body { overflow: auto; padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+.dialog-body[hidden] { display: none; }
+.result-words { margin: 0 0 4px; color: var(--muted); }
+.result-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.result-buttons .btn.run { font-size: 20px; }
+
+/* Before anything has run, the stage is one big Run button */
+.stage { position: relative; }
+.idle {
+  position: absolute; inset: 0; z-index: 5; background: var(--console-bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  text-align: center; padding: 16px; color: #c9ccf2;
+}
+.idle[hidden] { display: none; }
+.idle p { margin: 0; font-size: 18px; max-width: 34ch; }
+.big-run {
+  font-family: "Fredoka", sans-serif; font-weight: 700; font-size: 40px;
+  background: var(--run); color: #fff; border: 0; border-radius: 22px;
+  padding: 18px 54px; cursor: pointer; box-shadow: 0 8px 0 var(--run-dark);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+.big-run:active { transform: translateY(4px); box-shadow: 0 4px 0 var(--run-dark); }
+@keyframes pulse { 0%,100% { scale: 1; } 50% { scale: 1.06; } }
+
+/* Make it yours */
+.make h3 { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 21px; margin: 0 0 4px; }
+.make > p, .make form > p { margin: 0 0 12px; color: var(--muted); font-size: 15px; }
+.make form + form { margin-top: 18px; padding-top: 16px; border-top: 2px dashed var(--line); }
+.make label { display: block; font-weight: 800; font-size: 15px; margin: 10px 0 4px; }
+.make label small { font-weight: 400; color: var(--muted); }
+.make input, .make select {
+  width: 100%; font: inherit; font-size: 17px; padding: 9px 12px;
+  border: 2px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--ink);
+}
+.make input:focus, .make select:focus { outline: none; border-color: var(--accent); }
+.make .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.make .btn.add { background: var(--accent); color: var(--accent-ink); margin-top: 12px; font-size: 17px; }
+.make .oops { color: var(--stop); font-weight: 800; margin: 8px 0 0; }
+.added {
+  margin-top: 14px; border-radius: 14px; overflow: hidden; border: 2px solid var(--run);
+  animation: pop .35s ease-out;
+}
+.added .added-head { background: var(--run); color: #fff; font-weight: 800; padding: 6px 12px; font-size: 15px; }
+.added pre {
+  margin: 0; background: var(--code-bg); color: var(--code-ink); padding: 10px 12px;
+  font-family: "JetBrains Mono", monospace; font-size: 14px; white-space: pre-wrap; word-break: break-word;
+}
+
+@keyframes pop { from { transform: scale(.95); opacity: 0; } }
+
+.code-panel { margin-top: 18px; }
+.code-panel[hidden] { display: none; }
+.panel { background: var(--card); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
+.panel-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 12px; border-bottom: 1px solid var(--line);
+}
+.panel-head .label { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 17px; margin-right: auto; }
+.btn {
+  font: inherit; font-weight: 800; border: 0; border-radius: 12px;
+  padding: 9px 16px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  background: var(--chip); color: var(--chip-ink);
+}
+.btn.run { background: var(--run); color: #fff; font-size: 18px; padding: 10px 22px; box-shadow: 0 4px 0 var(--run-dark); }
+.btn.run:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--run-dark); }
+.btn.stop { background: var(--stop); color: #fff; }
+.btn[hidden] { display: none; }
+
+/* Code editor: a transparent textarea laid exactly over a highlighted copy */
+.editor {
+  position: relative; background: var(--code-bg);
+  font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 15px; line-height: 1.6;
+  height: 520px; overflow: auto;
+}
+.editor .gutter {
+  position: absolute; top: 0; left: 0; width: 40px; padding: 14px 8px 14px 0;
+  text-align: right; color: var(--code-gutter); user-select: none; white-space: pre;
+}
+.editor pre, .editor textarea {
+  margin: 0; padding: 14px 14px 14px 52px; border: 0;
+  font: inherit; line-height: inherit; white-space: pre; tab-size: 4;
+  min-height: 100%; width: max-content; min-width: 100%;
+}
+.editor pre { color: var(--code-ink); pointer-events: none; }
+.editor textarea {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  background: transparent; color: transparent; caret-color: #fff;
+  resize: none; outline: none; overflow: hidden;
+}
+.editor textarea::selection { background: rgba(124, 199, 255, .35); }
+.tok-key { color: var(--tok-key); font-weight: 600; }
+.tok-str { color: var(--tok-str); }
+.tok-num { color: var(--tok-num); }
+.tok-com { color: var(--tok-com); font-style: italic; }
+.tok-fn  { color: var(--tok-fn); }
+
+/* Output */
+.turtle-wrap { background: #fff; display: none; justify-content: center; border-bottom: 1px solid var(--line); }
+.turtle-wrap.on { display: flex; }
+#turtle-target { position: relative; width: 100%; max-width: 560px; aspect-ratio: 560 / 420; }
+/* Skulpt stacks its layers with margin-top: -420px; laid out absolutely
+   instead, that margin would lift the picture out of its box. */
+#turtle-target canvas { position: absolute !important; inset: 0; margin: 0 !important; width: 100% !important; height: 100% !important; }
+.console {
+  background: var(--console-bg); color: var(--console-ink);
+  font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 16px; line-height: 1.55;
+  padding: 14px; height: 520px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+}
+.console.short { height: 110px; }
+.console .hint { color: #9a9ec8; font-style: italic; }
+.console .err { color: var(--console-err); }
+.console .friendly { color: var(--console-in); }
+.console .typed { color: var(--console-in); }
+.console input {
+  background: transparent; border: 0; border-bottom: 2px solid var(--console-in);
+  color: var(--console-in); font: inherit; outline: none; min-width: 12ch; width: 60%;
+  padding: 0 2px; caret-color: var(--console-in);
+}
+.console .pause { color: #7e82b0; font-size: .85em; font-style: italic; cursor: pointer; animation: breathe 2s ease-in-out infinite; }
+.console input.pause-field { border: 0; min-width: 0; width: 2ch; caret-color: #7e82b0; }
+@keyframes breathe { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+
+
+footer { text-align: center; color: var(--muted); font-size: 14px; padding: 0 16px 32px; }
+.loading-note { color: var(--muted); font-size: 14px; }
+
+@media (max-width: 900px) {
+  .picker { grid-template-columns: repeat(2, 1fr); }
+  .work { grid-template-columns: minmax(0, 1fr); }
+  .editor { height: 380px; }
+  .console { height: 380px; }
+}
+@media (max-width: 480px) {
+  body { font-size: 16px; }
+  .pick .what { display: none; }
+  .pick .name { font-size: 17px; }
+  .editor { font-size: 13px; }
+  .console { font-size: 14px; }
+  .big-run { font-size: 32px; padding: 14px 40px; }
+  .make .row { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="bits" aria-hidden="true" id="bits"></div>
+  <div class="hero-inner">
+    <div class="kicker">Prince Henry's Grammar School · Computing</div>
+    <h1>Code your own Python <span class="snake">🐍</span></h1>
+    <p>Pick a program, press <b>Run</b>, and see what happens. Then make it your own. You cannot break anything!</p>
+  </div>
+</header>
+
+<nav class="picker" role="tablist" id="picker"></nav>
+
+<main>
+  <div class="intro">
+    <div class="intro-words">
+      <h2 id="title"></h2>
+      <p id="blurb"></p>
+    </div>
+    <div class="intro-buttons">
+      <button class="btn make-btn" id="open-make">🎨 Make it yours</button>
+      <button class="btn" id="show-code" aria-expanded="false">👀 See the code</button>
+      <button class="btn" id="reset" title="Put the program back how it started">↺ Start again</button>
+    </div>
+  </div>
+
+  <div class="work">
+    <section class="panel">
+      <div class="panel-head">
+        <span class="label">✨ The program</span>
+        <button class="btn stop" id="stop" hidden>■ Stop</button>
+        <button class="btn run" id="run" hidden>▶ Run again</button>
+      </div>
+      <div class="stage" id="stage">
+        <div class="turtle-wrap" id="turtle-wrap"><div id="turtle-target"></div></div>
+        <div class="console" id="console"></div>
+        <div class="idle" id="idle">
+          <button class="big-run" id="big-run">▶ Run</button>
+          <p id="idle-words"></p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <dialog class="make-dialog" id="make-dialog" aria-labelledby="make-title">
+    <div class="dialog-head">
+      <h2 id="make-title">🎨 Make it yours</h2>
+      <button class="dialog-close" id="make-close" aria-label="Close">✕</button>
+    </div>
+    <div class="dialog-body make" id="make"></div>
+    <div class="dialog-body" id="make-result" hidden></div>
+  </dialog>
+
+  <section class="panel code-panel" id="code-panel" hidden>
+    <div class="panel-head">
+      <span class="label">📝 The code</span>
+      <span class="loading-note">This is the real Python that runs the program. You can type in it too!</span>
+    </div>
+    <div class="editor" id="editor">
+      <div class="gutter" id="gutter"></div>
+      <pre id="painted" aria-hidden="true"></pre>
+      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Python code"></textarea>
+    </div>
+  </section>
+
+</main>
+
+<footer>Made with Python by the Computing department. Come and learn to do this in Year 7!</footer>
+
+<script>
+/* Every program on the page. Kept as plain strings so a teacher can change a
+   question or a colour here without touching anything below. */
+const PROGRAMS = [
+  {
+    id: "turtle",
+    emoji: "🐢",
+    name: "Turtle Art",
+    what: "Draw a picture of Otley with code",
+    title: "Turtle Art: Otley at night",
+    blurb: "A turtle walks around the screen with a pen. Every line of code tells it where to go.",
+    idle: "Press Run to watch the turtle draw!",
+    make: [{
+      heading: "🎨 Design your picture",
+      intro: "Change these, press the button, and see which lines of code change.",
+      fields: [
+        { name: "sky", label: "Sky colour", type: "select", options: ["midnightblue", "black", "navy", "purple", "darkslateblue", "teal"],
+          read: code => (/^screen\.bgcolor\("(.*)"\)$/m.exec(code) || [])[1] },
+        { name: "stars", label: "How many stars", type: "number", min: 0, max: 500,
+          read: code => (/^stars = (\d+)$/m.exec(code) || [])[1] },
+        { name: "colours", label: "Firework colours", hint: "(split them with commas)",
+          read: code => { const m = /^colours = \[(.*)\]$/m.exec(code); return m ? m[1].replace(/"/g, "") : ""; } },
+        { name: "petals", label: "Firework lines", type: "number", min: 3, max: 360,
+          read: code => (/^petals = (\d+)$/m.exec(code) || [])[1] },
+        { name: "words", label: "Words at the bottom",
+          read: code => { const m = /^t\.write\("((?:[^"\\]|\\.)*)"/m.exec(code); return m ? JSON.parse('"' + m[1] + '"') : ""; } },
+      ],
+      button: "🖌️ Change my picture",
+      apply(code, v) {
+        const colours = v.colours.split(",").map(c => c.trim().toLowerCase().replace(/\s+/g, "")).filter(Boolean);
+        if (!colours.length) return { error: "Give the firework at least one colour." };
+        // Turtle hands colours straight to the browser, so a colour the
+        // browser does not know is one the turtle cannot draw with either.
+        const unknown = colours.find(c => !CSS.supports("color", c));
+        if (unknown) return { error: "The computer does not know the colour \"" + unknown + "\". Try red, gold, hotpink or cyan." };
+        const whole = (n, low, high, fallback) => {
+          const x = parseInt(n, 10);
+          return isNaN(x) ? fallback : Math.min(high, Math.max(low, x));
+        };
+        const swaps = [
+          [/^screen\.bgcolor\(.*\)$/m, "screen.bgcolor(" + py(v.sky) + ")"],
+          [/^stars = .*$/m, "stars = " + whole(v.stars, 0, 500, 40)],
+          [/^colours = .*$/m, "colours = [" + colours.map(py).join(", ") + "]"],
+          [/^petals = .*$/m, "petals = " + whole(v.petals, 3, 360, 36)],
+          [/^t\.write\(.*$/m, "t.write(" + py(v.words) + ', align="center", font=("Arial", 20, "bold"))'],
+        ];
+        let changed = [], start = -1;
+        for (const [pattern, line] of swaps) {
+          const found = pattern.exec(code);
+          if (!found || found[0] === line) continue;
+          code = code.slice(0, found.index) + line + code.slice(found.index + found[0].length);
+          changed.push({ at: found.index, line });
+        }
+        if (!changed.length) return { error: "Change something first, then press the button." };
+        changed.sort((a, b) => a.at - b.at);
+        return { code, start: changed[0].at, added: changed.map(c => c.line).join("\n"), verb: "changed" };
+      }
+    }],
+    code: `# Turtle Art: Otley at night
+import turtle
+import random
+
+screen = turtle.Screen()
+screen.bgcolor("midnightblue")
+t = turtle.Turtle()
+t.speed(0)
+t.hideturtle()
+
+def jump(x, y):
+    t.penup()
+    t.goto(x, y)
+    t.pendown()
+
+# Twinkly stars
+stars = 40
+t.color("white")
+for i in range(stars):
+    jump(random.randint(-280, 280), random.randint(-20, 200))
+    t.dot(random.randint(2, 5))
+
+# The moon
+jump(200, 140)
+t.dot(60, "lightyellow")
+
+# The Chevin, the big hill above Otley
+jump(-300, -60)
+t.color("darkgreen")
+t.begin_fill()
+t.goto(-160, 20)
+t.goto(-20, 50)
+t.goto(120, 10)
+t.goto(300, -40)
+t.goto(300, -210)
+t.goto(-300, -210)
+t.goto(-300, -60)
+t.end_fill()
+
+# The River Wharfe
+t.color("deepskyblue")
+t.width(10)
+jump(-300, -150)
+for i in range(12):
+    t.goto(-300 + i * 55, -150 + (i % 2) * 18)
+t.width(1)
+
+# A firework over the hill!
+colours = ["red", "orange", "gold", "lime", "cyan", "magenta"]
+petals = 36
+jump(-120, 120)
+for i in range(petals):
+    t.color(colours[i % len(colours)])
+    t.forward(80)
+    t.backward(80)
+    t.right(360 / petals)
+
+# Sign it
+t.color("white")
+jump(0, -200)
+t.write("Prince Henry's Computing", align="center", font=("Arial", 20, "bold"))
+`
+  },
+  {
+    id: "me",
+    emoji: "🙋",
+    name: "Get to Know Me",
+    what: "The computer works things out about you",
+    title: "Get to Know Me",
+    blurb: "Tell the computer a few things about yourself and watch what it works out.",
+    idle: "Press Run and the computer will get to know you!",
+    make: [{
+      heading: "✍️ Ask your own question",
+      intro: "Make the computer ask something else, and decide what it says back.",
+      fields: [
+        { name: "question", label: "The question", placeholder: "What is your favourite game?" },
+        { name: "reply", label: "What the computer says back", hint: "(put ___ where their answer goes)", value: "Wow, ___ is my favourite too!" },
+      ],
+      button: "➕ Add my question",
+      apply(code, v) {
+        const question = v.question.trim(), reply = v.reply.trim();
+        if (!question || !reply) return { error: "Type a question and what the computer should say back." };
+        const name = "answer" + ((code.match(/^answer\d+ = input/gm) || []).length + 1);
+        let said;
+        if (reply.includes("___")) {
+          said = reply.split("___").map((piece, i) => (i ? name + " + " : "") + (piece ? py(piece) + " + " : "")).join("").replace(/ \+ $/, "");
+        } else {
+          said = py(reply);
+        }
+        const lines = name + " = input(" + py(question + " ") + ")\nprint(" + said + ")\nprint()\n";
+        return insertBefore(code, 'print("See you at', lines);
+      }
+    }, {
+      heading: "🦸 Add superhero words",
+      intro: "Add words to the lists the computer picks your superhero name from.",
+      fields: [
+        { name: "hero", label: "A word for the start", placeholder: "Ultra" },
+        { name: "power", label: "A word for the middle", placeholder: "Laser" },
+      ],
+      button: "➕ Add my words",
+      apply(code, v) {
+        const hero = v.hero.trim(), power = v.power.trim();
+        if (!hero && !power) return { error: "Type at least one word first." };
+        let result = { code, start: -1, added: "" };
+        for (const [list, word] of [["heroes", hero], ["powers", power]]) {
+          if (!word) continue;
+          const found = new RegExp("^" + list + " = \\[(.*)\\]$", "m").exec(result.code);
+          if (!found) return { error: "The " + list + " list has gone from the code. Press Start again to put it back." };
+          const line = list + " = [" + found[1] + ", " + py(word) + "]";
+          result.code = result.code.slice(0, found.index) + line + result.code.slice(found.index + found[0].length);
+          if (result.start < 0) result.start = found.index;
+          result.added += line + "\n";
+        }
+        result.added = result.added.trimEnd();
+        result.verb = "changed";
+        return result;
+      }
+    }],
+    code: `# Get to Know Me
+# The computer asks you some questions, then does some maths with your answers.
+
+# Waits for you to press Enter, so everything is not shown at once
+def pause():
+    input("(Press Enter to carry on)")
+
+print("Hello! I'm a computer. Let's get to know each other. 🤖")
+print()
+
+name = input("What is your first name? ")
+age = int(input("How old are you? "))
+food = input("What is your favourite food? ")
+animal = input("What is your favourite animal? ")
+
+print()
+print("Nice to meet you, " + name + "!")
+pause()
+
+print("Your name has " + str(len(name)) + " letters in it.")
+print("Backwards, your name is " + name[::-1] + ". 🔄")
+pause()
+
+print("You have been alive for about " + str(age * 365) + " days!")
+print("On your next birthday you will be " + str(age + 1) + ". In 10 years you will be " + str(age + 10) + "!")
+pause()
+
+# Use the letters in your name to pick a superhero name for you
+heroes = ["Captain", "Mega", "Super", "Turbo", "Doctor", "Agent", "Professor"]
+powers = ["Lightning", "Pixel", "Thunder", "Rocket", "Shadow", "Galaxy", "Byte"]
+first = heroes[len(name) % len(heroes)]
+second = powers[age % len(powers)]
+
+print("Your superhero name is... " + first + " " + second + " " + animal.title() + "! 🦸")
+pause()
+
+print("Your superpower is turning anything into " + food + ".")
+pause()
+
+print("See you at Prince Henry's, " + name + "! 👋")
+`
+  },
+  {
+    id: "secret",
+    emoji: "🕵️",
+    name: "Secret Codes",
+    what: "Turn a message into spy code",
+    title: "Secret Agent Code Machine",
+    blurb: "Every letter moves along the alphabet by your secret number. Only someone who knows the number can crack it!",
+    idle: "Press Run to make a secret code!",
+    make: [{
+      heading: "🕶️ Give yourself an agent name",
+      intro: "Every secret message will be signed with your agent name.",
+      fields: [
+        { name: "agent", label: "Your agent name", placeholder: "Silver Fox",
+          read: code => { const m = /^agent = "((?:[^"\\]|\\.)*)"$/m.exec(code); return m ? JSON.parse('"' + m[1] + '"') : ""; } },
+      ],
+      button: "➕ Sign my messages",
+      apply(code, v) {
+        const agent = v.agent.trim();
+        if (!agent) return { error: "Type an agent name first." };
+        const line = "agent = " + py(agent);
+        const already = /^agent = .*$/m.exec(code);
+        if (already) {
+          code = code.slice(0, already.index) + line + code.slice(already.index + already[0].length);
+          return { code, start: already.index, added: line, verb: "changed" };
+        }
+        const sign = 'print("Signed, Agent " + agent + " 🕶️")';
+        const result = insertBefore(code, "choice = input(", line + "\n\n");
+        result.code = result.code.trimEnd() + "\n" + sign + "\n";
+        result.added = line + "\n...\n" + sign;
+        return result;
+      }
+    }],
+    code: `# Secret Agent Code Machine 🕵️
+# Making a code slides each letter forward along the alphabet by your number.
+# With 3, A becomes D, B becomes E ... and Z goes round to C.
+# Cracking a code slides each letter back again by the same number.
+
+alphabet = "abcdefghijklmnopqrstuvwxyz"
+
+choice = input("Are you making a code or cracking one? (make / crack) ").strip().lower()
+cracking = choice.startswith("c")
+message = input("Type your message: ")
+key = int(input("What is the secret number? (1 to 25) "))
+
+result = ""
+for letter in message:
+    small = letter.lower()
+    if small in alphabet:
+        place = alphabet.index(small)
+        if cracking:
+            new_place = (place - key) % 26    # slide back to the left
+        else:
+            new_place = (place + key) % 26    # slide forward to the right
+        new_letter = alphabet[new_place]
+        if letter.isupper():
+            new_letter = new_letter.upper()
+        result = result + new_letter
+    else:
+        result = result + letter
+
+print()
+if cracking:
+    print("🔓 The hidden message is: " + result)
+else:
+    print("🔒 Your secret code is: " + result)
+    print("To read it, run this again, type crack, and use the number " + str(key) + ".")
+`
+  },
+  {
+    id: "quiz",
+    emoji: "🧠",
+    name: "The Big Quiz",
+    what: "Otley, Leeds, games and computers",
+    title: "The Big Otley Quiz",
+    blurb: "Python asks the questions, checks your answers and keeps your score.",
+    idle: "Press Run to start the quiz!",
+    make: [{
+      heading: "✍️ Add your own question",
+      intro: "Think of a question for the quiz. Python will ask it at the end.",
+      fields: [
+        { name: "question", label: "Your question", placeholder: "What is the best flavour of crisps?" },
+        { name: "answer", label: "The right answer", placeholder: "Salt and vinegar" },
+        { name: "also", label: "Another answer that is also right", hint: "(you can leave this empty)", placeholder: "Salt & vinegar" },
+      ],
+      button: "➕ Add my question",
+      apply(code, v) {
+        const question = v.question.trim(), answer = v.answer.trim(), also = v.also.trim();
+        if (!question || !answer) return { error: "Type a question and its answer first." };
+        const number = (code.match(/^ask\(/gm) || []).length + 1;
+        const answers = [answer, also].filter(Boolean).map(a => py(a.toLowerCase()));
+        const line = "ask(" + py(number + ". " + question) + ", [" + answers.join(", ") + "])\n";
+        const asked = [...code.matchAll(/^ask\(.*$/gm)];
+        if (asked.length) {
+          const last = asked[asked.length - 1];
+          return splice(code, last.index + last[0].length + 1, line);
+        }
+        return insertBefore(code, 'print("You scored', line);
+      }
+    }],
+    code: `# The Big Otley Quiz!
+# Python asks a question, waits for your answer, then checks it.
+
+score = 0
+total = 0
+
+def ask(question, answers):
+    global score, total
+    total = total + 1
+    guess = input(question + " ").strip().lower()
+    if guess in answers:
+        print("✅ Correct!")
+        score = score + 1
+    else:
+        print("❌ Not quite! It was: " + answers[0].title())
+    print()
+
+print("Welcome to the Big Otley Quiz! 🎉")
+name = input("What is your name? ")
+print("Good luck, " + name + "!")
+print()
+
+ask("1. Which town is Prince Henry's Grammar School in?", ["otley"])
+ask("2. Which river flows through Otley?", ["wharfe", "river wharfe", "the wharfe", "the river wharfe"])
+ask("3. What is the big hill above Otley called? (Clue: The Ch...)", ["chevin", "the chevin"])
+ask("4. Which big city is just down the road from Otley?", ["leeds"])
+ask("5. What is the capital city of the UK?", ["london"])
+ask("6. How many countries are in the UK?", ["4", "four"])
+ask("7. In Minecraft, what green monster goes 'ssss' then BOOM?", ["creeper", "a creeper"])
+ask("8. What colour is Pac-Man?", ["yellow"])
+ask("9. What do you click with that has the same name as a small animal?", ["mouse", "a mouse"])
+ask("10. Computers count with only two numbers: 0 and ...?", ["1", "one"])
+ask("11. This quiz is written in a language named after a snake. What is it?", ["python"])
+
+print("You scored " + str(score) + " out of " + str(total) + ", " + name + "!")
+if score == total:
+    print("🏆 PERFECT SCORE! You are a genius!")
+elif score >= total / 2:
+    print("🌟 Brilliant work!")
+else:
+    print("👍 Good try! Press Run to have another go.")
+`
+  }
+];
+
+const $ = id => document.getElementById(id);
+const codeBox = $("code"), painted = $("painted"), gutter = $("gutter"), editorBox = $("editor");
+const consoleBox = $("console"), runBtn = $("run"), stopBtn = $("stop");
+const edited = {};     // what each program says now, so swapping tabs keeps changes
+let current = PROGRAMS[0];
+
+/* Helpers the Make it yours forms use to write code. A JSON string is also a
+   valid Python string, quotes and all, so whatever a child types is safe. */
+function py(text) { return JSON.stringify(text); }
+function splice(code, at, text) {
+  return { code: code.slice(0, at) + text + code.slice(at), start: at, added: text.trimEnd() };
+}
+function insertBefore(code, needle, text) {
+  const at = code.indexOf(needle);
+  if (at < 0) {
+    const base = code.trimEnd() + "\n\n";
+    return splice(base, base.length, text);
+  }
+  return splice(code, at, text);
+}
+
+/* Watermark of 1s and 0s behind the header. */
+(function () {
+  let rows = "";
+  for (let r = 0; r < 14; r++) {
+    let row = "";
+    for (let c = 0; c < 220; c++) row += Math.random() < .5 ? "0" : "1";
+    rows += row + "\n";
+  }
+  $("bits").textContent = rows;
+})();
+
+/* ---------- Syntax colouring ---------- */
+const KEYWORDS = "and|as|break|continue|def|elif|else|for|from|global|if|import|in|is|not|or|pass|return|while|True|False|None";
+const BUILTINS = "print|input|int|str|len|range|float|round|random|list";
+const TOKEN = new RegExp(
+  "(#.*$)" +
+  "|(\"(?:[^\"\\\\\\n]|\\\\.)*\"?|'(?:[^'\\\\\\n]|\\\\.)*'?)" +
+  "|\\b(" + KEYWORDS + ")\\b" +
+  "|\\b(" + BUILTINS + ")\\b(?=\\s*\\()" +
+  "|\\b(\\d+(?:\\.\\d+)?)\\b", "gm");
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function paint(src) {
+  let out = "", last = 0, m;
+  TOKEN.lastIndex = 0;
+  while ((m = TOKEN.exec(src))) {
+    if (m[0] === "") { TOKEN.lastIndex++; continue; }
+    out += escapeHtml(src.slice(last, m.index));
+    const cls = m[1] ? "com" : m[2] ? "str" : m[3] ? "key" : m[4] ? "fn" : "num";
+    out += '<span class="tok-' + cls + '">' + escapeHtml(m[0]) + "</span>";
+    last = m.index + m[0].length;
+  }
+  return out + escapeHtml(src.slice(last));
+}
+function repaint() {
+  const src = codeBox.value;
+  // A trailing newline in a <pre> collapses, so the last line would sit one
+  // short of the caret in the textarea above it.
+  painted.innerHTML = paint(src) + "\n ";
+  const lines = src.split("\n").length;
+  let nums = "";
+  for (let i = 1; i <= lines; i++) nums += i + "\n";
+  gutter.textContent = nums;
+  // The textarea does not scroll itself; it grows to fit and the box around
+  // it scrolls, which keeps the colouring underneath lined up exactly.
+  codeBox.style.height = "0";
+  codeBox.style.width = "0";
+  codeBox.style.height = Math.max(painted.scrollHeight, editorBox.clientHeight) + "px";
+  codeBox.style.width = Math.max(painted.scrollWidth, editorBox.clientWidth) + "px";
+  edited[current.id] = src;
+}
+codeBox.addEventListener("input", repaint);
+codeBox.addEventListener("keydown", e => {
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const s = codeBox.selectionStart;
+    codeBox.setRangeText("    ", s, codeBox.selectionEnd, "end");
+    repaint();
+  } else if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey) {
+    // Keep the indent of the line above, and add one after a colon, so a
+    // child adding a line inside a loop does not get an indentation error.
+    e.preventDefault();
+    const s = codeBox.selectionStart;
+    const lineStart = codeBox.value.lastIndexOf("\n", s - 1) + 1;
+    const line = codeBox.value.slice(lineStart, s);
+    let indent = line.match(/^\s*/)[0];
+    if (/:\s*$/.test(line)) indent += "    ";
+    codeBox.setRangeText("\n" + indent, s, codeBox.selectionEnd, "end");
+    repaint();
+  } else if (e.key === "Enter" && e.ctrlKey) {
+    e.preventDefault();
+    run();
+  }
+});
+window.addEventListener("resize", repaint);
+
+/* ---------- Picking a program ---------- */
+function choose(prog) {
+  stop();
+  current = prog;
+  document.querySelectorAll(".pick").forEach(b => b.setAttribute("aria-selected", b.dataset.id === prog.id));
+  $("title").textContent = prog.title;
+  $("blurb").textContent = prog.blurb;
+  codeBox.value = edited[prog.id] != null ? edited[prog.id] : prog.code;
+  editorBox.scrollTop = 0;
+  repaint();
+  const isTurtle = prog.id === "turtle";
+  $("turtle-wrap").classList.toggle("on", isTurtle);
+  consoleBox.classList.toggle("short", isTurtle);
+  clearTurtle();
+  consoleBox.innerHTML = "";
+  showIdle(prog.idle);
+  buildMake(prog);
+}
+
+/* The big Run button that fills the stage before anything has run, and
+   again after the program has been changed, so the next step is obvious. */
+function showIdle(words) {
+  $("idle-words").textContent = words;
+  $("idle").hidden = false;
+  runBtn.hidden = true;
+}
+$("big-run").addEventListener("click", run);
+
+/* ---------- Make it yours ---------- */
+let makeForms = [];
+function buildMake(prog) {
+  const panel = $("make");
+  panel.innerHTML = "";
+  makeForms = [];
+  prog.make.forEach(make => {
+    const form = document.createElement("form");
+    form.innerHTML = "<h3>" + make.heading + "</h3><p>" + make.intro + "</p>";
+    const inputs = {};
+    make.fields.forEach(field => {
+      const id = prog.id + "-" + field.name;
+      const label = document.createElement("label");
+      label.htmlFor = id;
+      label.innerHTML = escapeHtml(field.label) + (field.hint ? " <small>" + escapeHtml(field.hint) + "</small>" : "");
+      let input;
+      if (field.type === "select") {
+        input = document.createElement("select");
+        field.options.forEach(o => input.add(new Option(o, o)));
+      } else {
+        input = document.createElement("input");
+        input.type = field.type || "text";
+        input.autocomplete = "off";
+        if (field.min != null) input.min = field.min;
+        if (field.max != null) input.max = field.max;
+        if (field.placeholder) input.placeholder = field.placeholder;
+      }
+      input.id = id;
+      const start = field.read ? field.read(codeBox.value) : field.value;
+      if (start != null) input.value = start;
+      inputs[field.name] = input;
+      form.append(label, input);
+    });
+    const button = document.createElement("button");
+    button.className = "btn add";
+    button.textContent = make.button;
+    const oops = document.createElement("p");
+    oops.className = "oops";
+    oops.hidden = true;
+    form.append(button, oops);
+
+    // Whether this form says something the code does not yet. A setting read
+    // from the code counts once it differs; an empty box waiting for a new
+    // line counts once something is typed; a box that starts filled in (the
+    // reply to a question) does not count on its own.
+    form.touched = false;
+    form.hasChanges = () => form.touched && make.fields.some(f => {
+      const value = inputs[f.name].value;
+      if (f.read) return value !== String(f.read(codeBox.value) ?? "");
+      if (f.value != null) return false;
+      return value.trim() !== "";
+    });
+    form.addEventListener("input", () => { form.touched = true; });
+    form.addEventListener("change", () => { form.touched = true; });
+
+    form.applyChanges = () => {
+      form.touched = false;
+      const values = {};
+      for (const name in inputs) values[name] = inputs[name].value;
+      const result = make.apply(codeBox.value, values);
+      oops.hidden = !result.error;
+      oops.textContent = result.error || "";
+      if (result.error) return null;
+      codeBox.value = result.code;
+      repaint();
+      // Fields that write a whole new line start empty again, ready for the
+      // next one; fields that change a setting keep what they now say.
+      make.fields.forEach(f => { if (!f.read && f.value == null) inputs[f.name].value = ""; });
+      return result;
+    };
+
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      // Anything changed in the other form on the pop-up goes in as well, so
+      // nothing typed is quietly left behind.
+      const others = makeForms.filter(f => f !== form && f.hasChanges());
+      showResults([form, ...others]);
+    });
+    makeForms.push(form);
+    panel.appendChild(form);
+  });
+}
+
+/* Put the given forms' changes into the code. If any worked, the pop-up
+   turns into "This is what happened in the code". */
+function showResults(forms) {
+  const results = forms.map(f => f.applyChanges()).filter(Boolean);
+  if (!results.length) return false;
+  stop();
+  showIdle("Your program has changed. Press Run to try it!");
+  const box = $("make-result");
+  box.innerHTML =
+    "<h3>✅ This is what happened in the code</h3>" +
+    results.map(r =>
+      '<div class="added"><div class="added-head">This code was ' + (r.verb || "added") + "</div>" +
+      "<pre>" + paint(r.added) + "</pre></div>").join("") +
+    '<div class="result-buttons">' +
+      '<button class="btn run" id="result-try">▶ Try it</button>' +
+      '<button class="btn" id="result-where">👀 Show me in the code</button>' +
+      '<button class="btn" id="result-more">✏️ Change something else</button>' +
+    "</div>";
+  $("make").hidden = true;
+  box.hidden = false;
+  box.scrollTop = 0;
+  $("result-try").addEventListener("click", () => {
+    $("make-dialog").close();
+    run();
+    $("stage").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+  $("result-where").addEventListener("click", () => {
+    $("make-dialog").close();
+    showInCode(results[0].start, results[0].added.split("\n")[0].length);
+  });
+  $("result-more").addEventListener("click", () => {
+    box.hidden = true;
+    $("make").hidden = false;
+  });
+  return true;
+}
+
+function openMake() {
+  $("make-result").hidden = true;
+  $("make").hidden = false;
+  $("make-dialog").showModal();
+  $("make").scrollTop = 0;
+}
+/* Closing with something changed but not put in does not just close: the
+   change goes in and the pop-up shows what it did. Otherwise a child alters
+   a setting, closes the pop-up, presses Run, and nothing is different. */
+function closeMake() {
+  if (!$("make").hidden) {
+    const waiting = makeForms.filter(f => f.hasChanges());
+    if (waiting.length) {
+      if (showResults(waiting)) return;
+      if (waiting.some(f => f.querySelector(".oops").textContent)) return;
+    }
+  }
+  $("make-dialog").close();
+}
+$("open-make").addEventListener("click", openMake);
+$("make-close").addEventListener("click", closeMake);
+$("make-dialog").addEventListener("cancel", e => { e.preventDefault(); closeMake(); });
+$("make-dialog").addEventListener("click", e => { if (e.target === $("make-dialog")) closeMake(); });
+
+function setCodeShown(on) {
+  $("code-panel").hidden = !on;
+  $("show-code").setAttribute("aria-expanded", on);
+  $("show-code").textContent = on ? "🙈 Hide the code" : "👀 See the code";
+  if (on) repaint();
+}
+$("show-code").addEventListener("click", () => setCodeShown($("code-panel").hidden));
+
+/* Open the code and pick out the line a form just wrote. */
+function showInCode(start, length) {
+  setCodeShown(true);
+  const line = codeBox.value.slice(0, start).split("\n").length - 1;
+  const lineHeight = parseFloat(getComputedStyle(editorBox).lineHeight);
+  editorBox.scrollTop = Math.max(0, line * lineHeight - editorBox.clientHeight / 3);
+  $("code-panel").scrollIntoView({ behavior: "smooth", block: "center" });
+  codeBox.focus({ preventScroll: true });
+  codeBox.setSelectionRange(start, start + length);
+}
+PROGRAMS.forEach(p => {
+  const b = document.createElement("button");
+  b.className = "pick";
+  b.setAttribute("role", "tab");
+  b.dataset.id = p.id;
+  b.innerHTML = '<span class="emoji">' + p.emoji + '</span><span class="name">' + p.name + '</span><span class="what">' + p.what + "</span>";
+  b.addEventListener("click", () => choose(p));
+  $("picker").appendChild(b);
+});
+$("reset").addEventListener("click", () => {
+  delete edited[current.id];
+  choose(current);
+});
+
+/* ---------- Running Python ---------- */
+let runNumber = 0;          // bumped on every run and stop; an old run that sees a different number gives up
+let pendingInput = null;    // the reject of an input box still waiting, so Stop can cancel it
+
+function write(text, cls) {
+  const span = document.createElement("span");
+  if (cls) span.className = cls;
+  span.textContent = text;
+  consoleBox.appendChild(span);
+  consoleBox.scrollTop = consoleBox.scrollHeight;
+}
+function askInput(prompt) {
+  // An input that only waits for Enter is a pause, not a question: it is shown
+  // quietly and disappears once pressed, leaving a gap between what came before
+  // and what comes next.
+  const isPause = /^\(press enter/i.test(prompt || "");
+  return new Promise((resolve, reject) => {
+    const text = consoleBox.textContent;
+    if (isPause && text && !text.endsWith("\n")) write("\n");
+    const promptSpan = document.createElement("span");
+    if (isPause) promptSpan.className = "pause";
+    promptSpan.textContent = prompt;
+    consoleBox.appendChild(promptSpan);
+    const field = document.createElement("input");
+    field.setAttribute("aria-label", prompt || "Your answer");
+    field.autocomplete = "off";
+    if (isPause) field.className = "pause-field";
+    consoleBox.appendChild(field);
+    consoleBox.scrollTop = consoleBox.scrollHeight;
+    field.focus({ preventScroll: true });
+    pendingInput = reject;
+    const finish = () => {
+      const value = field.value;
+      field.remove();
+      if (isPause) {
+        promptSpan.remove();
+        write("\n");
+      } else {
+        write(value + "\n", "typed");
+      }
+      pendingInput = null;
+      resolve(value);
+    };
+    field.addEventListener("keydown", e => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      finish();
+    });
+    // A tap does the same as Enter, for anyone on a tablet or phone.
+    if (isPause) promptSpan.addEventListener("click", finish);
+  });
+}
+function clearTurtle() {
+  if (window.Sk && Sk.TurtleGraphics && Sk.TurtleGraphics.reset) {
+    try { Sk.TurtleGraphics.reset(); } catch (e) {}
+  }
+  $("turtle-target").innerHTML = "";
+}
+function friendly(message) {
+  if (/IndentationError|unindent|expected an indented/i.test(message)) return "The spaces at the start of a line are not lined up. Python cares about those!";
+  if (/NameError/.test(message)) return "Python does not know one of the words. Check the spelling, and that it has been made before it is used.";
+  if (/SyntaxError|bad input|EOF/i.test(message)) return "Something is missing, like a bracket ( ) or a quote mark \" \".";
+  if (/invalid literal for int/i.test(message)) return "Python wanted a number there, like 11, not words.";
+  if (/TypeError/.test(message)) return "Python tried to mix words and numbers. Use str( ) to turn a number into words.";
+  return "Have a look at that line and see if something looks wrong.";
+}
+function stop() {
+  runNumber++;
+  if (pendingInput) { pendingInput(new Error("stopped")); pendingInput = null; }
+  consoleBox.querySelectorAll("input").forEach(i => i.remove());
+  runBtn.hidden = !$("idle").hidden;
+  stopBtn.hidden = true;
+}
+
+function run() {
+  if (!window.Sk) {
+    consoleBox.innerHTML = "";
+    write("Python could not load. Check the internet connection and refresh the page.", "err");
+    return;
+  }
+  $("idle").hidden = true;
+  stop();
+  const myRun = runNumber;
+  consoleBox.innerHTML = "";
+  clearTurtle();
+  runBtn.hidden = true;
+  stopBtn.hidden = false;
+
+  Sk.configure({
+    output: text => { if (myRun === runNumber) write(text); },
+    read: name => {
+      if (!Sk.builtinFiles || !Sk.builtinFiles.files[name]) throw "File not found: '" + name + "'";
+      return Sk.builtinFiles.files[name];
+    },
+    inputfun: askInput,
+    inputfunTakesPrompt: true,
+    __future__: Sk.python3,
+    yieldLimit: 100,
+    killableWhile: true,
+    killableFor: true,
+  });
+  (Sk.TurtleGraphics || (Sk.TurtleGraphics = {})).target = "turtle-target";
+  Sk.TurtleGraphics.width = 560;
+  Sk.TurtleGraphics.height = 420;
+
+  Sk.misceval.asyncToPromise(
+    () => Sk.importMainWithBody("<stdin>", false, codeBox.value, true),
+    { "*": () => { if (myRun !== runNumber) throw new Error("stopped"); } }
+  ).then(() => {
+    if (myRun !== runNumber) return;
+    write("\n✔ Finished! Press 🎨 Make it yours to change it.", "hint");
+    runBtn.hidden = false;
+    stopBtn.hidden = true;
+  }).catch(err => {
+    if (myRun !== runNumber) return;
+    if (err && err.message === "stopped") return;
+    const message = err && err.toString ? err.toString() : String(err);
+    write("\n" + message + "\n", "err");
+    write("💡 " + friendly(message) + "\n", "friendly");
+    runBtn.hidden = false;
+    stopBtn.hidden = true;
+  });
+}
+runBtn.addEventListener("click", run);
+stopBtn.addEventListener("click", () => {
+  stop();
+  write("\n■ Stopped.", "hint");
+});
+
+choose(PROGRAMS[0]);
+</script>
+</body>
+</html>
