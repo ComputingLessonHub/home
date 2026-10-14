@@ -271,19 +271,26 @@
     return { at: at, total: chain.length, reached: named(at), next: named(at + 1) };
   }
 
+  /* A practical's rubric, lowest level first. The builder has written it
+     that way round since v12.1 and says so with rubricOrder; a lesson saved
+     before then has no rubricOrder and was written best first, so it is
+     turned round. Every screen reads the rubric through this or the copy of
+     it in lesson.html, so an old lesson never shows upside down. */
+  function rubricLevels(lessonJson){
+    const list = ((lessonJson && lessonJson.rubric) || []).slice();
+    return lessonJson && lessonJson.rubricOrder === "lowest-first" ? list : list.reverse();
+  }
   /* A practical's levels by name, lowest first. The coding tasks' own chain
      where there is one, since that is the order they open in; otherwise the
-     rubric, which the builder asks to be written best first. Empty when
-     there are no levels at all. */
+     rubric. Empty when there are no levels at all. */
   function levelLadder(lessonJson){
     const chain = levelChain(lessonJson);
     if (chain) return chain.map((b, k) => levelName(b, k + 1));
-    return ((lessonJson && lessonJson.rubric) || [])
-      .map(g => String((g && g.name) || "").trim()).filter(Boolean).reverse();
+    return rubricLevels(lessonJson).map(g => String((g && g.name) || "").trim()).filter(Boolean);
   }
 
   window.progressMath = { TASK_LABEL, plainText, normAns, taskInfo,
                           quantifiableTasks, scoreTask, checkDone, attempted, withMarkingTicks,
                           pagesLock, defaultLocks, fetchLockedPages, markRoster,
-                          levelChain, levelName, levelReached, levelLadder };
+                          levelChain, levelName, levelReached, levelLadder, rubricLevels };
 })();

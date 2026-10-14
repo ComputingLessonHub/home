@@ -1291,18 +1291,12 @@ function checklistAuto(row){
   if (!done.length && !todo.length) return null;
   const said = (list, key) => list.map(c => String((c && c[key]) || "").trim()).filter(Boolean);
   const strengths = said(done, "strength"), targets = said(todo, "target");
-  let strength = strengths.length ? joinSentences(strengths.slice(-2)) : (lessonJson.zeroStrength || "");
+  let strength = strengths.length ? praiseFor(row) + " " + joinSentences(strengths.slice(-2)) : (lessonJson.zeroStrength || "");
   let target = targets.length ? targets[0] : (todo.length ? "" : (lessonJson.perfectTarget || ""));
-  /* A practical built in levels starts with the level reached, said warmly,
-     because that is the thing they will want to know first, and the target
-     ends by pointing at the next one. */
+  /* The target ends by pointing at the next level. The level reached is
+     not said in the Strength: the summary page already tells them, with
+     what that level asks for underneath. */
   const lv = window.progressMath.levelReached ? window.progressMath.levelReached(lessonJson, data) : null;
-  if (lv && lv.reached){
-    /* every level done is the whole of the practical, and is said so */
-    const well = lv.next ? "Well done for reaching " + lv.reached.label + "."
-                         : "Well done for completing every level of the practical, right up to " + lv.reached.label + ".";
-    strength = strength ? well + " " + strength : well;
-  }
   if (lv && lv.next && target){
     target = (/[.!?]$/.test(target) ? target : target + ".") + " Keep working to try to reach the next level.";
   }
@@ -1427,19 +1421,26 @@ function askReached(){
 }
 
 /* The three most recent Yes answers, which in level order are the furthest
-   the student got, after the level reached where there is one. */
+   the student got, after a word of praise. */
 function askStrength(){
   const lines = ask.items.filter((it, i) => i <= askedUpTo() && ask.answers[i] === true && it.strength)
     .map(it => it.strength).slice(-3);
-  let strength = lines.length ? joinSentences(lines) : (lessonJson.zeroStrength || "");
-  const reached = askReached();
-  if (reached !== null && reached >= 0){
-    const name = ask.ladder[reached];
-    const well = reached < ask.ladder.length - 1 ? "Well done for reaching " + name + "."
-                 : "Well done for completing every level of the practical, right up to " + name + ".";
-    strength = strength ? well + " " + strength : well;
-  }
-  return strength;
+  return lines.length ? praiseFor(ask.row) + " " + joinSentences(lines) : (lessonJson.zeroStrength || "");
+}
+
+/* A few words of praise to open a Strength with. Not the level, which the
+   summary page says already, and not the same words for the whole class:
+   thirty Strengths that all begin "Well done" read like a form letter.
+   Chosen from the username rather than at random, so a student's opener
+   is the same every time their work is opened and does not change under a
+   teacher who goes back to them. */
+const PRAISE = ["Well done!", "Good work!", "Great effort!", "Nice work!", "Brilliant work!",
+                "Fantastic effort!", "Excellent work!", "Super effort!"];
+function praiseFor(row){
+  const name = String((row && row.username) || "") + "|" + lessonId;
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return PRAISE[h % PRAISE.length];
 }
 function askFirstTarget(){
   const i = ask.items.findIndex((it, k) => k <= askedUpTo() && ask.answers[k] === false && it.target);
@@ -1826,7 +1827,7 @@ function paintMarking(user){
     const none = document.createElement("option");
     none.value = ""; none.textContent = practiceRun() ? "No level picked" : "Not graded yet";
     sel.appendChild(none);
-    (lessonJson.rubric || []).forEach(g => {
+    window.progressMath.rubricLevels(lessonJson).forEach(g => {
       const o = document.createElement("option");
       o.value = g.name; o.textContent = g.name;
       sel.appendChild(o);

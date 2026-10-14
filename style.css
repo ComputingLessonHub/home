@@ -514,6 +514,10 @@ details.answers pre{white-space:pre-wrap; font-family:var(--mono); font-size:var
 .paste-sub b{color:var(--text)}
 .paste-or{display:flex; justify-content:center; flex-wrap:wrap; gap:10px}
 .shot[hidden]{display:none}
+/* Original and Updated, over a screenshot taken again. Two short words, so
+   it keeps to its own size on a phone, where .subtabs otherwise goes the
+   full width; two classes, so it wins that whichever comes later. */
+.subtabs.shot-tabs{margin:0 auto 12px; width:fit-content}
 .shot-frame{position:relative; width:fit-content; max-width:100%; margin:0 auto 14px}
 .shot-img{
   display:block; max-width:100%; max-height:46vh; margin:0 auto;
@@ -739,6 +743,8 @@ html[data-bg=night] .result-card .st i{color:#F0938E}
 .done-locked{margin:0 0 6px; padding:10px 14px; border-radius:10px; font-weight:700;
   border-left:4px solid var(--amber); background:color-mix(in srgb, var(--amber) 10%, transparent)}
 .done-score{font-family:var(--display); font-size:var(--text-7xl); font-weight:700; line-height:1; margin-top:6px}
+/* the level a practical reached: a sentence, with what it asks for under it */
+.done-reached{font-family:var(--display); font-size:20px; font-weight:600; color:var(--text); margin:8px 0 6px}
 .done-pct{font-family:var(--mono); font-size:var(--text-lg); color:var(--muted); margin:8px 0 4px}
 .done-save{font-size:var(--text-2xl); padding:15px 34px; border-radius:var(--rad-md); margin:14px auto 0; display:inline-block}
 .done-back{display:block; margin:18px 0 4px; color:var(--muted); text-decoration:none}

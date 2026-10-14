@@ -260,6 +260,13 @@ function rubricWords(g, cls){
   else { box.textContent = g.description || ""; box.classList.add("plain"); }
   return box;
 }
+/* The rubric lowest level first, left to right. A lesson saved before v12.1
+   has no rubricOrder and was written best first, so it is turned round. The
+   same as progressMath.rubricLevels, which this page does not load. */
+function rubricLevels(){
+  const list = ((lesson && lesson.rubric) || []).slice();
+  return lesson && lesson.rubricOrder === "lowest-first" ? list : list.reverse();
+}
 /* All the grades and what each one needs, side by side. */
 function showRubric(){
   {
@@ -274,7 +281,7 @@ function showRubric(){
     const note = String((lesson && lesson.rubricNote) || "").trim();
     if (note) box.appendChild(el("p","rubric-note", note));
     const strip = el("div","rubricstrip");
-    ((lesson && lesson.rubric) || []).forEach(g => {
+    rubricLevels().forEach(g => {
       const col = el("div","rubriccol" + (myResult && myResult.grade === g.name ? " mine" : ""));
       col.appendChild(el("b","", g.name));
       col.appendChild(rubricWords(g, "rubric-desc"));
@@ -7133,18 +7140,41 @@ async function clipboardAllowed(){
   });
 }
 
-/* Which screenshot task a paste belongs to. A step is usually a whole page,
-   not the task, and a page can hold more than one of these, so the one last
-   clicked wins, then the first on the page still waiting for a picture.
-   Checking the step's own section against the task's, as this used to,
-   meant a screenshot on any page was never pasted at all. */
+/* The picture a screenshot task set to compare puts beside its own: the
+   first other screenshot in the lesson that has one, looking through the
+   pages, then the response tasks and extensions. Read from the live task
+   where it has been built, and from what was saved where it has not, so it
+   is found whichever of the two was put back first. "" when there is none. */
+function earlierScreenshot(selfId){
+  const found = [];
+  const walk = (list) => (list || []).forEach(x => {
+    if (!x) return;
+    if (x.type === "image" && x.id && x.id !== selfId) found.push(x.id);
+    walk(x.blocks);
+    (x.options || []).forEach(o => walk(o.blocks));
+  });
+  walk(lesson && lesson.blocks);
+  Object.values((lesson && lesson.responses) || {}).forEach(walk);
+  walk(lesson && lesson.extensions);
+  for (const id of found){
+    let v = "";
+    try{ v = fields[id] ? fields[id].get() : ""; }catch(e){}
+    if (!v && restoredData && typeof restoredData[id] === "string") v = restoredData[id];
+    if (v) return v;
+  }
+  return "";
+}
+
+/* Which screenshot task a paste belongs to. More than one can be showing,
+   so the one last clicked wins, then the first still waiting for a picture.
+   Looked for on the whole page rather than in the step on screen: a step is
+   a whole page, not the task, and the summary is not a step at all, so
+   asking the step meant a screenshot on a page, or in a response task, was
+   never pasted. Only the ones actually showing count, which leaves out the
+   pages not on screen and anything behind a choice. */
 let imageTaskClicked = null;
 function pasteOwner(){
-  const here = steps[step] && steps[step].section;
-  if (!here) return null;
-  const tasks = (here.classList.contains("img-task") ? [here] : [])
-    .concat(Array.from(here.querySelectorAll(".img-task")))
-    .filter(t => t.offsetParent !== null);       // not inside a shut choice
+  const tasks = Array.from(document.querySelectorAll(".img-task")).filter(t => t.offsetParent !== null);
   if (tasks.indexOf(imageTaskClicked) >= 0) return imageTaskClicked;
   return tasks.find(t => !t.__hasPicture()) || tasks[0] || null;
 }
@@ -7192,23 +7222,54 @@ function rImage(b){
   img.alt = "Your screenshot";
   shotFrame.appendChild(img);
   shotFrame.appendChild(fullScreenButton(() => img.src));
+  /* Original and Updated, for a screenshot taken again after feedback.
+     Only there when the builder turned it on, and only once there is both
+     a new picture and an earlier one to put beside it: a student who was
+     away for the first one has nothing to compare, so sees no tabs. */
+  const tabs = el("div","subtabs shot-tabs"); tabs.hidden = true;
+  const tabOriginal = el("button","","Original"), tabUpdated = el("button","on","Updated");
+  tabOriginal.type = tabUpdated.type = "button";
+  tabs.appendChild(tabOriginal); tabs.appendChild(tabUpdated);
+  let showingOriginal = false;
+  function paintCompare(){
+    const earlier = b.compare ? earlierScreenshot(b.id) : "";
+    tabs.hidden = !(earlier && dataUrl);
+    if (tabs.hidden) showingOriginal = false;
+    tabOriginal.classList.toggle("on", showingOriginal);
+    tabUpdated.classList.toggle("on", !showingOriginal);
+    img.src = showingOriginal ? earlier : dataUrl;
+    img.alt = showingOriginal ? "Your original screenshot" : "Your screenshot";
+  }
+  tabOriginal.addEventListener("click", () => { showingOriginal = true; paintCompare(); });
+  tabUpdated.addEventListener("click", () => { showingOriginal = false; paintCompare(); });
+  /* The earlier picture may only be put back after this one is, so any
+     screenshot arriving anywhere in the lesson is a reason to look again. */
+  if (b.compare) document.addEventListener("hubScreenshot", (e) => { if (e.detail !== b.id) paintCompare(); });
   const shotRow = el("div","row");
   const redo = el("button","btn-ghost","Replace picture");
   shotRow.appendChild(redo);
-  shot.appendChild(shotFrame); shot.appendChild(shotRow);
+  shot.appendChild(tabs); shot.appendChild(shotFrame); shot.appendChild(shotRow);
   s.appendChild(shot);
 
   const err = el("p","err");
   s.appendChild(err);
 
+  /* Shows this task's own picture, Updated, and tells any task comparing
+     against it that it has one now. */
+  function showPicture(v){
+    dataUrl = v;
+    showingOriginal = false;
+    img.src = v;
+    shot.hidden = false;
+    zone.hidden = true;
+    paintCompare();
+    try{ document.dispatchEvent(new CustomEvent("hubScreenshot", { detail: b.id })); }catch(e){}
+  }
   function accept(file){
     err.textContent = "";
     shrinkImage(file, (out, problem) => {
       if (problem){ err.textContent = problem; return; }
-      dataUrl = out;
-      img.src = out;
-      shot.hidden = false;
-      zone.hidden = true;
+      showPicture(out);
       try{
         markDirty(); save();
       }catch(e){
@@ -7280,7 +7341,7 @@ function rImage(b){
 
   fields[b.id] = {
     get: () => dataUrl,
-    set: (v) => { if (v){ dataUrl = v; img.src = v; shot.hidden = false; zone.hidden = true; } }
+    set: (v) => { if (v) showPicture(v); }
   };
   return { section:s,
            check: () => dataUrl ? { ok:true } : { ok:false, message:"Add a screenshot to continue" },
@@ -7747,8 +7808,12 @@ function renderPracticalComplete(){
            : "Your teacher will mark your assessment.");
   /* the mark or grade sits where a percentage would on a normal assessment */
   if (graded){
-    const g = el("p","done-score", myResult.grade);
-    hero.appendChild(g);
+    /* Said in a sentence rather than as a big headline: the level is a
+       description of the work, and what it asks for underneath is the part
+       worth reading. A name that already says "level" is not given another. */
+    const name = String(myResult.grade).trim();
+    hero.appendChild(el("p","done-reached",
+      /\blevel\b/i.test(name) ? "You reached " + name : "You reached the " + name + " level"));
     const rub = ((lesson && lesson.rubric) || []).find(x => x.name === myResult.grade);
     if (rub && (rub.descriptionHtml || rub.description)) hero.appendChild(rubricWords(rub, "done-sub rubric-desc"));
   } else if (scored){
@@ -8160,9 +8225,13 @@ function renderResponses(container, targetTopic, statusEl){
     /* A page as well: a practical built in levels gives its response as the
        same levels again, opening one after another the way they did in the
        lesson, which only a page knows how to do. */
+    /* A choice too: the builder lets one into a response list, and without
+       it here it was dropped without a word, so the reminders a teacher
+       put there never reached anyone. */
     const R = { question:rQuestion, quiz:rQuiz, python:rPython, blanks:rBlanks, mc:rMC, short:rShort,
                 text:rText, picture:rPicture, ide:rIDE, web:rWeb, order:rOrder, image:rImage,
-                embed:rEmbed, link:rLink, pastelink:rPasteLink, frame:rFrame, page:rPage }[b.type];
+                embed:rEmbed, link:rLink, pastelink:rPasteLink, frame:rFrame, page:rPage,
+                choice:rChoice }[b.type];
     if (!R) return;
     try{
       const built = R(b);

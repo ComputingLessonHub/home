@@ -1367,8 +1367,14 @@ EDITORS.choice = function(b, k){
 };
 
 EDITORS.image = function(b, k){
-  const { F } = k;
+  const { F, toggleRow, settings } = k;
   F("Heading (optional)", "title"); F("Instruction (optional)", "task", { area:true, rows:2 });
+  /* For a screenshot taken again, after feedback: Original and Updated
+     tabs over the new picture, the original being the first other
+     screenshot in the lesson the student has one for. Off unless asked. */
+  settings(() => toggleRow([["compare","Compare with an earlier screenshot", false]], "Options",
+    "After pasting, the student can switch between this screenshot and their earlier one from the same lesson. " +
+    "Nothing changes for a student who has no earlier screenshot."));
 };
 
 EDITORS.frame = function(b, k){

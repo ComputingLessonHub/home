@@ -869,6 +869,9 @@ function compile(){
        because there the rubric is the levels a student can aim for, and a
        teacher can say which one they reached without it being a grade. */
     if (out.marking !== "score" || practiceRun) out.rubric = (lesson.rubric || []).filter(g => g.name);
+    /* Written lowest level first, and said so: a lesson saved without this
+       was written best first, and everything that reads it turns it round. */
+    if (out.rubric) out.rubricOrder = "lowest-first";
     if (out.rubric && String(lesson.rubricNote || "").trim()) out.rubricNote = lesson.rubricNote.trim();
     out.practical = true;
     out.assessment = true;      // students and teachers treat it as an assessment
@@ -1223,7 +1226,8 @@ function compileOne(b, id, target){
                           b.pass.hold === true ? { hold:true } : {})
           : undefined });
     else if (b.type === "image")
-      push(keepArrays({ type:"image", id, title: b.title || "", task: b.task || "" }));
+      push(keepArrays({ type:"image", id, title: b.title || "", task: b.task || "",
+                        compare: b.compare === true ? true : undefined }));
     else if (b.type === "embed")
       push(keepArrays({ type:"embed", id, url: toEmbed(b.url), title: b.title || "",
              note: b.note || "", confirm: b.confirm === true }));
@@ -2522,8 +2526,8 @@ function rubricPopup(){
     const lv = !!lesson.practice;
     box.appendChild(el("h2","", lv ? "Levels" : "Rubric"));
     box.appendChild(el("p","modal-text", lv
-      ? "Put the highest level first. Students can read these while they work, and you can pick the one they reached when you mark."
-      : "Put the best grade first. Teachers pick one of these when marking."));
+      ? "Put the lowest level first. Students see them in this order, left to right, while they work, and you can pick the one they reached when you mark."
+      : "Put the lowest grade first. Students see them in this order, left to right, and teachers pick one of these when marking."));
     /* What students are told before the levels themselves, which is how this
        practical in particular is meant to be worked through. Left empty, the
        rubric opens with no line under its heading at all. */
@@ -3349,12 +3353,12 @@ function markingSetup(into){
   into.appendChild(card);
 }
 
-/* The rubric's levels by name, lowest first. The rubric is written best
-   first, so it is read backwards. The same order progressMath.levelLadder
-   gives the marking screen, which this page does not load. */
+/* The rubric's levels by name, lowest first, which is the order it is
+   edited in (fromCompiled turns an older best-first one round). The same
+   order progressMath.levelLadder gives the marking screen. */
 function practicalLevels(){
   if (!lesson.practical) return [];
-  return (lesson.rubric || []).map(g => String((g && g.name) || "").trim()).filter(Boolean).reverse();
+  return (lesson.rubric || []).map(g => String((g && g.name) || "").trim()).filter(Boolean);
 }
 function paintTargets(into){
   const used = {};
@@ -3410,10 +3414,9 @@ function paintTargets(into){
         w.appendChild(inp); body.appendChild(w);
       });
     /* Which level of the rubric this is part of. Marking asks about the
-       topics a level at a time, lowest first, and stops at the first one a
-       student has not done, so this is what lets it say which level they
-       reached. Listed lowest first, the order a teacher thinks of them in,
-       whatever order the rubric itself is written. */
+       topics a level at a time, lowest first, and stops once a level is
+       shown not to be done, so this is what lets it say which level they
+       reached. Listed lowest first, the same as the rubric. */
     const levels = practicalLevels();
     if (levels.length){
       const w = el("div","bfield");
@@ -7047,7 +7050,11 @@ function fromCompiled(data, meta){
                 linger: data.linger !== false,
                 versionOf: data.versionOf || "", versionName: data.versionName || "",
                 versionNote: data.versionNote || "", versionCode: data.versionCode || "",
-                marking: data.marking || "score", outOf: data.outOf || 20, rubric: data.rubric || [],
+                marking: data.marking || "score", outOf: data.outOf || 20,
+                /* Edited lowest level first. One saved before v12.1 was
+                   written best first, so it is turned round as it opens and
+                   saved the new way round. */
+                rubric: data.rubricOrder === "lowest-first" ? (data.rubric || []) : (data.rubric || []).slice().reverse(),
                 rubricNote: data.rubricNote || "",
                 topics: data.topics || {}, responses: {}, extensions: [], blocks: [] };
   /* Two things belong to every task whatever kind it is, and every branch
