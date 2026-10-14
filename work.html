@@ -1398,19 +1398,25 @@ function showAsk(asking){
   again.innerHTML = "";
   again.hidden = asking || !ask || !ask.items.length;
   if (again.hidden) return;
-  const btn = el("button","bank-link","Answer the questions again");
+  /* Never asked in the first place, so "again" would be the wrong word. */
+  const btn = el("button","bank-link", ask.onlyChecklist ? "Revise Strength and Target" : "Answer the questions again");
   btn.type = "button";
-  btn.addEventListener("click", () => { startAsk(ask.row, false); });
+  btn.addEventListener("click", () => { startAsk(ask.row, false, true); });
   again.appendChild(btn);
 }
 
-function startAsk(row, saved){
+function startAsk(row, saved, force){
   const ladder = window.progressMath.levelLadder(lessonJson);
   const items = askItems(row, ladder);
+  /* Every question a checklist line, each already answered by its tick: the
+     boxes already hold what the questions would come to, so asking them is
+     thirty students' worth of pressing Yes to things the work has decided.
+     They wait behind a button for the teacher who disagrees with a tick. */
+  const onlyChecklist = items.length > 0 && items.every(it => it.met !== undefined);
   ask = { row, items, ladder, answers: items.map(it => it.met === undefined ? null : it.met),
           at: 0, phase: "strength", stop: -1, target: "", targetChosen: false,
-          strength: "", strengthEdited: false, editingStrength: false };
-  if (!items.length || saved){ showAsk(false); return; }
+          strength: "", strengthEdited: false, editingStrength: false, onlyChecklist };
+  if (!items.length || saved || (onlyChecklist && !force)){ showAsk(false); return; }
   $("fbMsg").textContent = "";
   showAsk(true);
   paintAsk();
