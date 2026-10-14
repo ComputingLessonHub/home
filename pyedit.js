@@ -447,10 +447,26 @@ function explainError(err, code){
       return say("There is one bracket too many",
         "There is a closing bracket with nothing to close.",
         "Count the `(` and `)` on this line and take out the extra one.");
-    if (/expected an indented block/.test(msg))
+    if (/expected an indented block/.test(msg)){
+      /* Python names the line with the colon: "after 'if' statement on line
+         6". When that is the line it stopped on, nothing comes after it at
+         all, which is what a program looks like halfway through being
+         written. Telling them to push that line in sent them to indent the
+         if itself. */
+      const after = /after '(\w+)' statement on line (\d+)/.exec(msg);
+      const word = after ? after[1] : "";
+      const at = after ? parseInt(after[2], 10) : null;
+      const named = word ? "`" + word + "`" : "line";
+      if (at !== null && at === err.line)
+        return say("Nothing is under the " + (word ? named : "line") + " yet",
+          "Line " + at + " ends with a colon, so Python expects at least one line pushed in underneath it, saying what to do. There is not one yet.",
+          "Make a new line under line " + at + ", press Tab, and write what should happen, like `print(\"Correct!\")`.");
       return say("A line needs pushing in",
-        "The line above ends with a colon, so the next line has to be pushed in under it.",
+        at !== null
+          ? "Line " + at + " ends with a colon, so the line under it has to be pushed in to show it belongs to the " + named + "."
+          : "The line above ends with a colon, so the next line has to be pushed in under it.",
         "Click at the start of line " + err.line + " and press Tab.");
+    }
     if (/unexpected indent/.test(msg))
       return say("This line is pushed in too far",
         "This line starts further in than it should. Only lines under an `if`, `elif`, `else` or `while` get pushed in.",

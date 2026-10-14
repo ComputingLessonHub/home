@@ -606,7 +606,7 @@ function paintLessons(byId){
       }
       if (l.assessment || c.assessment){
         const badge = document.createElement("span");
-        badge.className = "badge"; badge.textContent = "Assessment";
+        badge.className = "badge"; badge.textContent = c.practical ? "Practical" : "Assessment";
         a.appendChild(badge);
         /* Still opens, to their work and their mark, but says up front that
            it cannot be changed, rather than letting them find out inside. */

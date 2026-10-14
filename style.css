@@ -2809,14 +2809,15 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
    After the last line of a level's checklist has gone green: that level
    ticks off on a track of all of them, the bar fills slowly across to the
    next, its padlock opens, and the next focus is read out. Slow on purpose,
-   about six seconds, and it goes by itself. It never takes a click: the
-   page under it works the whole time, so nothing waits on it.
+   then it waits for Okay so the next focus can be read at their own pace.
+   A click outside the card, Escape or Enter close it as well, so it is
+   never something a student is stuck behind.
 
    Every animation is kept in --a, so the exemption below can name them all
    at once. Children start with none of their own, or they would inherit
    their parent's and run it a second time. */
 .lvlup *{--a:none}
-.lvlup{position:fixed; inset:0; z-index:900; pointer-events:none;
+.lvlup{position:fixed; inset:0; z-index:900;
   display:flex; align-items:center; justify-content:center; padding:16px;
   background:rgba(10,14,24,.38);
   --a:lvlup-in .5s ease-out both; animation:var(--a)}
@@ -2867,6 +2868,9 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
 .lvlup-focus{margin:0; font-size:16px; line-height:1.5; color:var(--text);
   --a:lvlup-up .6s 3.9s ease-out both; animation:var(--a)}
 .lvlup-focus code{font-family:var(--mono); font-size:.92em}
+/* after the next focus has had a moment, so it is read before it is closed */
+.lvlup-ok{margin-top:18px; min-width:140px;
+  --a:lvlup-up .5s 4.4s ease-out both; animation:var(--a)}
 
 @keyframes lvlup-in{from{opacity:0} to{opacity:1}}
 @keyframes lvlup-out{from{opacity:1} to{opacity:0}}

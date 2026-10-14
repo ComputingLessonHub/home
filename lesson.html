@@ -3210,9 +3210,10 @@ function levelName(entry, n){
   const m = title.match(/^(?:level|step|stage|part)\s*\d+\s*[:.\-–]\s*(.+)$/i);
   return m ? m[1].trim() : (title || "Level " + n);
 }
-/* How long it takes, slowly, because it is the one thing on the page that
-   says the work has moved on. The level opens behind it as it fades. */
-const LEVELUP_SHOWN = 6000, LEVELUP_FADE = 650;
+/* Played slowly, because it is the one thing on the page that says the work
+   has moved on. The level opens behind it as it fades. Okay arrives after
+   the next focus has been read out (see .lvlup-ok in style.css). */
+const LEVELUP_OK_AT = 4400, LEVELUP_FADE = 650;
 function startLevelUp(items, i, open){
   let started = false, opened = false;
   const reveal = () => { if (opened) return; opened = true; open(); };
@@ -3226,15 +3227,14 @@ function startLevelUp(items, i, open){
      does not, the level still opens: a child left with nothing to do next is
      the one outcome this must never have. */
   setTimeout(play, 7000);
-  setTimeout(reveal, 7000 + LEVELUP_SHOWN + 1000);
 }
 let levelUpShowing = null;
 function playLevelUp(chain, from, to, reveal){
   if (levelUpShowing) levelUpShowing.remove();
   const at = chain.indexOf(from), next = chain.indexOf(to);
   const back = el("div","lvlup");
-  back.setAttribute("role","status");
-  back.setAttribute("aria-live","polite");
+  back.setAttribute("role","dialog");
+  back.setAttribute("aria-label","Level " + (chain.indexOf(to) + 1) + " unlocked");
   const card = el("div","lvlup-card");
   card.appendChild(tel("p","lvlup-kicker", "✓ " + levelName(from, at + 1) + " complete"));
 
@@ -3270,15 +3270,37 @@ function playLevelUp(chain, from, to, reveal){
   focus.appendChild(tel("b","", "Next focus: " + levelName(to, next + 1) + ". "));
   if (task) focus.appendChild(el("span","", task));
   card.appendChild(focus);
+  /* Closed when they have read it, not on a timer: the next focus is what
+     they are about to work on, and six seconds was not long enough for some
+     of a class to read it. Clicking anywhere outside the card, Escape and
+     Enter close it too, so it is never something to be stuck behind. */
+  const ok = el("button","btn-primary lvlup-ok","Okay");
+  ok.type = "button";
+  card.appendChild(ok);
   back.appendChild(card);
   document.body.appendChild(back);
   levelUpShowing = back;
 
-  setTimeout(() => {
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener("keydown", onKey, true);
     back.classList.add("leaving");
     reveal();
     setTimeout(() => { back.remove(); if (levelUpShowing === back) levelUpShowing = null; }, LEVELUP_FADE);
-  }, LEVELUP_SHOWN);
+  };
+  const onKey = (e) => {
+    if (e.key !== "Escape" && e.key !== "Enter") return;
+    e.preventDefault(); e.stopPropagation();
+    close();
+  };
+  ok.addEventListener("click", close);
+  back.addEventListener("click", (e) => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey, true);
+  /* Focus moves to Okay once it has appeared, so Enter means Okay rather
+     than whatever was focused under the card, like the Run button. */
+  setTimeout(() => { if (!closed) try{ ok.focus({ preventScroll:true }); }catch(e){} }, LEVELUP_OK_AT);
 }
 /* A padlock whose shackle is its own path, so it can lift open. */
 const LOCK_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">' +
