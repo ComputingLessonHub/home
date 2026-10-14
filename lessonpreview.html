@@ -21,8 +21,8 @@
   </div>
   <select id="pvVersion" title="Which version to preview" hidden></select>
   <button class="btn-ghost" id="pvReset" title="Clear the pretend student's work and your feedback">Start again</button>
+  <button class="btn-ghost iconbtn" id="pvHelp" title="What is this page?" aria-label="What is this page?">?</button>
 </div>
-<p class="pv-note" id="pvNote">Sam Example is a pretend student. Nothing here reaches a class, and it is all gone when this tab is closed.</p>
 
 <div class="pv-stage" id="pvStage">
   <div class="loading pv-wait" id="pvWait">
@@ -81,7 +81,7 @@ const SERVER = (function(){
 
 const qs = new URLSearchParams(location.search);
 const lessonId = qs.get("id") || "";
-const STUDENT = { username: "sam.example", name: "Sam Example", group: "Preview class" };
+const STUDENT = { username: "example.student", name: "Example Student", group: "Preview class" };
 
 /* ---------------- what the pretend server holds ----------------
    Kept as text, never as objects, so nothing a frame is handed is the same
@@ -456,15 +456,70 @@ $("pvReset").addEventListener("click", () => {
   show(current || "home");
 });
 
-/* ---------------- the pop-up, for signing in ---------------- */
+/* ---------------- the pop-up ---------------- */
+/* Everything but the closing buttons goes into a part that scrolls on its
+   own. Without it a short window clips the words under Okay, with no way to
+   reach them. */
+function scrollBody(box){
+  if (!box || box.querySelector(".modal-scroll")) return;
+  const middle = Array.from(box.children).filter(n =>
+    !n.classList.contains("modal-x") &&
+    !n.classList.contains("modal-cta") &&
+    !n.classList.contains("modal-stay"));
+  if (middle.length < 2) return;
+  const scroller = el("div","modal-scroll");
+  box.insertBefore(scroller, middle[0]);
+  middle.forEach(n => scroller.appendChild(n));
+}
 function openModal(build){
   const box = $("mBox");
   box.className = "modal";
   box.innerHTML = "";
   build(box);
+  scrollBody(box);
   $("mBack").hidden = false;
 }
 function closeModal(){ $("mBack").hidden = true; }
+
+/* ---------------- what this page is ----------------
+   Shown by itself the first time a teacher opens any preview, and from the
+   question mark after that. Remembered in the real browser rather than per
+   lesson: it says what the page is, which is the same for every lesson.
+   Only Okay counts as having read it, so it has no cross to slip past. */
+const INTRO_SEEN = "hub_pv_intro";
+function explain(){
+  openModal(box => {
+    box.appendChild(el("h2","","What is this page?"));
+    box.appendChild(el("p","modal-text",
+      "It shows this lesson exactly as a student sees it, using a pretend student called " +
+      STUDENT.name + "."));
+    const list = el("ul","modal-steps pv-intro-list");
+    [ ["Home view", "their home page, with this lesson on it."],
+      ["Lesson view", "the lesson itself. Try it as they would."],
+      ["Marking view", "View Work, where you give feedback. Switch back to see how it reaches them."]
+    ].forEach(([name, what]) => {
+      const li = el("li");
+      li.appendChild(el("b","", name));
+      li.appendChild(document.createTextNode(": " + what));
+      list.appendChild(li);
+    });
+    box.appendChild(list);
+    box.appendChild(el("p","modal-text",
+      "Nothing here reaches a class, and it is cleared when you close this tab."));
+    const ok = el("button","btn-primary modal-cta","Okay");
+    ok.addEventListener("click", () => {
+      try{ localStorage.setItem(INTRO_SEEN, "1"); }catch(e){}
+      closeModal();
+    });
+    box.appendChild(ok);
+  });
+}
+$("pvHelp").addEventListener("click", explain);
+function explainFirstTime(){
+  let seen = false;
+  try{ seen = localStorage.getItem(INTRO_SEEN) === "1"; }catch(e){}
+  if (!seen) explain();
+}
 
 /* ---------------- getting the lesson ---------------- */
 function waitSay(text, dots){
@@ -578,6 +633,8 @@ async function boot(){
   let start = "home";
   try{ start = sessionStorage.getItem("hub_pv_tab") || "home"; }catch(e){}
   show(START[start] ? start : "home");
+  /* Once the lesson is up, never over the sign-in or the dots. */
+  explainFirstTime();
 }
 boot();
 </script>
