@@ -1247,9 +1247,17 @@ function compileOne(b, id, target){
         }
         return out;
       });
+      /* Layout is written down only where it differs from the default, for
+         the same reason as fill. */
+      const widths = [];
+      for (let c = 0; c < wide; c++) widths.push(["narrow","medium","wide","wider"].includes((b.widths || [])[c]) ? b.widths[c] : "");
+      const lines = rows.map((_, r) => Math.min(Math.max(parseInt((b.lines || [])[r], 10) || 1, 1), 6));
       push(keepArrays({ type:"table", id, title: b.title || "", task: b.task || "",
         head: head.some(h => h.trim()) ? head : undefined,
         rows: rows,
+        widths: widths.some(Boolean) ? widths : undefined,
+        lines: lines.some(n => n > 1) ? lines : undefined,
+        sideHead: b.sideHead ? true : undefined,
         point: b.point || "", code: b.code || "", strand: b.strand || "" }));
     }
     /* An exam question carries its specification point and the wording of

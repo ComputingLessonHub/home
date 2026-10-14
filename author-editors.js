@@ -1746,6 +1746,29 @@ EDITORS.table = function(b, k){
   /* Every row the same width, whatever editing has left behind. */
   while (b.head.length < cols) b.head.push("");
   b.rows.forEach(r => { while (r.length < cols) r.push({ t:"", fill:true }); });
+  /* Widths and heights are kept one per column and one per row, so every
+     add and remove below has to keep them lined up with the grid. */
+  if (!Array.isArray(b.widths)) b.widths = [];
+  if (!Array.isArray(b.lines)) b.lines = [];
+  while (b.widths.length < cols) b.widths.push("");
+  b.widths.length = cols;
+  while (b.lines.length < b.rows.length) b.lines.push(1);
+  b.lines.length = b.rows.length;
+  const picker = (choices, value, title, set) => {
+    const sel = document.createElement("select");
+    sel.className = "tt-size";
+    sel.title = title;
+    choices.forEach(([v, text]) => {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = text;
+      sel.appendChild(o);
+    });
+    sel.value = String(value);
+    sel.addEventListener("change", () => { set(sel.value); saveDraft(); schedulePreview(); });
+    return sel;
+  };
+  const WIDTH_CHOICES = [["","Auto width"],["narrow","Narrow"],["medium","Medium"],["wide","Wide"],["wider","Extra wide"]];
+  const LINE_CHOICES = [1,2,3,4,5,6].map(n => [String(n), n === 1 ? "1 line" : n + " lines"]);
 
   const w = el("div","bfield");
   w.appendChild(el("label","","The table"));
@@ -1770,10 +1793,13 @@ EDITORS.table = function(b, k){
     drop.addEventListener("click", () => {
       if (cols <= 1) return;
       b.head.splice(c, 1);
+      b.widths.splice(c, 1);
       b.rows.forEach(r => r.splice(c, 1));
       redraw(); schedulePreview();
     });
     th.appendChild(drop);
+    th.appendChild(picker(WIDTH_CHOICES, b.widths[c] || "", "How wide this column is",
+      v => { b.widths[c] = v; }));
     headRow.appendChild(th);
   });
   headRow.appendChild(el("th","tt-edit-corner",""));
@@ -1801,7 +1827,12 @@ EDITORS.table = function(b, k){
     const end = el("td","tt-edit-corner");
     const drop = el("button","btn-ghost bmini","✕");
     drop.title = "Remove this row";
-    drop.addEventListener("click", () => { b.rows.splice(r, 1); redraw(); schedulePreview(); });
+    drop.addEventListener("click", () => {
+      b.rows.splice(r, 1); b.lines.splice(r, 1);
+      redraw(); schedulePreview();
+    });
+    end.appendChild(picker(LINE_CHOICES, b.lines[r] || 1, "How tall this row is",
+      v => { b.lines[r] = parseInt(v, 10) || 1; }));
     end.appendChild(drop);
     tr.appendChild(end);
     grid.appendChild(tr);
@@ -1815,15 +1846,25 @@ EDITORS.table = function(b, k){
     const fresh = [];
     for (let c = 0; c < cols; c++) fresh.push({ t:"", fill:true });
     b.rows.push(fresh);
+    /* A new row is as tall as the one above it: a table of explanations
+       is usually explanations all the way down. */
+    b.lines.push(b.lines[b.lines.length - 1] || 1);
     redraw(); schedulePreview();
   });
   const addCol = el("button","btn-ghost bmini2","+ Column");
   addCol.addEventListener("click", () => {
     b.head.push("");
+    b.widths.push("");
     b.rows.forEach(r => r.push({ t:"", fill:true }));
     redraw(); schedulePreview();
   });
-  foot.appendChild(addRow); foot.appendChild(addCol);
+  /* For a trace table or a comparison, where the left column names each
+     row rather than being part of the answer. */
+  const side = el("button","btn-ghost bmini2 toggle", "First column is headings");
+  side.type = "button";
+  side.setAttribute("aria-pressed", b.sideHead ? "true" : "false");
+  side.addEventListener("click", () => { b.sideHead = !b.sideHead; redraw(); schedulePreview(); });
+  foot.appendChild(addRow); foot.appendChild(addCol); foot.appendChild(side);
   /* Said once, under the grid, rather than left to be discovered when a
      class has already done it. */
   const marked = b.rows.reduce((n, r) => n + r.filter(c => c && c.fill && String(c.t || "").trim()).length, 0);

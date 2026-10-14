@@ -8388,7 +8388,9 @@ function buildPdf(){
         const parts = (Array.isArray(row) ? row : []).map(cell => {
           const c = (cell && typeof cell === "object") ? cell : { t: String(cell == null ? "" : cell) };
           if (!c.fill) return String(c.t == null ? "" : c.t);
-          const typed = String(said[at++] || "").trim();
+          /* A tall row's box can hold line breaks, which would split the
+             row across the page. */
+          const typed = String(said[at++] || "").replace(/\s*\n\s*/g, " / ").trim();
           return typed || "____";
         });
         out.push({ t: "text", face: "p", text: (r + 1) + ".  " + parts.join("   |   ") });

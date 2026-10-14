@@ -5020,6 +5020,17 @@ html[data-build=compact] .homebar .title{flex:1 1 0; min-width:0}
 .tt-in{width:100%; min-width:120px; border:none; background:transparent; color:var(--text);
   font-family:var(--body); font-size:var(--text-lg); padding:10px 12px; min-height:44px; box-sizing:border-box}
 .tt-in:focus{outline:2px solid var(--amber); outline-offset:-2px; background:var(--panel-2)}
+/* A column the teacher gave a width keeps it: the box's own 120px floor
+   would otherwise make "narrow" mean 120px. */
+.tt [data-sized] .tt-in{min-width:0}
+/* A row taller than one line. The box is a textarea sized to the lines
+   asked for, and the given cells beside it are at least as tall so the
+   row reads as one height rather than whatever the words happened to be. */
+textarea.tt-in{display:block; resize:none; line-height:1.45;
+  height:calc(var(--tt-lines, 1) * 1.45em + 20px)}
+.tt .tt-tall > td:not(.tt-fill), .tt .tt-tall > th{
+  height:calc(var(--tt-lines, 1) * 1.45em + 20px); box-sizing:border-box}
+.tt tbody th{background:var(--panel-2)}
 .tt td[data-verdict=right]{background:var(--mint-dim)}
 .tt td[data-verdict=wrong]{background:var(--red-dim)}
 .tt-actions{display:flex; align-items:center; gap:12px; margin:12px 0 0}
@@ -5034,6 +5045,11 @@ html[data-build=compact] .homebar .title{flex:1 1 0; min-width:0}
 .tt-edit input{width:130px; min-width:0; font-size:var(--text-base); padding:7px 9px}
 .tt-edit th input{font-weight:700}
 .tt-edit-corner{border:none !important; background:transparent}
+/* Column width sits under its heading, row height at the end of its row. */
+.tt-edit .tt-size{font-size:12.5px; padding:4px 6px; width:auto}
+.tt-edit th .tt-size{display:block; width:100%; margin:4px 0 0; font-weight:400}
+.tt-edit-corner .tt-size{margin:0 4px 0 0}
+.tt-edit-corner{white-space:nowrap}
 /* Which of the two a cell is, said by the button rather than by a colour
    alone: the difference matters and colour on its own is not enough. */
 .tt-flip{min-width:30px; font-weight:700}

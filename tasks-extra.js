@@ -969,11 +969,31 @@
      marked, and a table with no answers anywhere has no Check button at
      all: it is then a worksheet to be read, which is a perfectly good
      thing for it to be.
+
+     How it is laid out, all optional:
+       widths:  [ "", "narrow", "wide", ... ]  one per column, "" is auto
+       lines:   [ 1, 3, ... ]                  one per row, how tall it is
+       sideHead: true                          the first column is headings
+     A row taller than one line gets boxes that take more than one line,
+     because "explain what this line does" does not fit in a box sized
+     for a number.
      =================================================================== */
+  /* rem, not em: a heading cell and a body cell are set in different sizes,
+     and a column has to be one width all the way down. */
+  const TT_WIDTHS = { narrow: "4.5rem", medium: "9rem", wide: "15rem", wider: "24rem" };
   window.rTable = function(b, ctx){
     const s = make("section", "tabletask");
     const head = Array.isArray(b.head) ? b.head : [];
     const rows = Array.isArray(b.rows) ? b.rows : [];
+    const widths = Array.isArray(b.widths) ? b.widths : [];
+    const lines = Array.isArray(b.lines) ? b.lines : [];
+    const linesOf = (r) => Math.min(Math.max(parseInt(lines[r], 10) || 1, 1), 6);
+    /* A set width goes on every cell of the column, not just the heading:
+       a table with no heading row still has to honour it. */
+    const sizeCell = (cell, c) => {
+      const w = TT_WIDTHS[widths[c]];
+      if (w){ cell.style.width = w; cell.dataset.sized = ""; }
+    };
     const boxes = [];                 // one per fillable cell, in order
 
     /* A table on a phone is the one thing that genuinely cannot be made
@@ -984,23 +1004,34 @@
     if (head.length){
       const thead = make("thead");
       const tr = make("tr");
-      head.forEach(h => tr.appendChild(make("th", "", String(h == null ? "" : h))));
+      head.forEach((h, c) => {
+        const th = make("th", "", String(h == null ? "" : h));
+        sizeCell(th, c);
+        tr.appendChild(th);
+      });
       thead.appendChild(tr);
       table.appendChild(thead);
     }
     const body = make("tbody");
     rows.forEach((row, r) => {
       const tr = make("tr");
+      const tall = linesOf(r);
+      if (tall > 1){ tr.className = "tt-tall"; tr.style.setProperty("--tt-lines", tall); }
       (Array.isArray(row) ? row : []).forEach((cell, c) => {
-        const td = make("td");
         const want = cell && typeof cell === "object" ? cell : { t: String(cell == null ? "" : cell) };
+        /* A heading down the side is only ever a given cell. One the
+           teacher left as a box stays a box, or it would vanish. */
+        const td = make(b.sideHead && c === 0 && !want.fill ? "th" : "td");
+        if (td.tagName === "TH") td.scope = "row";
+        sizeCell(td, c);
         if (want.fill){
           td.className = "tt-fill";
-          const input = make("input", "tt-in");
-          input.type = "text";
+          const input = make(tall > 1 ? "textarea" : "input", "tt-in");
+          if (tall > 1) input.rows = tall; else input.type = "text";
           input.autocomplete = "off"; input.autocapitalize = "off"; input.spellcheck = false;
+          const side = b.sideHead && c > 0 && row[0] && !row[0].fill ? String(row[0].t || "") : "";
           input.setAttribute("aria-label",
-            (head[c] ? head[c] + ", " : "") + "row " + (r + 1));
+            (head[c] ? head[c] + ", " : "") + (side || "row " + (r + 1)));
           input.addEventListener("input", () => { td.dataset.verdict = ""; ctx.changed(); });
           td.appendChild(input);
           boxes.push({ input: input, td: td, answer: String(want.t == null ? "" : want.t).trim() });
