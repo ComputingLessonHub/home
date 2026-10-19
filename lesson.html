@@ -1764,7 +1764,7 @@ function arrangeAssessment(){
   [ n === 1 ? "There is 1 question, on the next page."
             : "There are " + n + " questions, all on the next page, one after another.",
     "Answer every question. You can scroll back up and change an answer at any time until you hand it in.",
-    "The numbered boxes show which questions you have answered. Press a number to go straight to that question.",
+    "The bar beside the questions shows which ones you have answered. Press it to go straight to a question.",
     "Your answers are saved as you go.",
     "When you have finished, press Finish at the bottom. Once you have handed it in, you cannot go back and change anything."
   ].forEach(t => list.appendChild(el("li","", t)));
@@ -1940,39 +1940,18 @@ function noteQuestionInView(){
    screen on every screen of the assessment, the welcome included, and thirty
    slivers of a line say very little about thirty questions.
 
-   On a wide screen they are a panel beside the questions, a box for each
-   one, filled in once it has an answer and ringed for the one in view, with
-   how many are answered above them. On a phone there is no column to spare,
-   so the bar along the bottom carries how many are answered, and pressing it
-   opens the same boxes. Both are there only while the questions are. */
+   On a wide screen it is one bar up the left of the questions, a piece for
+   each question, filling as they are answered, with a flag beside the one
+   in view. Numbered boxes and a bar on the right were tried as choices in
+   Settings and taken out again: one look is one thing to explain to a class.
+   On a phone there is no column to spare, so the bar along the bottom
+   carries how many are answered, and pressing it opens numbered boxes.
+   Both are there only while the questions are. */
 function buildAssessTracker(){
   const t = $("tracker"); t.innerHTML = "";
   t.hidden = true;
   const A = assessPages;
-  const nav = el("nav","qnav no-print");
-  nav.setAttribute("aria-label","Questions");
-  nav.hidden = true;
-  const head = el("div","qnav-head");
-  head.appendChild(tel("span","qnav-title","Questions"));
-  A.navCount = tel("span","qnav-count","");
-  head.appendChild(A.navCount);
-  nav.appendChild(head);
-  const meter = el("div","qnav-meter");
-  A.navFill = el("span");
-  meter.appendChild(A.navFill);
-  nav.appendChild(meter);
-  const grid = el("div","qnav-grid");
-  A.items.forEach(it => { it.seg = questionBox(it, null); grid.appendChild(it.seg); });
-  nav.appendChild(grid);
-  nav.appendChild(questionKey());
   const row = $("blocks").parentNode;          // the row the task bar sits in
-  row.insertBefore(nav, $("blocks"));
-  A.nav = nav;
-
-  /* The other way of showing it, picked in Settings: one bar up the side of
-     the questions, a piece for each question, filling as they are answered.
-     Less to look at than thirty numbered boxes. Which side it sits on is
-     where paintAssessTracker puts it. */
   const bar = el("nav","qbar no-print");
   bar.setAttribute("aria-label","Questions");
   bar.hidden = true;
@@ -1982,6 +1961,10 @@ function buildAssessTracker(){
   A.items.forEach(it => {
     const piece = el("button","qseg");
     piece.type = "button";
+    /* The flag is part of the button, so pressing the flag goes to the
+       question too. Only shown for the one in view, and for the empty ones
+       once a student has tried to hand in with them still empty. */
+    piece.appendChild(tel("span","qflag", String(it.num)));
     piece.addEventListener("click", () => {
       if (finished && !spectate) return;
       goToQuestion(it, true);
@@ -1992,7 +1975,6 @@ function buildAssessTracker(){
   bar.appendChild(track);
   row.insertBefore(bar, $("blocks"));
   A.bar = bar;
-  A.barTrack = track;
   /* The bar is as tall as the part of the questions on screen, which only
      the page knows once it is laid out, and again whenever that changes. */
   window.addEventListener("resize", sizeQuestionBar);
@@ -2019,7 +2001,8 @@ function questionBox(it, closeFirst){
 }
 function questionKey(){
   const key = el("div","qnav-key");
-  [["done","Answered"],["","Not answered yet"]].forEach(pair => {
+  const empty = assessPages.flagMissing ? ["missing","Not answered"] : ["","Not answered yet"];
+  [["done","Answered"], empty].forEach(pair => {
     const k = el("span","qnav-keyitem");
     k.appendChild(el("span","qnum-swatch" + (pair[0] ? " " + pair[0] : "")));
     k.appendChild(tel("span","", pair[1]));
@@ -2028,7 +2011,10 @@ function questionKey(){
   return key;
 }
 function paintQuestionBox(box, it, has, now, kind){
-  box.className = (kind || "qnum") + (has ? " done" : "") + (now ? " now" : "");
+  /* Red only after a student has tried to hand in: an empty question at the
+     start of a test is not a thing to be warned about. */
+  const missing = !has && assessPages.flagMissing;
+  box.className = (kind || "qnum") + (has ? " done" : "") + (now ? " now" : "") + (missing ? " missing" : "");
   const words = "Question " + it.num + (has ? ", answered" : ", not answered yet");
   box.title = words;
   box.setAttribute("aria-label", words);
@@ -2036,42 +2022,22 @@ function paintQuestionBox(box, it, has, now, kind){
 }
 function paintAssessTracker(){
   const A = assessPages;
-  if (!A.nav) return;
+  if (!A.bar) return;
   const ds = $("doneScreen");
   const onSummaryNow = !!(ds && !ds.hidden);
   /* Only while the questions are on screen: the pages before them have no
      questions to count, and the summary has a score to show instead. */
   const showing = A.onQuestions && !onSummaryNow;
-  const look = questionProgressLook();
-  A.nav.hidden = !showing || look !== "boxes";
-  A.bar.hidden = !showing || look === "boxes";
+  A.bar.hidden = !showing;
   A.navBtn.hidden = !showing;
   document.body.classList.toggle("assess-on-questions", showing);
-  /* Which side the bar is on, so the stylesheet can balance it with an empty
-     column of the same width on the other side and keep the questions in
-     the middle of the screen. */
-  document.body.classList.toggle("qbar-left", showing && look === "left");
-  document.body.classList.toggle("qbar-right", showing && look === "right");
-  /* Before the questions or after them. Moved only when it is on the wrong
-     side, so painting on every keystroke does not keep shifting the page. */
-  if (look !== "boxes"){
-    const blocks = $("blocks");
-    const onRight = A.bar.previousElementSibling === blocks;
-    if (look === "right" && !onRight) blocks.after(A.bar);
-    if (look === "left" && onRight) blocks.before(A.bar);
-    A.bar.classList.toggle("right", look === "right");
-  }
   let answered = 0;
   A.items.forEach(it => {
     const has = questionAnswered(it);
     if (has) answered++;
-    const now = showing && it.step === step;
-    paintQuestionBox(it.seg, it, has, now);
-    paintQuestionBox(it.piece, it, has, now, "qseg");
+    paintQuestionBox(it.piece, it, has, showing && it.step === step, "qseg");
   });
   const total = A.items.length;
-  A.navCount.textContent = answered + " of " + total + " answered";
-  A.navFill.style.width = (total ? Math.round(answered / total * 100) : 0) + "%";
   A.barCount.innerHTML = "";
   A.barCount.appendChild(tel("b","", String(answered)));
   A.barCount.appendChild(tel("span","", "of " + total));
@@ -2079,14 +2045,6 @@ function paintAssessTracker(){
   if (!A.bar.hidden) sizeQuestionBar();
   A.navBtn.textContent = answered + " of " + total + " answered";
   A.navBtn.setAttribute("aria-label", answered + " of " + total + " questions answered. Show the question numbers.");
-}
-/* Which of the two a student has picked in Settings. Kept on this computer,
-   like the rest of Settings, and numbered boxes until they choose. */
-const QPROGRESS_KEY = "hub_qprogress";
-function questionProgressLook(){
-  let v = "";
-  try{ v = localStorage.getItem(QPROGRESS_KEY) || ""; }catch(e){}
-  return v === "left" || v === "right" ? v : "boxes";
 }
 function sizeQuestionBar(){
   const A = assessPages;
@@ -2098,33 +2056,13 @@ function sizeQuestionBar(){
   const stage = $("stage").getBoundingClientRect();
   const top = Math.max(A.bar.getBoundingClientRect().top, stage.top + 16);
   A.bar.style.height = Math.max(160, Math.round(stage.bottom - 16 - top)) + "px";
+  /* A flag with a number in it needs about 18px. With thirty questions on a
+     short screen the pieces are thinner than that, and red flags on two
+     empty questions in a row would sit on top of each other, so then they
+     lose their numbers and become arrows. The one in view keeps its number. */
+  const first = A.items[0] && A.items[0].piece;
+  A.bar.classList.toggle("tight", !!first && first.getBoundingClientRect().height < 18);
 }
-/* Settings is drawn the first time it is opened, by settings.js, which asks
-   the page for any group of its own. Only an assessment being sat has the
-   question progress to choose for. */
-window.settingsSection = (holder) => {
-  if (!holder || !assessPages) return;
-  const grp = el("div","set-group");
-  grp.appendChild(tel("span","set-label","Question progress"));
-  const opts = el("div","font-opts");
-  const choices = [["boxes","Numbered boxes"], ["left","A bar on the left"], ["right","A bar on the right"]];
-  const paint = () => opts.querySelectorAll(".set-opt").forEach((b, k) =>
-    b.classList.toggle("on", choices[k][0] === questionProgressLook()));
-  choices.forEach(([look, words]) => {
-    const b = tel("button","set-opt", words);
-    b.type = "button";
-    b.addEventListener("click", () => {
-      try{ localStorage.setItem(QPROGRESS_KEY, look); }catch(e){}
-      paint();
-      paintTracker();             // changes over now, under the pop-up
-    });
-    opts.appendChild(b);
-  });
-  grp.appendChild(opts);
-  grp.appendChild(tel("p","subnote","How the questions you have answered are shown beside them. On a phone they are always under the button at the bottom. Kept on this computer."));
-  holder.appendChild(grp);
-  paint();
-};
 /* The boxes again, in a pop-up, for a phone. Built fresh each time it
    opens, so it always says what is answered now. */
 function openQuestionSheet(){
@@ -2169,22 +2107,25 @@ function assessRepaintSoon(){
 }
 
 /* Finish is never held up, but before anything is handed in it says what
-   is still empty, the way a form does before it is sent. Three numbers at
-   most: a list of eleven reads as a telling-off, and the first few are
-   enough to go and find. Then, empty or not, one last question, because
-   there is no coming back from it without a teacher. */
+   is still empty, the way a form does before it is sent. Not by listing
+   numbers: from then on the empty ones are flagged in red on the bar, which
+   is where a student goes looking, and stays right as they fill them in.
+   Then, empty or not, one last question, because there is no coming back
+   from it without a teacher. */
 function askToHandIn(){
   const missing = assessPages.items.filter(it => !questionAnswered(it));
   if (!missing.length){ confirmHandIn(); return; }
+  assessPages.flagMissing = true;
+  paintTracker();
   const count = missing.length;
-  const nums = missing.slice(0, 3).map(it => String(it.num));
-  const which = count === 1 ? "Question " + nums[0] + " has no answer yet."
-    : count <= 3 ? "Questions " + joinWords(nums) + " have no answer yet."
-    : "Including questions " + joinWords(nums) + ".";
+  /* On a phone the bar is not there; the red is in the numbers the bottom
+     button opens. */
+  const phone = window.matchMedia("(max-width:720px)").matches;
   handInModal({
     eyebrow: "Not finished yet",
     title: "You have not answered " + (count === 1 ? "1 question" : count + " questions"),
-    text: which,
+    text: phone ? "Press the button at the bottom and look for the questions marked red."
+                : "Look for the questions marked red on the side.",
     yes: { label: "Go back and complete the questions", act: () => goToQuestion(missing[0], true) },
     no:  { label: "Submit my assessment anyway", act: confirmHandIn },
     focus: "yes"

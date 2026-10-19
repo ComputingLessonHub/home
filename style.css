@@ -6521,27 +6521,15 @@ body.lpvpage{height:100vh; height:100dvh; overflow:hidden; display:flex; flex-di
    mobile rules above set. Where one has to beat an older rule it matches
    that rule's selector and adds to it, rather than relying on coming last. */
 
-/* The question numbers, in a panel beside the questions. Sticky inside the
-   stage, the same way the task bar is, so it stays put while the questions
-   scroll past it. */
-.qnav{
-  position:sticky; top:16px; z-index:5; flex:0 0 212px; align-self:flex-start;
-  margin:16px 0 0; padding:16px;
-  background:var(--panel); border:1px solid var(--line); border-radius:16px;
-}
-.qnav[hidden]{display:none}
-.qnav-head{display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin:0 0 8px}
-.qnav-title{font-family:var(--display); font-weight:800; font-size:15px}
-.qnav-count{font-size:12.5px; font-weight:600; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap}
-.qnav-meter{height:6px; border-radius:999px; background:var(--line); overflow:hidden; margin:0 0 14px}
-.qnav-meter > span{display:block; height:100%; width:0; background:var(--amber); border-radius:inherit; transition:width .25s ease}
-.qnav-grid{display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:6px}
-/* A box for each question: outlined while it is empty, filled in the
+/* The question numbers on a phone, in the pop-up the bottom bar opens.
+   A box for each question: outlined while it is empty, filled in the
    site's blue once it has an answer, and ringed in the text colour for the
    one on screen. Blue rather than green, because green beside a question
    reads as "right", and nothing is marked until it is handed in. A ring
    rather than a colour, so the one on screen still says whether it is
-   answered. */
+   answered. Red outline and number once a student has tried to hand in
+   with it empty. */
+.qnav-grid{display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:6px}
 .qnum{
   height:34px; min-height:0; min-width:0; padding:0;
   border:1.5px solid var(--line-2); border-radius:9px;
@@ -6557,23 +6545,25 @@ body.lpvpage{height:100vh; height:100dvh; overflow:hidden; display:flex; flex-di
 .qnav-keyitem{display:inline-flex; align-items:center; gap:6px}
 .qnum-swatch{width:14px; height:14px; border-radius:4px; border:1.5px solid var(--line-2); background:var(--panel)}
 .qnum-swatch.done{background:var(--amber); border-color:var(--amber)}
+.qnum.missing, .qnum-swatch.missing{border-color:var(--red); color:var(--red)}
 
-/* The other look, picked in Settings: one bar up the side of the questions,
-   a piece for each, filled in blue as they are answered, with the count on
-   top. Each piece is a button as wide as the bar's column though what shows
-   is a narrow strip, because a strip that narrow is too small to aim at. */
+/* On a wide screen: one bar up the left of the questions, a piece for
+   each, filled in blue as they are answered, with the count on top. Sticky
+   inside the stage, the same way the task bar is, so it stays put while the
+   questions scroll past it. Each piece is a button as wide as the bar's
+   column though what shows is a narrow strip, because a strip that narrow
+   is too small to aim at. The padding on the left is room for the flags,
+   which hang out of the pieces towards it. */
 .qbar{
-  position:sticky; top:16px; z-index:5; flex:0 0 52px; align-self:flex-start;
+  position:sticky; top:16px; z-index:5; flex:0 0 88px; align-self:flex-start;
   display:flex; flex-direction:column; align-items:center; gap:10px;
-  margin:16px 0 0; height:400px;
+  margin:16px 0 0; padding-left:40px; height:400px;
 }
 .qbar[hidden]{display:none}
-/* The questions stay in the middle of the screen whichever side the bar is
-   on: an empty column as wide as the bar balances it on the other side.
-   Centring the bar and the questions together moved the questions half a
-   bar's width away from the middle, and the other way when it swapped. */
-body.qbar-left.assess-on-questions .stagerow::after,
-body.qbar-right.assess-on-questions .stagerow::before{content:""; flex:0 0 52px}
+/* The questions stay in the middle of the screen: an empty column as wide
+   as the bar balances it on the other side. Centring the bar and the
+   questions together moved the questions half a bar's width off the middle. */
+body.assess-on-questions .stagerow::after{content:""; flex:0 0 88px}
 .qbar-count{display:flex; flex-direction:column; align-items:center; line-height:1.1;
   font-variant-numeric:tabular-nums; color:var(--muted); font-size:12px; font-weight:600; white-space:nowrap}
 .qbar-count b{font-family:var(--display); font-size:20px; font-weight:800; color:var(--text)}
@@ -6592,13 +6582,38 @@ body.qbar-right.assess-on-questions .stagerow::before{content:""; flex:0 0 52px}
 .qseg:last-child::before{border-radius:0 0 7px 7px}
 .qseg:hover::before{background:var(--muted)}
 .qseg.done::before{background:var(--amber)}
-/* The one on screen: an arrow beside the bar pointing at it, on the side the
-   questions are, in the text colour like the ring round its box. */
-.qseg.now::after{
-  content:""; position:absolute; top:50%; left:calc(50% + 10px); margin-top:-6px;
-  border:6px solid transparent; border-left:0; border-right:8px solid var(--text);
+/* A flag to the left of the bar, its point at the piece it belongs to,
+   with the question's number in it. Filled in the text colour for the one
+   on screen; outlined in red with a red number for an empty one once a
+   student has tried to hand in, so they can see where to go back to. The
+   point is a square turned on its corner, half hidden behind the flag, so
+   it carries the same outline as the rest of it. */
+.qflag{
+  --flag-line:var(--text); --flag-fill:var(--text);
+  display:none; position:absolute; top:50%; right:calc(50% + 13px); z-index:1;
+  height:18px; min-width:22px; padding:0 2px 0 5px; box-sizing:border-box;
+  transform:translateY(-50%);
+  border:1.5px solid var(--flag-line); border-right:0; border-radius:4px 0 0 4px;
+  background:var(--flag-fill); color:var(--panel);
+  font-size:11px; font-weight:800; line-height:15px; text-align:center;
+  font-variant-numeric:tabular-nums; white-space:nowrap;
 }
-.qbar.right .qseg.now::after{left:auto; right:calc(50% + 10px); border-right:0; border-left:8px solid var(--text)}
+.qflag::after{
+  content:""; position:absolute; z-index:-1; top:50%; right:-5px; width:11px; height:11px;
+  transform:translateY(-50%) rotate(45deg);
+  border-top:1.5px solid var(--flag-line); border-right:1.5px solid var(--flag-line);
+  border-radius:0 2px 0 0; background:var(--flag-fill); box-sizing:border-box;
+}
+.qseg.now .qflag, .qseg.missing .qflag{display:block}
+.qseg.missing .qflag{--flag-line:var(--red); --flag-fill:var(--panel); color:var(--red)}
+.qseg.missing.now .qflag{--flag-fill:var(--red); color:var(--panel)}
+.qseg.missing::before{background:var(--red-dim)}
+/* Too thin for numbers: the red flags shrink to arrows. */
+.qbar.tight .qseg.missing:not(.now) .qflag{
+  min-width:0; width:0; height:0; padding:0; font-size:0; background:none; border-radius:0;
+  border:5px solid transparent; border-right:0; border-left:8px solid var(--red);
+}
+.qbar.tight .qseg.missing:not(.now) .qflag::after{display:none}
 .qseg:focus-visible{outline:none}
 .qseg:focus-visible::before{outline:2px solid var(--amber); outline-offset:2px}
 
@@ -6633,7 +6648,7 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
    the bottom says how many are answered and opens them in a pop-up. */
 .qnav-open{display:none}
 @media (max-width:720px){
-  .qnav, .qbar{display:none}
+  .qbar{display:none}
   .qnav-open:not([hidden]){display:inline-flex; align-items:center; justify-content:center;
     max-width:100%; padding:8px 14px; font-size:14px; font-weight:700; white-space:nowrap}
   .assess-questions > .pg-item{padding:16px 16px 18px; margin-bottom:20px; border-radius:14px}
