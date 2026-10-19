@@ -749,6 +749,10 @@ html[data-bg=night] .result-card .st i{color:#F0938E}
 .done-shots .done-shot{margin:0}
 .done-shots .shot-img{max-height:220px; cursor:zoom-in}
 /* where Back to my work would be, while the teacher has it locked */
+.done-locked .hi,.warnline .hi{vertical-align:-3px}
+/* a padlock where the tick would be: not finished, so not green */
+.done-tick.done-lockmark{color:var(--amber); border-color:var(--amber); background:color-mix(in srgb, var(--amber) 8%, transparent)}
+.statechip .hi{vertical-align:-2px}
 .done-locked{margin:0 0 6px; padding:10px 14px; border-radius:var(--rad-md); font-weight:700;
   border-left:4px solid var(--amber); background:color-mix(in srgb, var(--amber) 10%, transparent)}
 .done-score{font-family:var(--display); font-size:var(--text-7xl); font-weight:700; line-height:1; margin-top:6px}
@@ -1158,6 +1162,9 @@ body.spectating.embedded{padding-top:0}
   margin:4px 0 14px; padding:12px 14px; border-radius:var(--rad-md);
   border:1.5px solid var(--line); background:var(--panel-2)}
 .marklock.on{border-color:var(--amber); background:color-mix(in srgb, var(--amber) 10%, var(--panel))}
+.marklock-ico{flex:none; width:40px; height:40px; border-radius:var(--rad-sm); display:grid; place-items:center;
+  background:var(--panel); color:var(--muted); border:1px solid var(--line)}
+.marklock.on .marklock-ico{background:var(--amber); color:var(--amber-ink); border-color:var(--amber)}
 .marklock-words{flex:1 1 260px; display:flex; flex-direction:column; gap:2px}
 .marklock-words span{font-size:var(--text-base); color:var(--muted)}
 .lp-acts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px}
@@ -1513,11 +1520,7 @@ html.builder .loadscreen{z-index:90}
   font-size:var(--text-sm); text-align:left; margin:0 0 14px}
 
 
-/* builder: mode tabs, nested pages, quiz sub-cards */
-.modeswitch{display:flex; gap:6px; padding:10px 24px 0; background:var(--bar)}
-.modeswitch button{background:transparent; border:1.5px solid transparent; border-bottom:none;
-  color:var(--muted); font-size:var(--text-lg); font-weight:800; padding:9px 22px; border-radius:12px 12px 0 0}
-.modeswitch button.on{background:var(--panel); border-color:var(--line); color:var(--text)}
+/* builder: nested pages, quiz sub-cards */
 .pal.strong{border-color:var(--amber); background:var(--panel-2)}
 .pagekids{margin:6px 0 10px; padding:10px 0 2px 12px; border-left:3px solid var(--line-2)}
 .pagekids .bcard{background:var(--panel-2)}
@@ -1833,7 +1836,8 @@ html[data-bg=dark] .mbtick .yes{color:var(--mint)}
 .build-titles{align-items:center}
 
 /* markbook: scrolls, and columns can be sorted */
-.mbscroll{max-height:44vh; overflow:auto; border:1px solid var(--line); border-radius:var(--rad-md); margin:0 0 18px}
+.mbscroll{max-height:44vh; overflow:auto; border:1px solid var(--line); border-radius:var(--rad-md); margin:0 0 18px;
+  background:var(--panel)}
 .mbtable th{position:sticky; top:0; background:var(--panel); z-index:2}
 .mbsort{cursor:pointer; white-space:nowrap}
 .mbsort:hover{color:var(--amber-dark)}
@@ -2098,29 +2102,39 @@ body.workpage .grow{flex:1}
 .workwrap{flex:1; min-height:0; display:flex; flex-direction:column;
   padding:12px 22px 14px; box-sizing:border-box; overflow:hidden}
 
-/* --- the progress markbook --- */
+/* --- a lesson's markbook ---
+   Drawn as an assessment's markbook is (.mbtable, .mbbar, .mbstats), so the
+   rules here are only what a lesson has and a test does not: a row of page
+   names over the headings, the task-type filters and the eye on a column. */
 .progress-pill{font-size:var(--text-sm); font-weight:700; padding:6px 14px; border-radius:var(--rad-pill);
   border:1.5px solid var(--line-2); background:var(--panel); color:var(--muted); cursor:pointer}
 .progress-pill.on{border-color:var(--amber); color:var(--amber)}
-.progresswrap{flex:1; min-height:0; overflow:auto; border:1px solid var(--line); border-radius:var(--rad-md)}
-.progresstable{width:100%; border-collapse:collapse; font-size:var(--text-md); white-space:nowrap}
-.progresstable th,.progresstable td{border-bottom:1px solid var(--line); padding:8px 12px; text-align:center}
-.progresstable th{position:sticky; top:0; background:var(--panel); font-size:var(--text-sm);
-  color:var(--muted); font-weight:800; z-index:2}
-.progresstable .pcol-name{position:sticky; left:0; background:var(--panel); text-align:left}
-.progresstable td.pcol-name{cursor:pointer}
-.progresstable .pcol-name span{display:block; font-size:var(--text-xs); color:var(--muted); font-weight:400}
-.progresstable .pcol-total{position:sticky; right:0; background:var(--panel); font-weight:800}
-.progresstable th.pcol-name,.progresstable th.pcol-total{z-index:3}
+.mbfilters{display:flex; flex-wrap:wrap; align-items:center; gap:8px}
+.progresswrap{flex:1; min-height:0; overflow:auto; border:1px solid var(--line); border-radius:var(--rad-md);
+  background:var(--panel)}
+.progresstable{white-space:nowrap}
+/* the one column that stays put while a wide lesson scrolls sideways */
+.progresstable .pcol-name{position:sticky; left:0; background:var(--panel); z-index:1}
+.progresstable th.pcol-name{z-index:3}
+.progresstable td.pcol-total{font-weight:800}
+.progresstable .mblink{cursor:pointer}
+.progresstable .mblink:hover{text-decoration:underline; color:var(--amber-dark)}
+/* the same sizing as an assessment's markbook pane: the table takes the
+   height left over, and everything else is as tall as it needs */
+.lessonmb{overflow-y:auto}
+.lessonmb > *{flex:0 0 auto}
+.lessonmb > .progresswrap{flex:1 1 auto; min-height:280px}
+.lessonmb > #progressMsg:empty{display:none}
+.lessonmb .mbhint{margin:8px 0 14px}
+.lessonmb .progress-types{margin-top:0}
 /* the page a column belongs to, above the task-type row */
 .progresstable .pcol-page{font-size:var(--text-xs); letter-spacing:.04em; text-transform:uppercase;
-  color:var(--dim); background:var(--panel-2); border-bottom:1px solid var(--line-2)}
+  color:var(--dim); background:var(--panel-2); border-bottom:1px solid var(--line-2); padding-top:6px; padding-bottom:6px}
+.progresstable .pcol-page.pcol-lead{left:0; z-index:3}
 /* a task that only ever appears once a student says they have finished early */
 .progresstable .pcol-ext{color:var(--amber-dark);
   background:color-mix(in srgb, var(--amber) 12%, var(--panel-2))}
 /* every header that reorders the rows when clicked */
-.progresstable .pcol-sort{cursor:pointer; user-select:none}
-.progresstable .pcol-sort:hover{color:var(--text)}
 .progresscell .yes{color:var(--mint); font-weight:800}
 .progresscell .part{color:var(--amber-dark); font-weight:800}
 .progresscell .no{color:var(--red)}
@@ -2473,11 +2487,11 @@ textarea,select,.searchbox{ border-radius:var(--rad-md) }
   text-decoration-color:color-mix(in srgb, var(--amber) 30%, transparent) }
 
 /* --- tabs: a pill for the one you are on --- */
-.tabs button,.subtabs button,.modeswitch button{
+.tabs button,.subtabs button{
   border-radius:var(--rad-pill); text-transform:none; letter-spacing:.01em; font-size:var(--text-md);
   border:1.5px solid transparent; background:transparent;
 }
-.tabs button.on,.subtabs button.on,.modeswitch button.on{
+.tabs button.on,.subtabs button.on{
   background:var(--panel); border-color:var(--line); color:var(--text)
 }
 
@@ -2571,7 +2585,7 @@ html[data-bg=night] #hubTint{mix-blend-mode:screen; opacity:.5}
    the bar at the bottom 77px deep. Repeated below it so they keep their own. */
 .btn-continue{ line-height:1.9; font-size:var(--text-lg); padding:8px 26px }
 .ide-run{ line-height:1.8; font-size:var(--text-md); padding:5px 16px }
-.tabs button,.subtabs button,.modeswitch button{ line-height:2.1; padding:0 15px }
+.tabs button,.subtabs button{ line-height:2.1; padding:0 15px }
 .lp-acts button{ line-height:2.1 }
 
 /* which made the top bar deeper than it needed to be */
@@ -3794,14 +3808,16 @@ body.allmode .tracker,body.allmode .trackmeta,body.allmode .crumbbar{display:non
    author.html rather than by a media query alone, because the pieces are
    moved about in the page as well as restyled and the two must agree.
    ===================================================================== */
-.modechip{display:none}
-html[data-build=compact] .modechip{
-  display:inline-flex; align-items:center; gap:7px; padding:6px 12px;
+/* What kind of work this is, in the top bar in both layouts. It reads as a
+   label and opens Lesson options, where the kind is changed. */
+.modechip{
+  display:inline-flex; align-items:center; gap:7px; padding:5px 12px;
   border:1.5px solid var(--line-2); border-radius:var(--rad-pill); background:var(--panel);
   font-family:var(--body); font-size:var(--text-sm); font-weight:800; color:var(--text);
   cursor:pointer; white-space:nowrap}
+.modechip[hidden]{display:none}
 .modechip:hover{border-color:var(--amber); color:var(--amber)}
-.modechip-pen{font-size:var(--text-xs); opacity:.65}
+.modechip[data-kind=assess],.modechip[data-kind=practical]{border-color:color-mix(in srgb, var(--amber) 55%, var(--line-2)); color:var(--amber-dark)}
 
 /* the one row of controls under the top bar */
 .buildbar{display:flex; align-items:center; gap:8px; padding:8px 14px;
@@ -3824,12 +3840,56 @@ html[data-build=compact] .buildbar .subtabs{
 html[data-build=compact] .buildbar .subtabs button{
   padding:6px 13px; font-size:var(--text-base); white-space:nowrap}
 
-/* picking what kind of work this is */
+/* a list of choices in a pop-up, one per line */
 .modepick{display:flex; flex-direction:column; gap:8px; margin:14px 0 4px}
 .modepick-item{padding:15px 16px; border:1.5px solid var(--line-2); border-radius:var(--rad-md);
   background:var(--panel); font-family:var(--body); font-size:var(--text-lg); font-weight:700;
   color:var(--text); cursor:pointer; text-align:left}
 .modepick-item:hover{border-color:var(--amber); color:var(--amber)}
+
+/* Picking what kind of work this is: four cards, each saying what it means,
+   in two columns where there is room. The same cards are the first section
+   of Lesson options. */
+.kindgrid{display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; margin:12px 0 4px}
+.kindcard{display:flex; align-items:flex-start; gap:12px; padding:14px 14px; text-align:left;
+  border:1.5px solid var(--line-2); border-radius:var(--rad-md); background:var(--panel);
+  font-family:var(--body); color:var(--text); cursor:pointer;
+  transition:border-color .12s ease, background .12s ease}
+.kindcard:hover{border-color:var(--amber)}
+.kindcard.on{border-color:var(--amber); background:color-mix(in srgb, var(--amber) 8%, var(--panel))}
+.kindcard-ico{flex:none; width:38px; height:38px; border-radius:var(--rad-sm); display:grid; place-items:center;
+  background:var(--panel-2); color:var(--muted)}
+.kindcard.on .kindcard-ico{background:var(--amber); color:var(--amber-ink)}
+.kindcard-words{display:flex; flex-direction:column; gap:3px; min-width:0}
+.kindcard-words b{font-size:var(--text-md); font-weight:800}
+.kindcard-words span{font-size:var(--text-sm); color:var(--muted); line-height:1.4}
+.modal.kindpop{max-width:700px}
+@media (max-width:560px){ .kindgrid{grid-template-columns:1fr} }
+
+/* Lesson options: sections with a heading each, and settings as rows with a
+   switch at the end rather than buttons that say "on" in their own words. */
+.modal.lessonopts{max-width:700px; text-align:left}
+.lessonopts h2{margin-bottom:6px}
+.optsec{padding:16px 0 4px; border-top:1px solid var(--line)}
+.optsec:first-of-type{border-top:none; padding-top:6px}
+.optsec-head{margin:0 0 4px; font-family:var(--display); font-size:var(--text-md); font-weight:800; color:var(--text)}
+.optsec-about{margin:0 0 10px; font-size:var(--text-sm); color:var(--muted)}
+.optsec .bfield:last-child{margin-bottom:8px}
+/* a row, side by side: the rule further down makes .savepickers a column,
+   and in a column the basis below would be each picker's height */
+.optsec .savepickers{display:flex; flex-direction:row; flex-wrap:wrap; gap:8px}
+.optsec .savepickers select{flex:1 1 220px; width:auto; min-width:0}
+.lessonopts .bfield input{width:100%}
+.optrows{display:flex; flex-direction:column; gap:8px; margin:6px 0 8px}
+.optrow{display:flex; align-items:center; gap:10px; padding:10px 12px;
+  border:1px solid var(--line); border-radius:var(--rad-md); background:var(--panel-2)}
+.optrow-words{flex:1 1 auto; display:flex; flex-direction:column; gap:2px; min-width:0}
+.optrow-words b{font-size:var(--text-base); font-weight:800}
+.optrow-words span{font-size:var(--text-sm); color:var(--muted); line-height:1.4}
+.optrow-wrap .voice-picks{margin:8px 0 0 12px}
+.optrow-wrap label.voice-pick{display:flex; align-items:flex-start; gap:10px; margin:0; font-size:var(--text-base);
+  font-weight:400; line-height:1.4; cursor:pointer}
+.optrow-wrap label.voice-pick input{width:18px; height:18px; margin:1px 0 0; flex:none; accent-color:var(--amber)}
 /* Hiding the rest of a page: the levels in the pop-up, each with a line
    saying what it asks of a student, and the one in force picked out. */
 .gatepick{display:flex; flex-direction:column; gap:3px}
@@ -3852,7 +3912,6 @@ html[data-build=compact]{
   --buildbar-h:54px;
 }
 html[data-build=compact], html[data-build=compact] body{height:auto; overflow:auto}
-html[data-build=compact] .modeswitch,
 html[data-build=compact] .build-top,
 html[data-build=compact] .build-palette{display:none}
 html[data-build=compact] .build{display:block; height:auto}
@@ -4048,7 +4107,7 @@ body > *:not(script):not(.modal-back):not(#hubTint):not(.confetti):not(.pdfshell
   animation:hub-arrive .34s cubic-bezier(.22,.61,.36,1);
 }
 /* the bars settle a little sooner than what sits underneath them */
-body > .homebar, body > .topbar, body > .crumbbar, body > .modeswitch{
+body > .homebar, body > .topbar, body > .crumbbar{
   animation-duration:.24s;
 }
 /* The loading screen covers the page while a lesson is put together, so it
@@ -6031,6 +6090,11 @@ body.has-rail #pwBtn, body.has-rail #keepBtn, body.has-rail #logBtn{display:none
 /* The site's name and logo. In the top bar on a phone, and wherever the side
    menu is off; at the head of the side menu otherwise, where the menu runs
    the full height and the top bar starts beside it. */
+/* Back to the console, at the left of a page the console opened in its own
+   tab. Just the arrow on a phone, where the bar has no room for the word. */
+.consoleback{display:inline-flex; align-items:center; gap:6px; flex:none; padding:6px 12px 6px 9px; font-weight:700}
+.consoleback .hi{flex:none}
+@media (max-width:700px){ .consoleback{padding:6px 8px} .consoleback-words{display:none} }
 .brandtitle{display:inline-flex; align-items:center; gap:10px; white-space:nowrap}
 .brandlogo{flex:none; width:28px; height:28px; display:block}
 .rail-brand{display:flex; align-items:center; gap:10px; margin:-4px 0 12px; padding:6px 8px 14px;
@@ -6851,8 +6915,9 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
   box-shadow:0 1px 2px rgba(0,0,0,.05); transition:transform .12s, border-color .12s, box-shadow .12s}
 .voice-opt:hover, .voice-opt:focus-visible{border-color:var(--amber); transform:translateY(-2px);
   box-shadow:0 6px 16px rgba(0,0,0,.08); outline:none}
-.voice-icon{font-size:var(--text-5xl); line-height:1}
-.voice-opts[data-kind=choice] .voice-icon{font-size:var(--text-4xl)}
+.voice-icon{display:grid; place-items:center; line-height:0; color:var(--muted); transition:color .12s ease}
+.voice-opts[data-kind=choice] .voice-icon svg{width:36px; height:36px}
+.voice-opt:hover .voice-icon, .voice-opt:focus-visible .voice-icon, .voice-opt.on .voice-icon{color:var(--amber)}
 .voice-word{font-size:var(--text-base); line-height:1.3; text-align:center; color:var(--muted); font-weight:600}
 .voice-opt:hover .voice-word, .voice-opt:focus-visible .voice-word{color:var(--text)}
 .voice-card p.voice-trouble{color:var(--red); font-weight:700; font-size:var(--text-md)}
@@ -6914,6 +6979,11 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
 .mbvoice-pill:hover{border-color:var(--amber)}
 .mbvoice-pill.on{border-color:var(--amber); background:color-mix(in srgb, var(--amber) 10%, var(--panel))}
 .mbvoice-pill.on b{background:var(--amber); color:var(--amber-ink)}
+/* Student Voice for a year group: which assessment and which class, then
+   the markbook's own cards */
+.yvoice-bar{display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 14px}
+.yvoice-bar select{flex:1 1 220px; height:42px; padding:0 12px; border:1.5px solid var(--line-2); border-radius:var(--rad-md);
+  background:var(--panel); color:var(--text); font-family:var(--body); font-size:var(--text-base)}
 .mbvoice{display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; margin:0 0 14px}
 .mbvoice-q{display:flex; flex-direction:column; gap:6px; padding:12px 14px; text-align:left;
   border:1px solid var(--line); border-radius:var(--rad-md); background:var(--panel); color:var(--text); font:inherit}
@@ -6931,6 +7001,7 @@ button.mbvoice-row:hover{background:var(--panel-2)}
 button.mbvoice-row.on{border-color:var(--amber); background:color-mix(in srgb, var(--amber) 10%, var(--panel))}
 /* wrapped rather than cut short: "The lesson on th..." says nothing */
 .mbvoice-opt{color:var(--muted); line-height:1.3}
+.mbvoice-opt .hi{vertical-align:-4px; color:var(--amber)}
 button.mbvoice-row.on .mbvoice-opt{color:var(--text); font-weight:700}
 .mbvoice-bar{height:10px; border-radius:99px; background:var(--panel-2); overflow:hidden}
 .mbvoice-fill{display:block; height:100%; border-radius:99px; background:var(--amber)}

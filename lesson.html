@@ -1340,9 +1340,10 @@ const handedOver = handedLesson();
         ? "Viewing " + (inspectName || "a student") + "'s work, click here to go back"
         : "Teacher preview, this is what students will see \u00b7 click here to go back");
       backBit.type = "button";
+      /* Opened in the console's own tab now, where window.close does nothing,
+         so it steps back to the console rather than trying to shut itself. */
       backBit.addEventListener("click", () => {
-        if (window.close) window.close();
-        setTimeout(() => { location.href = "admin.html"; }, 150);
+        if (window.consoleNav) window.consoleNav.back(); else location.href = "admin.html";
       });
       vb.appendChild(backBit);
       if (inspectList && inspectList.length && pdfParam === null){   // show it even for one student
@@ -1373,7 +1374,13 @@ const handedOver = handedLesson();
       }
       document.body.appendChild(vb);           // position:fixed, order doesn't matter
       const home = $("homeLink");
-      if (home){ home.textContent = "\u2190 Teacher console"; home.href = "admin.html"; }
+      if (home){
+        home.textContent = "\u2190 Teacher console"; home.href = "admin.html";
+        home.addEventListener("click", (e) => {
+          if (!window.consoleNav) return;
+          e.preventDefault(); window.consoleNav.back();
+        });
+      }
       hideLoader();
       /* A link that has lost characters on its way through a chat window
          decodes to nothing. Saying so beats showing an empty lesson that
@@ -7834,7 +7841,10 @@ function rQuiz(b){
 
 function rPassword(b){
   const s = el("section");
-  s.appendChild(el("p","warnline","🔒 Test made-up passwords only, never a real one. Nothing you type here is sent anywhere or saved."));
+  const warn = el("p","warnline","");
+  warn.innerHTML = lockIcon(16);
+  warn.appendChild(document.createTextNode(" Test made-up passwords only, never a real one. Nothing you type here is sent anywhere or saved."));
+  s.appendChild(warn);
   const inp = el("input"); inp.type = "text"; inp.autocomplete = "off"; inp.placeholder = "Try a password…";
   s.appendChild(inp);
   const meter = el("div","meter"); const bar = el("div","meter-bar"); meter.appendChild(bar); s.appendChild(meter);
@@ -9045,6 +9055,14 @@ function submittedShots(){
   return row;
 }
 
+/* A padlock drawn the way the console draws its icons, in the colour of
+   whatever it sits in. This page does not load ui.js, so it keeps its own. */
+function lockIcon(size){
+  const s = size || 18;
+  return '<svg class="hi" viewBox="0 0 24 24" width="' + s + '" height="' + s + '" fill="none" stroke="currentColor" '
+    + 'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+    + '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+}
 /* Locked for marking before they had finished. There is nothing to show
    but where things stand, and no way back into the tasks. */
 function showMarkingLocked(){
@@ -9057,7 +9075,7 @@ function showMarkingLocked(){
     "Your teacher is marking this. You can carry on with it once they unlock it.");
   /* a padlock rather than the tick: nothing here has been finished */
   const mark = hero.querySelector(".done-tick");
-  if (mark) mark.textContent = "\u{1F512}";
+  if (mark){ mark.innerHTML = lockIcon(40); mark.classList.add("done-lockmark"); }
   box.appendChild(hero);
 }
 /* The lock arriving while the page is open: from the save being refused, or
@@ -9277,13 +9295,18 @@ function renderAssessmentComplete(justFinished, res, st, sent){
   stCard.appendChild(sRow); stCard.appendChild(tRow);
   cards.appendChild(stCard);
 
-  // what to do about it, in the second
+  /* what to do about it, in the second: only when the lesson has response
+     tasks or extensions to do. A card and a button pointing at an empty
+     space below promised practice that was never coming. */
+  const respBank = (lesson && lesson.responses) || {};
+  const hasResponses = Object.keys(respBank).some(k => (respBank[k] || []).length) ||
+                       ((lesson && lesson.extensions) || []).length > 0;
   const respCard = el("div","st-card flyin");
   respCard.appendChild(el("h2","sect-head","Response"));
   respCard.appendChild(el("p","modal-text","Some practice on the topic your target is about."));
   const jump = el("button","btn-primary fadein","Start response tasks \u2193");
   respCard.appendChild(jump);
-  cards.appendChild(respCard);
+  if (hasResponses) cards.appendChild(respCard);
 
   /* Only what is left over once the card above has taken the wording. */
   const teacherCard = feedbackCard({ comment: tn.comment });
@@ -9484,8 +9507,13 @@ function voiceAsk(card, q, trouble){
   q.options.forEach((text, i) => {
     const b = el("button","voice-opt");
     b.type = "button";
-    const icon = (q.icons && q.icons[i]) || "";
-    if (icon) b.appendChild(el("span","voice-icon", icon)).setAttribute("aria-hidden","true");
+    const icon = window.studentVoice.iconOf(q, i, 44);
+    if (icon){
+      const pic = el("span","voice-icon");
+      pic.innerHTML = icon;
+      pic.setAttribute("aria-hidden","true");
+      b.appendChild(pic);
+    }
     b.appendChild(el("span","voice-word", text));
     b.addEventListener("click", () => pickVoice(card, q, i));
     opts.appendChild(b);
@@ -10265,8 +10293,10 @@ function doneShell(title){
   /* A way back into the work. Someone who has finished still wants to reread
      what they wrote, and without this the only way back was to reload. */
   if (markingLocked && !spectate){
-    box.appendChild(el("p","done-locked",
-      "🔒 Your teacher has locked this while they mark it, so it cannot be changed just now."));
+    const note = el("p","done-locked", "");
+    note.innerHTML = lockIcon(17);
+    note.appendChild(document.createTextNode(" Your teacher has locked this while they mark it, so it cannot be changed just now."));
+    box.appendChild(note);
   } else if (steps.length && !(assessPages && !spectate)){
     /* Not for a marked assessment a student has handed in. They were told
        twice that there was no going back; their answers are under View my

@@ -147,6 +147,66 @@ html[data-look="new"] .dock{
 }
 html[data-look="new"] .checklist{box-shadow:var(--look-shadow-1)}
 
+/* ---------- the plain top bar: the sandbox and a student's lesson ---------- */
+html[data-look="new"] .topbar{
+  background:color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter:saturate(1.4) blur(10px); -webkit-backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom-color:transparent; box-shadow:var(--look-shadow-1); padding-top:8px; padding-bottom:8px
+}
+/* The way back reads as a button, the same as Console on the other pages,
+   rather than small capitals that look like a label. */
+html[data-look="new"] .topbar .home{
+  font-family:var(--body); font-size:var(--text-sm); font-weight:700; letter-spacing:0; text-transform:none;
+  color:var(--amber-dark); padding:6px 12px; border:1.5px solid var(--line-2); border-radius:var(--rad-pill);
+  background:var(--panel); transition:background .12s ease, border-color .12s ease
+}
+html[data-look="new"] .topbar .home:hover{background:var(--look-tint); border-color:color-mix(in srgb, var(--brand) 35%, var(--line-2))}
+html[data-look="new"] .topbar .sep{display:none}
+
+/* ---------- the builder ---------- */
+html[data-look="new"] .build-top{
+  background:color-mix(in srgb, var(--bar) 92%, transparent);
+  border-bottom-color:transparent; box-shadow:var(--look-shadow-1); position:relative; z-index:7
+}
+/* the page strip floats over the page being edited, which shows faintly through */
+html[data-look="new"] .pagestrip{
+  background:color-mix(in srgb, var(--panel-2) 82%, transparent);
+  backdrop-filter:saturate(1.4) blur(10px); -webkit-backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom-color:color-mix(in srgb, var(--line) 70%, transparent)
+}
+html[data-look="new"] .pagechip{transition:border-color .12s ease, color .12s ease, box-shadow .12s ease, transform .12s ease}
+html[data-look="new"] .pagechip:hover:not(.on){transform:translateY(-1px); box-shadow:var(--look-shadow-1)}
+html[data-look="new"] .pagechip.on{box-shadow:0 2px 8px color-mix(in srgb, var(--amber) 35%, transparent)}
+html[data-look="new"] .build-preview{background:var(--panel); box-shadow:-1px 0 0 var(--line), -8px 0 24px rgba(16, 24, 40, .04)}
+html[data-look="new"] .prev-head{background:var(--panel)}
+html[data-look="new"] .modechip{box-shadow:var(--look-shadow-1)}
+
+/* ---------- signing in ----------
+   Only while the sign-in card is the page: the site's logo over a narrower,
+   centred card, so the first thing a class sees is the site and one box. */
+html[data-look="new"] body:has(#loginCard:not([hidden])) .masthead{text-align:center; margin-top:32px}
+html[data-look="new"] body:has(#loginCard:not([hidden])) .masthead::before{
+  content:""; display:block; width:64px; height:64px; margin:0 auto 16px;
+  background:url(images/logo.svg) center / contain no-repeat
+}
+html[data-look="new"] #loginCard:not([hidden]){max-width:560px; margin-left:auto; margin-right:auto; padding:26px 28px; box-shadow:var(--look-shadow-2)}
+html[data-look="new"] #loginCard .grid3{grid-template-columns:1fr}
+
+/* ---------- the sandbox ---------- */
+html[data-look="new"] .sb-open{
+  border-radius:var(--rad-lg); box-shadow:var(--look-shadow-1);
+  transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease
+}
+html[data-look="new"] .sb-open:hover{transform:translateY(-2px); box-shadow:var(--look-shadow-2);
+  border-color:color-mix(in srgb, var(--brand) 40%, var(--line))}
+
+/* ---------- the marking page ---------- */
+html[data-look="new"] .workbar{box-shadow:var(--look-shadow-1)}
+html[data-look="new"] .mbstat{box-shadow:var(--look-shadow-1); border-color:color-mix(in srgb, var(--line) 70%, transparent)}
+html[data-look="new"] .mbscroll,
+html[data-look="new"] .progresswrap{box-shadow:var(--look-shadow-1); border-color:color-mix(in srgb, var(--line) 70%, transparent)}
+html[data-look="new"] .marklock{box-shadow:var(--look-shadow-1)}
+
 /* ---------- pop-ups ---------- */
 html[data-look="new"] .modal-back{
   background:rgba(16, 24, 40, .38);

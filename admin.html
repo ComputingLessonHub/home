@@ -236,6 +236,7 @@ setTimeout(function(){
       <button class="btn-ghost iconbtn refresh" id="refYear" title="Refresh">&#8635;</button>
       <button class="btn-ghost" id="hubNewUnit">+ New unit</button>
       <button class="btn-ghost" id="specBtn" hidden>Specification</button>
+      <button class="btn-ghost" id="yearVoiceBtn" hidden title="What this year group said in Student Voice">Student Voice</button>
       <button class="btn-primary" id="hubNewLesson2">+ Build a new lesson</button>
     </div>
     <div class="classgrid" id="hubUnits"></div>
@@ -256,6 +257,7 @@ setTimeout(function(){
     <div class="toolrow">
       <button class="btn-ghost iconbtn refresh" id="refComp" title="Refresh">&#8635;</button>
       <button class="btn-ghost" id="compSpecBtn">Specification</button>
+      <button class="btn-ghost" id="compVoiceBtn" hidden title="What this year group said in Student Voice">Student Voice</button>
     </div>
     <div class="classgrid" id="hubStrands"></div>
   </div>
@@ -823,6 +825,9 @@ function openModal(build){
 function closeModal(fromBack){
   const wasOpen = !$("tmodal").hidden;
   $("tmodal").hidden = true;
+  /* Whatever was open has gone, so a refresh should not bring a lesson's
+     Manage back up. */
+  if (wasOpen) forgetManaging();
   if (wasOpen && !fromBack && modalDepth > 0){
     modalDepth--;
     try{
@@ -1030,7 +1035,14 @@ async function enterConsole(){
      interrupted, and restoreSpot then read it back and found Home: nobody
      has ever been put back in their class. restoreSpot shows Home itself
      when there is nothing to go back to. */
+  const managing = lastManaged();
   await restoreSpot(lastSpot());
+  /* Manage is a pop-up over a class's lessons, so it only comes back over
+     those, once they are on screen. */
+  const spotNow = lastSpot();
+  if (managing && cls && spotNow && (spotNow.view === "lessonsView" || spotNow.view === "partsView" || spotNow.view === "classView"))
+    { try{ await loadCatalogue(); }catch(e){} manageLesson(managing); }   // the catalogue has its title
+  else forgetManaging();
   nudgeBackup();           // the once-a-week reminder to take a backup
 }
 on("whoGo", "click", async () => {
@@ -1096,6 +1108,12 @@ async function restoreSpot(spot){
     if (spot.view === "practiceView"){ toPractice(); return; }
     if (here && spot.view === "classView"){ openClass(cls); return; }
     if (here && spot.view === "studentsView"){ openClass(cls); show("studentsView"); loadStudents(); return; }
+    /* The screens off the side menu and the class's own reports. Each was
+       missing here, so refreshing any of them landed on Home. */
+    if (spot.view === "pwView"){ showPwView(); return; }
+    if (spot.view === "keepView"){ $("keepBtn").click(); return; }
+    if (here && spot.view === "coverView"){ nameClass(cls); show("coverView"); loadCoverage(); return; }
+    if (here && spot.view === "progressView"){ nameClass(cls); await openProgressView(); return; }
     /* Nothing is put on screen before the catalogue has come. show() is what
        takes the dots away, so calling it for a page on the way past showed
        that page instead of the dots and then replaced it a moment later:
@@ -2013,10 +2031,10 @@ function newVersionPopup(fromId){
       }
       closeModal();
       const from = fromSel ? fromSel.value : fromId;
-      window.open("author.html?edit=" + encodeURIComponent(from) + "&version=new" +
+      consoleNav.go("author.html?edit=" + encodeURIComponent(from) + "&version=new" +
                   "&vname=" + encodeURIComponent(name) +
                   "&vnote=" + encodeURIComponent(noteIn.value.trim().slice(0, 300)) +
-                  "&vcode=" + encodeURIComponent(codeSel.value), "_blank");
+                  "&vcode=" + encodeURIComponent(codeSel.value));
     };
     go.addEventListener("click", send);
     nameIn.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
@@ -2044,7 +2062,7 @@ function editLesson(id){
   const root = rootOf(id);
   const open = (which) => {
     closeModal();
-    window.open("author.html?edit=" + encodeURIComponent(which), "_blank");
+    consoleNav.go("author.html?edit=" + encodeURIComponent(which));
   };
   openModal(box => {
     box.classList.add("roomy");
@@ -2525,7 +2543,7 @@ function lessonCards(list, box){
       (v) => OFFLINE ? shareLink(v) : distribute(v));
     const deleteIt = () => whichVersion(l.lesson_id, "Which one do you want to delete?",
       (v) => deleteLesson(v));
-    const previewIt = () => window.open("lessonpreview.html?id=" + encodeURIComponent(l.lesson_id), "_blank");
+    const previewIt = () => consoleNav.go("lessonpreview.html?id=" + encodeURIComponent(l.lesson_id));
     const give = el("button","btn-primary", OFFLINE ? "Get link" : "Give to classes");
     give.addEventListener("click", giveIt);
     const pv = el("button","btn-ghost","Preview");
@@ -2660,7 +2678,7 @@ on("hubNewUnit", "click", () => newUnitPrompt(hubYear));
       if (hubUnit) bits.push("unit=" + encodeURIComponent(hubUnit));
     }
     if (bits.length) url += "?" + bits.join("&");
-    window.open(url, "_blank");
+    consoleNav.go(url);
   });
 });
 
@@ -2816,7 +2834,7 @@ on("hubNewLesson4", "click", () => {
   const bits = ["year=" + encodeURIComponent(hubYear)];
   if (hubPoint) bits.push("point=" + encodeURIComponent(hubPoint));
   if (strand) bits.push("unit=" + encodeURIComponent(strand.code + " " + strand.title));
-  window.open("author.html?" + bits.join("&"), "_blank");
+  consoleNav.go("author.html?" + bits.join("&"));
 });
 const pointById = (id) => (cat.points || []).find(p => p.id === id) || null;
 
@@ -3561,7 +3579,7 @@ if (!OFFLINE){ const tile = $("openPractice"); if (tile) tile.hidden = false; }
 on("openPractice", "click", toPractice);
 /* In a tab of its own, the same as a student's programs open: the console
    stays where it was, and the sandbox is a page a teacher may want beside it. */
-on("pracMine", "click", () => { window.open("sandbox.html?teacher=1", "_blank"); });
+on("pracMine", "click", () => { consoleNav.go("sandbox.html?teacher=1"); });
 on("backHome2", "click", toHome);
 on("pracGo", "click", () => searchStudents());
 on("pracSearch", "keydown", (e) => { if (e.key === "Enter") searchStudents(); });
@@ -3573,8 +3591,8 @@ function openStudent(st){
 }
 /* Their programs, in the same viewer a lesson's work opens in. */
 function openPrograms(st){
-  window.open("work.html?practice=1&group=" + encodeURIComponent(st.group_name || cls) +
-              "&student=" + encodeURIComponent(st.username), "_blank");
+  consoleNav.go("work.html?practice=1&group=" + encodeURIComponent(st.group_name || cls) +
+              "&student=" + encodeURIComponent(st.username));
 }
 
 /* Students matching everything typed. The server matches one run of letters
@@ -4345,7 +4363,7 @@ on("newLessonBtn", "click", () => {
   if (year) bits.push("year=" + encodeURIComponent(year));
   const p = pointNamed(subunit);
   if (p) bits.push("point=" + encodeURIComponent(p.id));
-  window.open("author.html?" + bits.join("&"), "_blank");
+  consoleNav.go("author.html?" + bits.join("&"));
 });
 /* The point of the specification a part's wording belongs to. The catalogue
    carries the wording and not the id, because the screens that group by it
@@ -4833,8 +4851,10 @@ function markingLockRow(id){
   const on = !!markingLocks[id];
   const row = el("p","lp-note verpick");
   row.appendChild(document.createTextNode("Lock for marking "));
-  const chip = el("button","statechip chip-live " + (on ? "wait" : "shut"),
-                  on ? "\u{1F512} On" : "Off");
+  const chip = el("button","statechip chip-live " + (on ? "wait" : "shut"), "");
+  /* the console's own padlock, drawn in the chip's colour, not an emoji */
+  if (on && window.hubUI) chip.innerHTML = window.hubUI.icon("lock", 13) + " ";
+  chip.appendChild(document.createTextNode(on ? "On" : "Off"));
   chip.type = "button";
   chip.title = on ? "Locked: " + cls + " can see this but cannot change it. Click to unlock."
                   : "Stop " + cls + " changing this while you mark it";
@@ -4860,8 +4880,11 @@ function paintMarkingBox(box){
   box.innerHTML = "";
   const on = !!markingLocks[lessonId];
   box.className = "marklock" + (on ? " on" : "");
+  const ico = el("span","marklock-ico");
+  ico.innerHTML = window.hubUI ? window.hubUI.icon(on ? "lock" : "unlock", 20) : "";
+  box.appendChild(ico);
   const words = el("div","marklock-words");
-  words.appendChild(el("b","", on ? "\u{1F512} Locked for marking" : "Lock for marking"));
+  words.appendChild(el("b","", on ? "Locked for marking" : "Lock for marking"));
   words.appendChild(el("span","", on
     ? cls + " can see their work but cannot change it. Unlock it when you have finished marking."
     : "Stops " + cls + " changing their work while you mark it. They can still see it."));
@@ -4925,6 +4948,12 @@ async function loadClassLocks(){
        it stayed behind, calling a function that no longer existed. */
   }
 }
+/* Which lesson's Manage is open, beside hub_spot and for the same reason: a
+   refresh with Manage open put the teacher back on the class with it shut,
+   and the lesson they were pacing had to be found again. */
+function rememberManaging(id){ try{ sessionStorage.setItem("hub_manage", id); }catch(e){} }
+function forgetManaging(){ try{ sessionStorage.removeItem("hub_manage"); }catch(e){} }
+function lastManaged(){ try{ return sessionStorage.getItem("hub_manage") || ""; }catch(e){ return ""; } }
 async function manageLesson(id){
   lessonId = id;
   workCache = { key: "", rows: [], t: 0 };
@@ -5103,7 +5132,7 @@ function paintTasks(){
     });
     const eye = el("button","btn-ghost iconbtn","\u{1F441}");
     eye.title = "Preview as a student";
-    eye.addEventListener("click", () => window.open("lesson.html?id=" + encodeURIComponent(lessonId) + "&preview=" + i, "_blank"));
+    eye.addEventListener("click", () => consoleNav.go("lesson.html?id=" + encodeURIComponent(lessonId) + "&preview=" + i));
     const who = el("button","btn-ghost iconbtn","\u{1F465}");
     who.title = "Who has done this task?";
     who.addEventListener("click", () => whoDone(i, b, true));
@@ -5154,8 +5183,8 @@ function summaryRow(){
 /* Looking at a class's work happens on its own page, where there is room
    for the progress markbook and the feedback panel. */
 function openWorkPage(id, tab){
-  window.open("work.html?lesson=" + encodeURIComponent(id) + "&group=" + encodeURIComponent(cls) +
-              (tab ? "&tab=" + tab : ""), "_blank");
+  consoleNav.go("work.html?lesson=" + encodeURIComponent(id) + "&group=" + encodeURIComponent(cls) +
+              (tab ? "&tab=" + tab : ""));
 }
 
 /* ---------- student work: view on screen or print to PDF ---------- */
@@ -5193,7 +5222,7 @@ function handOff(rows, idx){
 
 function inspect(rows, idx, stepIdx){
   handOff(rows, idx);
-  window.open("lesson.html?id=" + encodeURIComponent(lessonId) + "&view=1" + (stepIdx !== undefined ? "&step=" + stepIdx : ""), "_blank");
+  consoleNav.go("lesson.html?id=" + encodeURIComponent(lessonId) + "&view=1" + (stepIdx !== undefined ? "&step=" + stepIdx : ""));
 }
 function printWork(rows, idx){
   handOff(rows, idx);
@@ -5388,5 +5417,7 @@ window.consoleReady = true;
 <script src="timetable.js"></script>
 <script src="student-profile.js"></script>
 <script src="console-search.js"></script>
+<script src="voice.js"></script>
+<script src="year-voice.js"></script>
 </body>
 </html>

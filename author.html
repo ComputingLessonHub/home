@@ -61,7 +61,7 @@
 })();
 </script>
 
-<div class="homebar">
+<div class="homebar" data-console-back>
   <!-- Which of the two things this page is. They were a strip of their own
        under the title, which put two rows of switching above the work; the
        title was already a word saying where you are, so it became the
@@ -76,10 +76,12 @@
     </button>
   </div>
   <div class="title"><span id="titleShow"></span></div>
-  <!-- which kind of work this is, on a narrow screen where the tab strip
-       below has been folded away -->
-  <button class="modechip" id="modeChip" hidden>
-    <span id="modeChipName">Lesson</span><span class="modechip-pen">&#9998;</span>
+  <!-- Which kind of work this is. It used to be a row of tabs under the
+       title, which made a lesson and an assessment one click apart; they are
+       not things to flick between, so the kind is chosen in Lesson options
+       and this only says what it is, opening Lesson options to change it. -->
+  <button class="modechip" id="modeChip" type="button" title="Change in Lesson options">
+    <span id="modeChipName">Lesson</span>
   </button>
   <button class="btn-ghost iconbtn" id="setBtn" title="Settings">&#9881;&#65038;</button>
 </div>
@@ -91,13 +93,6 @@
 <div class="buildbar" id="buildBar" hidden>
   <div class="buildbar-scroll" id="buildBarScroll"></div>
   <button class="btn-ghost bmini2 prevtoggle" id="prevToggle">Preview</button>
-</div>
-
-<div class="modeswitch">
-  <button class="on" id="modeLesson">Lesson</button>
-  <button id="modeAssess">Assessment</button>
-  <button id="modePractical">Practical assessment</button>
-  <button id="modeHome">Home learning</button>
 </div>
 
 <div class="build-top">
@@ -2713,16 +2708,9 @@ function setMode(assess, practical){
   lesson.practical = !!practical;
   if (practical) lesson.assessment = false;
   ensureQuestionsPage();
-  /* The practical button is taken off the page when there is no server, so
-     it may not be there to mark. */
-  const prBtn = $("modePractical");
-  if (prBtn) prBtn.classList.toggle("on", !!practical);
-  $("modeHome").classList.toggle("on", !!lesson.homework && !assess && !practical);
   $("assessTabs").hidden = !assess && !practical;
   $("tabQuestions").textContent = practical ? "Tasks" : "Questions";
   if (!assess){ assessTab = "questions"; respEditing = null; }
-  $("modeLesson").classList.toggle("on", !assess && !practical && !lesson.homework);
-  $("modeAssess").classList.toggle("on", assess);
   $("palLesson").hidden = !!assess;          // a practical uses the lesson palette
   /* Extension tasks are for a lesson or a piece of home learning. An
      assessment has its own extension list, and a practical one is marked by
@@ -2737,26 +2725,28 @@ function setMode(assess, practical){
   saveDraft(); render(); schedulePreview();
   if (typeof paintBuildBar === "function") paintBuildBar();
 }
-on("modeLesson", "click", () => {
-  lesson.homework = false;
-  if (lesson.assessment && lesson.blocks.length){
-    openModal(box => {
-      box.appendChild(el("h2","","Switch to a lesson?"));
-      box.appendChild(el("p","modal-text","Your questions stay, but assessment marking is switched off."));
-      const yes = el("button","btn-primary modal-cta","Switch");
-      yes.addEventListener("click", () => { closeModal(); setMode(false, false); });
-      const no = el("button","btn-ghost modal-stay","Cancel"); no.addEventListener("click", closeModal);
-      box.appendChild(yes); box.appendChild(no);
-    });
-  } else setMode(false, false);
-});
-on("modeAssess", "click", () => setMode(true, false));
-on("modePractical", "click", () => { lesson.homework = false; setMode(false, true); });
-on("modeHome", "click", () => {
-  /* the same as a lesson in every way, but students see it as home learning */
-  lesson.homework = true;
-  setMode(false, false);
-});
+/* The four kinds of work, in the order they are offered. Home learning is
+   a lesson in every way except that students see it as home learning and
+   nothing in it is ever locked. */
+const KINDS = [
+  { id:"lesson",    name:"Lesson",               icon:"lessons",
+    about:"Pages a class works through, opened one at a time as you teach." },
+  { id:"assess",    name:"Assessment",           icon:"work",
+    about:"Questions marked as they are answered, with a Strength, a Target and response tasks." },
+  { id:"practical", name:"Practical assessment", icon:"practice",
+    about:"Built like a lesson, sat a page at a time, and marked by you." },
+  { id:"home",      name:"Home learning",        icon:"home",
+    about:"A lesson done at home. Every page is open from the start." }
+];
+function kindNow(){
+  return lesson.practical ? "practical" : lesson.assessment ? "assess" : lesson.homework ? "home" : "lesson";
+}
+function setKind(id){
+  lesson.homework = id === "home";
+  setMode(id === "assess", id === "practical");
+  paintBuildBar();
+}
+
 function setAssessTab(which){
   assessTab = which;
   respEditing = null;
@@ -4059,82 +4049,152 @@ function showTitle(){
    with the X keeps the change. The year and unit pickers already worked that
    way and having half the pop-up behave differently is how a teacher loses a
    title without noticing. */
-on("optionsBtn", "click", () => {
+/* A switch for a setting that is on or off, the same one the console's
+   pacing uses, with what it does written beside it rather than behind it. */
+function optSwitch(isOn, label, onFlip){
+  const sw = el("button","pace-switch" + (isOn ? " on" : ""));
+  sw.type = "button";
+  sw.setAttribute("role", "switch");
+  sw.setAttribute("aria-checked", isOn ? "true" : "false");
+  sw.setAttribute("aria-label", label);
+  sw.appendChild(el("span","pace-switch-words", isOn ? "On" : "Off"));
+  sw.appendChild(el("span","pace-knob"));
+  sw.addEventListener("click", onFlip);
+  return sw;
+}
+/* One setting: its name and what it does on the left, the switch on the
+   right, and the longer explanation behind the help dot. */
+function optRow(name, about, sw, help){
+  const row = el("div","optrow");
+  const words = el("div","optrow-words");
+  const head = el("b","", name);
+  words.appendChild(head);
+  if (about) words.appendChild(el("span","", about));
+  row.appendChild(words);
+  if (help) row.appendChild(helpDot(help));
+  row.appendChild(sw);
+  return row;
+}
+function optSection(title, about){
+  const sec = el("section","optsec");
+  sec.appendChild(el("h3","optsec-head", title));
+  if (about) sec.appendChild(el("p","optsec-about", about));
+  return sec;
+}
+
+/* Everything that belongs to the lesson rather than to a page: what kind of
+   work it is, what it is called, where it sits in the hub, and how it
+   behaves. One pop-up in both layouts, because the top row it used to sit
+   on is not there at all below 1100px and a setting a teacher cannot reach
+   on an iPad may as well not exist.
+
+   Each field writes as it is typed rather than waiting for Done, so closing
+   with the X keeps the change. The year and unit pickers already worked that
+   way and having half the pop-up behave differently is how a teacher loses a
+   title without noticing. The kind of work changes on the press too. */
+function openLessonOptions(){
   const titles = document.querySelector(".build-titles");
   openModal(box => {
+    box.classList.add("lessonopts");
     box.appendChild(el("h2","","Lesson options"));
 
+    /* ---- what it is ---- */
+    const secKind = optSection("What this is");
+    const grid = el("div","kindgrid");
+    grid.setAttribute("role", "radiogroup");
+    grid.setAttribute("aria-label", "What this is");
+    /* Changing kind deletes nothing, so it happens on the press: what has
+       already been built stays, whichever kind it becomes. */
+    const paintKinds = () => {
+      grid.innerHTML = "";
+      KINDS.forEach(k => grid.appendChild(kindCard(k, k.id === kindNow(), (pick) => {
+        if (pick.id === kindNow()) return;
+        setKind(pick.id); repaint();
+      })));
+    };
+    secKind.appendChild(grid);
+    box.appendChild(secKind);
+
+    /* ---- what it is called ---- */
+    const secAbout = optSection("About it");
     const w1 = el("div","bfield");
-    w1.appendChild(el("label","","Lesson title"));
+    w1.appendChild(el("label","","Title"));
     const t1 = el("input"); t1.value = lesson.title || "";
+    t1.placeholder = "What students will see it called";
     t1.addEventListener("input", () => {
       lesson.title = t1.value; saveDraft(); showTitle(); schedulePreview(); });
-    w1.appendChild(t1); box.appendChild(w1);
-
+    w1.appendChild(t1); secAbout.appendChild(w1);
     const w2 = el("div","bfield");
     w2.appendChild(el("label","","One line for the home page"));
     const t2 = el("input"); t2.value = lesson.intro || "";
+    t2.placeholder = "Optional. Shown under the title on a student's home page";
     t2.addEventListener("input", () => {
       lesson.intro = t2.value; saveDraft(); schedulePreview(); });
-    w2.appendChild(t2); box.appendChild(w2);
+    w2.appendChild(t2); secAbout.appendChild(w2);
+    box.appendChild(secAbout);
 
-    /* The real pickers are moved in, not copied, so "+ New year group" and
+    /* ---- where it lives ----
+       The real pickers are moved in, not copied, so "+ New year group" and
        everything else attached to them still works. */
+    const secWhere = optSection("Where it lives", specLevel()
+      ? "The year group and the point of the specification it is filed under."
+      : "The year group and unit it is filed under in Lessons.");
     const w3 = el("div","bfield savepickers");
-    w3.appendChild(el("label","", specLevel() ? "Year group and specification point"
-                                             : "Year group and unit"));
     w3.appendChild($("lYear"));
     w3.appendChild($("lUnit"));
     w3.appendChild($("lSub"));
-    box.appendChild(w3);
+    secWhere.appendChild(w3);
+    box.appendChild(secWhere);
 
-    const w4 = el("div","bfield");
-    w4.appendChild(el("label","","Saving"));
-    const row = el("div","brow");
-    const tog = el("button","btn-ghost bmini2","");
-    const paint = () => {
-      tog.textContent = "Autosave: " + (lesson.linger !== false ? "on" : "off");
-      tog.classList.toggle("right", lesson.linger !== false);
+    /* ---- how it behaves ---- */
+    const secHow = optSection("How it works");
+    const howRows = el("div","optrows");
+    secHow.appendChild(howRows);
+    box.appendChild(secHow);
+
+    const paintHow = () => {
+      howRows.innerHTML = "";
+      const auto = lesson.linger !== false;
+      howRows.appendChild(optRow("Autosave",
+        auto ? "Work is sent as students go, as well as when they finish."
+             : "Work only arrives when a student presses Finish or Save Work.",
+        optSwitch(auto, "Autosave", () => {
+          lesson.linger = lesson.linger === false; saveDraft(); schedulePreview(); paintHow(); }),
+        ["On by default. Their work is sent half a minute after they stop typing, "
+         + "at least every three minutes while they keep going, and again as they "
+         + "press Continue if anything is still waiting, so a task that takes "
+         + "twenty minutes is not twenty minutes at risk. Turned off, work only "
+         + "reaches you when a student presses Finish or Save Work."]));
+      /* Only a standard assessment has STAR feedback to turn off, or asks
+         Student Voice, so nothing else is shown either. */
+      if (lesson.assessment && !lesson.practical){
+        const star = lesson.star !== false;
+        howRows.appendChild(optRow("STAR feedback",
+          star ? "Each student gets a Strength, a Target and response tasks."
+               : "Each student gets their mark, and everyone gets the same extension tasks.",
+          optSwitch(star, "STAR feedback", () => {
+            lesson.star = lesson.star === false;
+            paintAssessTabs(); saveDraft(); render(); schedulePreview(); paintHow();
+          }),
+          ["On: each student gets a Strength and Target from the topics their questions are tagged "
+           + "with, and response tasks chosen from their target.",
+           "Off: they get their mark and nothing more, and the same extension tasks for everyone at "
+           + "the bottom of their summary. The tabs above change to Questions and Extension tasks."]));
+        howRows.appendChild(voiceField());
+      }
     };
-    tog.addEventListener("click", () => {
-      lesson.linger = lesson.linger === false; paint(); saveDraft(); schedulePreview(); });
-    paint();
-    row.appendChild(tog);
-    row.appendChild(helpDot(
-      ["On by default. Their work is sent half a minute after they stop typing, "
-       + "at least every three minutes while they keep going, and again as they "
-       + "press Continue if anything is still waiting, so a task that takes "
-       + "twenty minutes is not twenty minutes at risk. Turned off, work only "
-       + "reaches you when a student presses Finish or Save Work."]));
-    w4.appendChild(row); box.appendChild(w4);
 
-    /* Only a standard assessment has STAR feedback to turn off, so nothing
-       else is shown the choice. */
-    if (lesson.assessment && !lesson.practical){
-      const w5 = el("div","bfield");
-      w5.appendChild(el("label","","STAR feedback"));
-      const row5 = el("div","brow");
-      const star = el("button","btn-ghost bmini2","");
-      const paintStar = () => {
-        star.textContent = "STAR feedback: " + (lesson.star !== false ? "on" : "off");
-        star.classList.toggle("right", lesson.star !== false);
-      };
-      star.addEventListener("click", () => {
-        lesson.star = lesson.star === false;
-        paintStar(); paintAssessTabs(); saveDraft(); render(); schedulePreview();
-      });
-      paintStar();
-      row5.appendChild(star);
-      row5.appendChild(helpDot(
-        ["On: each student gets a Strength and Target from the topics their questions are tagged "
-         + "with, and response tasks chosen from their target.",
-         "Off: they get their mark and nothing more, and the same extension tasks for everyone at "
-         + "the bottom of their summary. The tabs above change to Questions and Extension tasks."]));
-      w5.appendChild(row5); box.appendChild(w5);
-      box.appendChild(voiceField());
-    }
+    /* ---- versions ----
+       versionField brings its own label, which the section heading replaces. */
+    const secVer = optSection("Versions");
+    const ver = versionField();
+    const verLabel = ver.querySelector(":scope > label");
+    if (verLabel) verLabel.remove();
+    secVer.appendChild(ver);
+    box.appendChild(secVer);
 
-    box.appendChild(versionField());
+    const repaint = () => { paintKinds(); paintHow(); };
+    paintKinds(); paintHow();
 
     const go = el("button","btn-primary modal-cta","Done");
     go.addEventListener("click", closeModal);
@@ -4150,7 +4210,8 @@ on("optionsBtn", "click", () => {
     };
     document.addEventListener("hubModalClosed", back);
   }
-});
+}
+on("optionsBtn", "click", openLessonOptions);
 
 
 /* ---------------- versions of a lesson ----------------
@@ -4190,31 +4251,30 @@ function lastTeacher(){
    the ids are kept, in lesson.voice: the questions themselves live in
    voice.js, so improving the wording there reaches every lesson. */
 function voiceField(){
-  const w = el("div","bfield");
-  w.appendChild(el("label","","Student Voice"));
   const all = (window.studentVoice && window.studentVoice.QUESTIONS) || [];
-  const row = el("div","brow");
-  const tog = el("button","btn-ghost bmini2","");
-  const list = el("div","voice-picks");
   const on = () => Array.isArray(lesson.voice) && lesson.voice.length > 0;
   const changed = () => { paint(); saveDraft(); schedulePreview(); };
+  const w = el("div","optrow-wrap");
+  const list = el("div","voice-picks");
+  let row = null;
   const paint = () => {
-    tog.textContent = "Student Voice: " + (on() ? "on" : "off");
-    tog.classList.toggle("right", on());
+    const fresh = optRow("Student Voice",
+      on() ? "Each student is asked one of the ticked questions, picked at random."
+           : "A short question about how the half term went, under their marks.",
+      optSwitch(on(), "Student Voice", () => {
+        lesson.voice = on() ? [] : all.map(q => q.id);
+        changed();
+      }),
+      ["On: under the summary of their marks, each student is asked one of the ticked questions "
+       + "about how the half term went, picked at random. It is optional, with a Skip button, and "
+       + "their answer is saved the moment they pick it.",
+       "Their answers are in the Student Voice tab of the markbook, one question at a time."]);
+    if (row) w.replaceChild(fresh, row); else w.insertBefore(fresh, list);
+    row = fresh;
     list.hidden = !on();
     list.querySelectorAll("input").forEach(box => { box.checked = on() && lesson.voice.indexOf(box.value) >= 0; });
   };
-  tog.addEventListener("click", () => {
-    lesson.voice = on() ? [] : all.map(q => q.id);
-    changed();
-  });
-  row.appendChild(tog);
-  row.appendChild(helpDot(
-    ["On: under the summary of their marks, each student is asked one of the ticked questions "
-     + "about how the half term went, picked at random. It is optional, with a Skip button, and "
-     + "their answer is saved the moment they pick it.",
-     "Their answers are in the Student Voice tab of the markbook, one question at a time."]));
-  w.appendChild(row);
+  w.appendChild(list);
   all.forEach(q => {
     const line = el("label","voice-pick");
     const box = el("input");
@@ -4231,7 +4291,6 @@ function voiceField(){
     line.appendChild(el("span","", q.ask));
     list.appendChild(line);
   });
-  w.appendChild(list);
   paint();
   return w;
 }
@@ -5373,7 +5432,6 @@ function showBank(on){
   const hide = (sel, yes) => document.querySelectorAll(sel).forEach(e => { e.hidden = yes; });
   hide(".build", bankOpen);
   hide(".build-top", bankOpen);
-  hide(".modeswitch", bankOpen);
   $("bankView").hidden = !bankOpen;
   if (bankOpen) $("assessTabs").hidden = true;
   else setMode(!!lesson.assessment, !!lesson.practical);
@@ -7764,14 +7822,12 @@ function applyBuildLayout(){
     homeSlot.appendChild(actions);
     if (options) $("buildBarScroll").appendChild(options);
     $("buildBar").hidden = false;
-    $("modeChip").hidden = false;
     $("saveSite").textContent = "Save";
   } else {
     if (options) titles.insertBefore(options, titles.firstChild);
     topSlot.appendChild(titles);
     topSlot.appendChild(actions);
     $("buildBar").hidden = true;
-    $("modeChip").hidden = true;
     $("saveSite").textContent = "Save to the site";
     stopPreviewing();
   }
@@ -7782,9 +7838,10 @@ function applyBuildLayout(){
 /* What belongs on the one row of controls, which depends on the kind of
    work: an assessment and a practical have their tabs, a lesson has none. */
 function paintBuildBar(){
+  paintKindChip();
   if (!isCompact()) return;
   const scroll = $("buildBarScroll");
-  if (!scroll || !$("assessTabs") || !$("modeChipName")) return;
+  if (!scroll || !$("assessTabs")) return;
   const assess = !!lesson.assessment;
   const practical = !!lesson.practical;
   /* The tab strip is moved in beside New page rather than copied, so the
@@ -7796,43 +7853,55 @@ function paintBuildBar(){
   } else {
     tabs.hidden = true;
   }
-  /* The chip says what kind of work this is, and on the bank there is no
-     kind: it is not part of the lesson at all. */
-  const chip = $("modeChip");
-  if (chip) chip.hidden = bankOpen;
-  $("modeChipName").textContent = practical ? "Practical assessment"
-    : assess ? "Assessment"
-    : lesson.homework ? "Home learning" : "Lesson";
+}
+/* The chip says what kind of work this is, in both layouts, and on the bank
+   there is no kind: a bank task is not part of a lesson at all. */
+function paintKindChip(){
+  const chip = $("modeChip"), name = $("modeChipName");
+  if (!chip || !name) return;
+  chip.hidden = !!bankOpen;
+  const k = KINDS.find(x => x.id === kindNow());
+  name.textContent = k ? k.name : "Lesson";
+  chip.dataset.kind = kindNow();
 }
 
-/* ---------- which kind of work ---------- */
-function modePicker(force){
-  openModal(box => {
-    box.appendChild(el("h2","","What are you making?"));
-    const list = el("div","modepick");
-    [["Lesson", () => { lesson.homework = false; setMode(false, false); }],
-     ["Assessment", () => setMode(true, false)],
-     ["Practical assessment", () => { lesson.homework = false; setMode(false, true); }],
-     ["Home learning", () => { lesson.homework = true; setMode(false, false); }]
-    ].forEach(pair => {
-      const b = el("button","modepick-item", pair[0]);
-      b.addEventListener("click", () => {
-        pair[1]();
-        modeChosen = true;
-        closeModal();
-        paintBuildBar();
-      });
-      list.appendChild(b);
-    });
-    box.appendChild(list);
-    if (!force){
-      const no = el("button","btn-ghost modal-stay","Cancel");
-      no.addEventListener("click", closeModal);
-      box.appendChild(no);
-    }
-  });
+/* ---------- which kind of work ----------
+   Asked once, when a new piece of work is started, in both layouts. After
+   that the kind is changed in Lesson options, where it sits with everything
+   else that is about the lesson as a whole rather than one press away. */
+function kindCard(k, picked, onPick){
+  const b = el("button","kindcard" + (picked ? " on" : ""));
+  b.type = "button";
+  b.setAttribute("role", "radio");
+  b.setAttribute("aria-checked", picked ? "true" : "false");
+  const ico = el("span","kindcard-ico");
+  ico.innerHTML = window.hubUI ? window.hubUI.icon(k.icon, 22) : "";
+  b.appendChild(ico);
+  const words = el("span","kindcard-words");
+  words.appendChild(el("b","", k.name));
+  words.appendChild(el("span","", k.about));
+  b.appendChild(words);
+  b.addEventListener("click", () => onPick(k));
+  return b;
 }
-on("modeChip", "click", () => modePicker(false));
+function modePicker(){
+  openModal(box => {
+    box.classList.add("kindpop");
+    box.appendChild(el("h2","","What are you making?"));
+    box.appendChild(el("p","modal-text","You can change this later in Lesson options."));
+    const list = el("div","kindgrid");
+    list.setAttribute("role", "radiogroup");
+    KINDS.forEach(k => list.appendChild(kindCard(k, k.id === kindNow(), (pick) => {
+      setKind(pick.id);
+      modeChosen = true;
+      closeModal();
+    })));
+    box.appendChild(list);
+  });
+  const first = document.querySelector(".kindgrid .kindcard.on") || document.querySelector(".kindgrid .kindcard");
+  if (first) first.focus();
+}
+on("modeChip", "click", () => $("optionsBtn").click());
 
 /* ---------- the Save pop-up ----------
    A last look before it goes to the class. The title, year and unit it used
@@ -8007,11 +8076,10 @@ render();
 refreshPreview();
 fitPreview();
 if (window.initSettings) initSettings($("setBtn"));
-/* A fresh lesson on a narrow screen starts by asking what it is, because
-   the row of kinds that asks on a desktop is not on the page there. One
-   opened for editing already knows. */
-if (isCompact() && !new URLSearchParams(location.search).get("edit")){
-  setTimeout(() => { if (!modeChosen) modePicker(true); }, 300);
+/* A fresh piece of work starts by asking what it is. One opened for editing
+   already knows, and so does a draft being carried on with. */
+if (!new URLSearchParams(location.search).get("edit") && !(lesson.blocks && lesson.blocks.length)){
+  setTimeout(() => { if (!modeChosen) modePicker(); }, 300);
 }
 </script>
 </body>

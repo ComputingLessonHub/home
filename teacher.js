@@ -220,4 +220,52 @@ function form(box, opts){
 
 window.teacherAuth = { headers, json, have, forget, signIn, form, rejected, keep, kept, dropKept };
 
+/* ---- going somewhere from the console, in the same tab ----
+   Marking, the builder, a preview and a sandbox each used to open a tab of
+   their own, and a morning of teaching left a row of them along the top.
+   They open in place now. The console keeps where it was in sessionStorage,
+   which belongs to the tab and so survives the trip, and Back is the way
+   home: the browser's own, or the Console button each of these pages has.
+
+   FROM is set on the way out, so a page knows whether there is a console
+   behind it to step back to, or whether it was opened some other way (a
+   bookmark, a link in an email) and has to load the console fresh. */
+const FROM = "hub_from_console";
+function goFromConsole(url){
+  try{ sessionStorage.setItem(FROM, "1"); }catch(e){}
+  location.href = url;
+}
+function cameFromConsole(){
+  try{ return sessionStorage.getItem(FROM) === "1"; }catch(e){ return false; }
+}
+function backToConsole(){
+  let ref = "";
+  try{ ref = new URL(document.referrer).origin === location.origin ? document.referrer : ""; }catch(e){}
+  if (cameFromConsole() && ref && history.length > 1){ history.back(); return; }
+  location.href = "admin.html";
+}
+/* A Console button for the left end of a page's top bar. */
+function consoleButton(){
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "btn-ghost consoleback no-print";
+  b.title = "Back to the teacher console";
+  b.innerHTML = (window.hubUI ? window.hubUI.icon("back", 18) : "←") + '<span class="consoleback-words">Console</span>';
+  b.addEventListener("click", backToConsole);
+  return b;
+}
+window.consoleNav = { go: goFromConsole, back: backToConsole, came: cameFromConsole, button: consoleButton };
+/* A top bar asks for the button with data-console-back, rather than each
+   page building its own. Not on a page shown inside another one, such as
+   the builder's preview, where there is nowhere to go back from. */
+function addConsoleButtons(){
+  if (window.self !== window.top) return;
+  document.querySelectorAll("[data-console-back]").forEach(bar => {
+    if (bar.querySelector(".consoleback")) return;
+    bar.insertBefore(consoleButton(), bar.firstChild);
+  });
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", addConsoleButtons);
+else addConsoleButtons();
+
 })();

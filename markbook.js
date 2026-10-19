@@ -402,8 +402,11 @@
           paint(holder);
         });
       }
-      const icon = (!isSkip && q.icons && q.icons[i]) || "";
-      line.appendChild(el("span","mbvoice-opt", (icon ? icon + " " : "") + text));
+      const opt = el("span","mbvoice-opt", "");
+      const icon = isSkip ? "" : window.studentVoice.iconOf(q, i, 18);
+      if (icon) opt.innerHTML = icon + " ";
+      opt.appendChild(document.createTextNode(text));
+      line.appendChild(opt);
       const bar = el("span","mbvoice-bar");
       if (!isSkip){
         const fill = el("span","mbvoice-fill");
@@ -496,7 +499,11 @@
        assessment asks for it, or somebody has answered. */
     const bar = el("div","mbbar");
     const tabs = el("div","subtabs mbtabs");
-    const views = [["marks","Marks"],["responses","Response tasks"]];
+    /* Response tasks only when the assessment has some: a tab that only ever
+       says there is nothing in it is one more thing to click on to find out. */
+    const views = [["marks","Marks"]];
+    if (markbookTasks.length) views.push(["responses","Response tasks"]);
+    else if (mbView === "responses") mbView = "marks";
     if (voiceQs.length) views.push(["voice","Student Voice"]);
     views.forEach(pair => {
       const b = el("button", mbView === pair[0] ? "on" : "", pair[1]);
@@ -508,7 +515,8 @@
       });
       tabs.appendChild(b);
     });
-    bar.appendChild(tabs);
+    /* a strip with one tab in it is not a choice */
+    if (views.length > 1) bar.appendChild(tabs); else bar.appendChild(el("span"));
     const tools = el("div","mbtools");
     const copyAll = el("button","btn-ghost bmini2","Copy all");
     copyAll.type = "button";
@@ -516,7 +524,7 @@
     copyAll.addEventListener("click", async () => {
       const t = holder.querySelector(".mbtable");
       if (!t) return;
-      mbSel = { table: t, a: [0, 0], b: [t.rows.length - 1, t.rows[0].cells.length - 1] };
+      mbSel = { table: t, a: [mbFirstRow(t), 0], b: [t.rows.length - 1, t.rows[0].cells.length - 1] };
       mbPaintSel();
       copyAll.textContent = (await mbCopyOut()) ? "Copied" : "Press Ctrl+C";
       setTimeout(() => { copyAll.textContent = "Copy all"; }, 1600);
@@ -618,6 +626,9 @@
      say what it copies as, so a tick goes as Yes and a mark as a number. */
   let mbSel = null;          // { table, a:[row, cell], b:[row, cell] }
   let mbDrag = false, mbMoved = false;
+  /* The row picking starts from: past a row of page names over the headings,
+     whose cells each cover several columns and would copy out of line. */
+  function mbFirstRow(t){ let i = 0; while (t.rows[i] && t.rows[i].classList.contains("mbgroup")) i++; return i; }
   function mbAt(cell){ return [cell.parentNode.rowIndex, cell.cellIndex]; }
   function mbBox(){
     if (!mbSel) return null;
@@ -731,8 +742,11 @@
     if (!(e.ctrlKey || e.metaKey)) return;
     const key = e.key.toLowerCase();
     if (key !== "a" && key !== "c") return;
-    const t = document.querySelector("#mbHolder .mbtable");
-    if (!t || !t.rows.length || !t.getClientRects().length) return;
+    /* the markbook on screen: an assessment's, or a lesson's, which
+       work.html draws with the same picking */
+    const t = Array.from(document.querySelectorAll("#mbHolder .mbtable, #progressTable.mbtable"))
+      .find(x => x.rows.length && x.getClientRects().length);
+    if (!t) return;
     const f = document.activeElement;
     if (f && f.closest && f.closest("input, textarea, select, [contenteditable=true], .rt-box")) return;
     if (key === "c"){
@@ -755,7 +769,7 @@
       return;                 // not prevented: the browser's copy is the point
     }
     e.preventDefault();
-    mbSel = { table: t, a: [0, 0], b: [t.rows.length - 1, t.rows[0].cells.length - 1] };
+    mbSel = { table: t, a: [mbFirstRow(t), 0], b: [t.rows.length - 1, t.rows[t.rows.length - 1].cells.length - 1] };
     mbPaintSel();
   });
 
@@ -808,11 +822,27 @@
     });
     mbSave(rows);
   }
-  function mbSave(rows){
-    const name = (title + " " + group).replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, "-") + ".xlsx";
+  function mbSave(rows, named){
+    const name = ((named || title + " " + group)).replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, "-") + ".xlsx";
     if (window.saveXlsx) window.saveXlsx(rows, "Markbook", name);
     else say("Could not build the file", "The spreadsheet builder did not load.");
   }
 
-  window.markbook = { build: build, paint: paint };
+  /* The spreadsheet half of the markbook, for a lesson's markbook in
+     work.html: the same picking, copying and saving, so a lesson and an
+     assessment behave as one thing rather than two that look alike. */
+  const sheet = {
+    selectable: mbSelectable,
+    /* a press that ended a drag was picking cells, not sorting */
+    moved: () => mbMoved,
+    clear: () => { mbSel = null; },
+    copyAll: async (t) => {
+      if (!t || !t.rows.length) return false;
+      mbSel = { table: t, a: [mbFirstRow(t), 0], b: [t.rows.length - 1, t.rows[t.rows.length - 1].cells.length - 1] };
+      mbPaintSel();
+      return mbCopyOut();
+    },
+    save: mbSave
+  };
+  window.markbook = { build: build, paint: paint, sheet: sheet };
 })();

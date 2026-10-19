@@ -1,19 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Computing Lesson Hub">
   <title>Computing Lesson Hub</title>
-  <defs>
-    <linearGradient id="clh-tile" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#4F95DE"/>
-      <stop offset="1" stop-color="#2A5F9E"/>
-    </linearGradient>
-  </defs>
-  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#clh-tile)"/>
-  <!-- the code brackets: computing -->
-  <path d="M18 20.5 L8.5 32 L18 43.5" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M46 20.5 L55.5 32 L46 43.5" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- the hub: one centre, three lessons joined to it -->
-  <path d="M32 32 L32 21 M32 32 L26 40 M32 32 L38 40" stroke="#FFFFFF" stroke-opacity=".85" stroke-width="2.6" stroke-linecap="round"/>
-  <circle cx="32" cy="20" r="3" fill="#FFFFFF"/>
-  <circle cx="25.5" cy="40.5" r="3" fill="#FFFFFF"/>
-  <circle cx="38.5" cy="40.5" r="3" fill="#FFFFFF"/>
-  <circle cx="32" cy="31.5" r="5.5" fill="#F2B705" stroke="#FFFFFF" stroke-width="2"/>
+  <!-- An open book, for lessons, with code brackets across its pages, for
+       computing. The gold spine sits between them where the slash of </>
+       would go, and is the one bit of colour that still shows at the size
+       of a browser tab. Flat colours only, so it stays crisp at 16px. -->
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="#2F6BAE"/>
+  <path d="M30 18.5 C24.5 15.5 17 15 10 16.5 V45 C17 43.5 24.5 44 30 47 Z" fill="#FFFFFF"/>
+  <path d="M34 18.5 C39.5 15.5 47 15 54 16.5 V45 C47 43.5 39.5 44 34 47 Z" fill="#FFFFFF"/>
+  <rect x="30" y="17" width="4" height="31.5" rx="2" fill="#F2B705"/>
+  <path d="M22 25.5 L16.5 31.5 L22 37.5" fill="none" stroke="#2F6BAE" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M42 25.5 L47.5 31.5 L42 37.5" fill="none" stroke="#2F6BAE" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

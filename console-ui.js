@@ -432,7 +432,7 @@
       pv.title = "See it as a student does, and try marking it";
       pv.addEventListener("click", (e) => {
         e.stopPropagation();
-        window.open("lessonpreview.html?id=" + encodeURIComponent(id), "_blank");
+        consoleNav.go("lessonpreview.html?id=" + encodeURIComponent(id));
       });
       acts.appendChild(give);
       acts.appendChild(edit);
@@ -549,6 +549,8 @@
       const foot = el("div","modal-foot pace-foot"); foot.id = "paceFoot"; box.appendChild(foot);
       window.paintTasks();
     });
+    /* after openModal, so the pop-up it replaced closing does not undo it */
+    rememberManaging(lessonId);
   };
   /* Everything that changes the locks ends by calling paintTasks, so the
      pacing view is drawn from here whenever it is the one on screen. */
@@ -592,7 +594,8 @@
     /* where the class has got to, and the one-press way on */
     const stat = el("div","pace-stat");
     stat.appendChild(el("b","", opened + " of " + total));
-    stat.appendChild(el("span","", opened === total ? "Everything is open" : "open, including the summary"));
+    stat.appendChild(el("span","", opened === total ? "Everything is open"
+      : hasSummary ? "open, including the summary" : "pages open"));
     head.appendChild(stat);
     const track = el("div","pace-track");
     track.setAttribute("aria-hidden", "true");
@@ -649,7 +652,7 @@
         eye.innerHTML = ic("eye", 17);
         eye.title = "View as a student";
         eye.setAttribute("aria-label", "View " + title + " as a student");
-        eye.addEventListener("click", () => window.open("lesson.html?id=" + encodeURIComponent(lessonId) + "&preview=" + i, "_blank"));
+        eye.addEventListener("click", () => consoleNav.go("lesson.html?id=" + encodeURIComponent(lessonId) + "&preview=" + i));
         r.appendChild(eye);
       }
       const sw = el("button","pace-switch" + (isOpen ? " on" : ""));

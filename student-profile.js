@@ -281,8 +281,8 @@
         meter.appendChild(el("span","prof-dim", l.mr.isAssessment ? "An assessment: see Specification coverage" : "Nothing marked automatically"));
       }
       r.appendChild(meter);
-      r.appendChild(btn("View work", "btn-ghost bmini2", () => window.open("work.html?lesson=" + encodeURIComponent(l.id) +
-        "&group=" + encodeURIComponent(group) + "&student=" + encodeURIComponent(me), "_blank")));
+      r.appendChild(btn("View work", "btn-ghost bmini2", () => consoleNav.go("work.html?lesson=" + encodeURIComponent(l.id) +
+        "&group=" + encodeURIComponent(group) + "&student=" + encodeURIComponent(me))));
       rows.appendChild(r);
     });
     /* The key sits above the lessons, in the colours it describes. */

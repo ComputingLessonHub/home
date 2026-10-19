@@ -19,12 +19,12 @@
 </head>
 <body class="workpage">
 
-<div class="homebar">
+<div class="homebar" data-console-back>
   <div class="title" id="barTitle">Computing Lesson Hub</div>
   <span class="grow"></span>
   <div class="subtabs worktabs">
     <button class="on" id="tabWork">View work</button>
-    <button id="tabProgress">Progress</button>
+    <button id="tabProgress">Markbook</button>
   </div>
   <button class="btn-ghost iconbtn" id="setBtn" title="Settings">&#9881;&#65038;</button>
 </div>
@@ -36,14 +36,19 @@
   </div>
 </div>
 
-<!-- ================= progress ================= -->
-<div id="progressPane" class="workwrap" hidden>
-  <div class="toolrow" id="progressFilters"></div>
+<!-- ================= a lesson's markbook =================
+     The same spreadsheet an assessment's markbook is: the figures along the
+     top, the filters and Copy all and Save for Excel in one row, then the
+     table, picked and copied the way markbook.js picks and copies. -->
+<div id="progressPane" class="workwrap lessonmb" hidden>
+  <div class="mbstats" id="progressStats"></div>
+  <div class="mbbar" id="progressFilters"></div>
   <p class="hint" id="progressMsg"></p>
   <div class="progresswrap">
-    <table class="progresstable" id="progressTable"></table>
+    <table class="progresstable mbtable" id="progressTable"></table>
   </div>
-  <div class="mbstats" id="progressStats"></div>
+  <p class="subnote mbhint" id="progressHint">Click a cell, then drag or Shift-click to pick more. Ctrl+C copies them. Click a mark to open that piece of work.</p>
+  <div class="progress-types" id="progressTypes" hidden></div>
 </div>
 
 <!-- ================= the markbook =================
@@ -282,7 +287,6 @@ async function boot(){
     if (lessonJson && (lessonJson.practical || lessonJson.assessment)) $("tabWork").textContent = "Mark work";
     /* a test has no pages to lay out on one, only its marked answers */
     if (markingTest()) $("viewMode").hidden = true;
-    if (markbookMode()) $("tabProgress").textContent = "Markbook";
     roster = students.sort(byUsername);
     rows = work;
     if (!PRACTICE) await loadMarks();
@@ -590,19 +594,9 @@ let shutProgressFullscreen = null;   // set while the full-screen markbook is op
 let unitSiblings = null;   // null = not looked up yet; otherwise {before:[...]} in teaching order
 let siblingCache = new Map();   // lesson id -> the result of markRoster against it, once fetched
 let comparisonPrev = null;   // {title, pct} for the lesson before this one, false once known there isn't one
-/* What the markbook is sorted by. "username"/"displayName" are the two
-   ways to read the name column; anything else is a task id, or "total". */
+/* What the markbook is sorted by: "username", "displayName", "total" or a
+   task id. */
 let progressSort = { key: "username", dir: 1 };
-/* The name column cycles through both fields rather than just flipping
-   direction, since there are two different things "Student" could mean
-   here and a plain toggle could only ever offer one of them. */
-function clickNameSort(){
-  const cycle = [["username",1], ["username",-1], ["displayName",1], ["displayName",-1]];
-  const at = cycle.findIndex(c => c[0] === progressSort.key && c[1] === progressSort.dir);
-  const next = cycle[(at + 1) % cycle.length];
-  progressSort = { key: next[0], dir: next[1] };
-  paintProgress();
-}
 function clickColumnSort(key){
   if (progressSort.key === key) progressSort.dir = -progressSort.dir;
   else progressSort = { key: key, dir: -1 };   // a mark you have just asked about is one you want the best or worst of first
@@ -665,6 +659,8 @@ function openProgressFullscreen(){
 function paintProgress(){
   const filters = $("progressFilters"), table = $("progressTable"), msg = $("progressMsg");
   if (!filters || !table) return;
+  const sheet = window.markbook && window.markbook.sheet;
+  if (sheet) sheet.clear();
   /* A locked page is one the class cannot reach yet, so there is nothing
      behind its tasks worth asking about: a column of dashes for a page
      nobody could have opened would read as a class that has not tried,
@@ -675,34 +671,48 @@ function paintProgress(){
   const hasExt = openTasks.some(t => t.extension);
   const tasks = openTasks.filter(t => progressShowExt || !t.extension);
   filters.innerHTML = ""; table.innerHTML = "";
-  if (hasExt){
-    const ext = el("button","btn-primary", progressShowExt ? "Hide Extension Tasks" : "Include Extension Tasks");
-    ext.addEventListener("click", () => { progressShowExt = !progressShowExt; paintProgress(); });
-    filters.appendChild(ext);
-  }
-  const full = el("button","btn-ghost iconbtn progress-full-btn","⛶");
+
+  /* the row over the table: which tasks, at one end; the spreadsheet's
+     own buttons at the other, as on an assessment's markbook */
+  const left = el("div","mbfilters");
+  const tools = el("div","mbtools");
+  const full = el("button","btn-ghost iconbtn progress-full-btn","");
+  full.innerHTML = window.hubUI ? window.hubUI.icon("open", 17) : "⛶";
   full.title = "Show the markbook full screen";
+  full.setAttribute("aria-label", "Show the markbook full screen");
   full.addEventListener("click", openProgressFullscreen);
+  filters.appendChild(left);
+  filters.appendChild(tools);
+  const hint = $("progressHint");
   if (!tasks.length){
-    filters.appendChild(full);
+    tools.appendChild(full);
     msg.textContent = !openTasks.length
       ? (allTasks.length ? "Every page with a scored task on it is still locked for this class."
                          : "Nothing in this lesson can be scored automatically yet.")
-      : "Every scored task left is inside an extension. Include Extension Tasks to see them.";
+      : "Every scored task left is inside an extension. Include extension tasks to see them.";
+    if (hasExt) left.appendChild(extToggle());
     $("progressStats").innerHTML = "";
+    $("progressTypes").hidden = true;
+    if (hint) hint.hidden = true;
     return;
   }
   msg.textContent = "";
+  if (hint) hint.hidden = false;
   const labels = [...new Set(tasks.map(t => t.label))];
-  labels.forEach(label => {
-    const pill = el("button","progress-pill" + (progressPicked.has(label) ? " on" : ""), label);
-    pill.addEventListener("click", () => {
-      if (progressPicked.has(label)) progressPicked.delete(label); else progressPicked.add(label);
-      paintProgress();
+  /* Only worth offering when there is more than one kind to choose between. */
+  if (labels.length > 1){
+    labels.forEach(label => {
+      const pill = el("button","progress-pill" + (progressPicked.has(label) ? " on" : ""), label);
+      pill.type = "button";
+      pill.setAttribute("aria-pressed", progressPicked.has(label) ? "true" : "false");
+      pill.addEventListener("click", () => {
+        if (progressPicked.has(label)) progressPicked.delete(label); else progressPicked.add(label);
+        paintProgress();
+      });
+      left.appendChild(pill);
     });
-    filters.appendChild(pill);
-  });
-  filters.appendChild(full);
+  }
+  if (hasExt) left.appendChild(extToggle());
   const shown = progressPicked.size ? tasks.filter(t => progressPicked.has(t.label)) : tasks;
 
   /* Every mark, for every student, worked out once rather than once per
@@ -723,6 +733,21 @@ function paintProgress(){
     marks[st.username] = { data: data, perTask: perTask, total: { got: gotSum, max: maxSum } };
   });
 
+  const copyAll = el("button","btn-ghost bmini2","Copy all");
+  copyAll.type = "button";
+  copyAll.title = "Copy the whole table, ready to paste into a spreadsheet";
+  copyAll.addEventListener("click", async () => {
+    if (!sheet) return;
+    copyAll.textContent = (await sheet.copyAll(table)) ? "Copied" : "Press Ctrl+C";
+    setTimeout(() => { copyAll.textContent = "Copy all"; }, 1600);
+  });
+  const excel = el("button","btn-ghost bmini2","Save for Excel");
+  excel.type = "button";
+  excel.addEventListener("click", () => saveLessonMarkbook(shown, marks));
+  tools.appendChild(copyAll);
+  tools.appendChild(excel);
+  tools.appendChild(full);
+
   const sorted = roster.slice().sort((a, b) => {
     const k = progressSort.key, d = progressSort.dir;
     let x, y;
@@ -739,22 +764,17 @@ function paintProgress(){
 
   const thead = el("thead"), tbody = el("tbody");
   table.appendChild(thead); table.appendChild(tbody);
-  const rowPage = el("tr"), rowTask = el("tr");
+  const rowPage = el("tr","mbgroup"), rowTask = el("tr");
   thead.appendChild(rowPage); thead.appendChild(rowTask);
-  /* The page-name strip runs above the whole table, Student and Total
-     included, rather than stopping short of them: a rowspan there used to
-     make both columns as tall as the page row and the task row put
-     together, which is taller than either needs to be on its own. A blank
-     cell here, matching height with everything else in this row, is all
-     Student and Total need from it; their own header, the same height as
-     every task column's, lives in the row below like the rest. */
-  const nameBlank = el("th","pcol-name pcol-page");
-  rowPage.appendChild(nameBlank);
   /* Columns for the same page sit under one heading between them, so a page
      with two checklists on it reads as one page with two columns rather
      than two unrelated columns that happen to be neighbours. An extension
      task never merges into its page's group: it is stamped with its own
-     title in quantifiableTasks, so the two never look like one run. */
+     title in quantifiableTasks, so the two never look like one run. The
+     three columns before them have no page, so one blank cell spans them. */
+  const nameBlank = el("th","pcol-page pcol-lead");
+  nameBlank.colSpan = 3;
+  rowPage.appendChild(nameBlank);
   let i = 0;
   while (i < shown.length){
     let j = i + 1;
@@ -765,24 +785,35 @@ function paintProgress(){
     rowPage.appendChild(pageHead);
     i = j;
   }
-  const totalBlank = el("th","pcol-total pcol-page");
-  rowPage.appendChild(totalBlank);
 
-  const nameHead = el("th","pcol-name pcol-sort","Student" + sortArrow(progressSort.key === "displayName" ? "displayName" : "username"));
-  nameHead.title = "Sort by username or by name";
-  nameHead.addEventListener("click", clickNameSort);
-  rowTask.appendChild(nameHead);
+  /* A heading sorts when pressed, unless the press was the end of a drag
+     picking cells, which is the markbook's rule too. */
+  const head = (label, key, cls, tip) => {
+    const th = el("th","mbsort" + (cls ? " " + cls : "") + (progressSort.key === key ? " on" : ""));
+    th.appendChild(el("span","", label + sortArrow(key)));
+    th.dataset.copy = label;
+    if (tip) th.title = tip;
+    th.addEventListener("click", (e) => {
+      if (e.shiftKey || (sheet && sheet.moved())) return;
+      clickColumnSort(key);
+    });
+    return th;
+  };
+  rowTask.appendChild(head("Username", "username", "pcol-name"));
+  rowTask.appendChild(head("Display name", "displayName"));
+  rowTask.appendChild(head("Marks", "total", "pcol-total"));
   shown.forEach(t => {
-    const th = el("th","pcol-sort");
     /* The type is what fits in the column; the page row above already says
        where it is, so the full title is left for a hover rather than
        crowding the header. */
-    th.title = t.pageTitle + " \u00b7 " + t.title;
-    th.appendChild(el("span","", t.label + sortArrow(t.id)));
-    th.addEventListener("click", () => clickColumnSort(t.id));
+    const th = head(t.label, t.id, "", t.pageTitle + " \u00b7 " + t.title);
     const hidden = progressHiddenCols.has(t.id);
-    const eye = el("button","eye-toggle" + (hidden ? " off" : ""), "\u{1F441}");
+    const eye = el("button","eye-toggle" + (hidden ? " off" : ""), "");
+    eye.type = "button";
+    eye.innerHTML = window.hubUI ? window.hubUI.icon("eye", 14) : "\u{1F441}";
     eye.title = hidden ? "Show this column's marks again" : "Hide this column's marks";
+    eye.setAttribute("aria-label", eye.title);
+    eye.addEventListener("mousedown", (e) => e.stopPropagation());
     eye.addEventListener("click", (e) => {
       e.stopPropagation();
       if (hidden) progressHiddenCols.delete(t.id); else progressHiddenCols.add(t.id);
@@ -791,42 +822,73 @@ function paintProgress(){
     th.appendChild(eye);
     rowTask.appendChild(th);
   });
-  const totalHead = el("th","pcol-total pcol-sort","Total" + sortArrow("total"));
-  totalHead.addEventListener("click", () => clickColumnSort("total"));
-  rowTask.appendChild(totalHead);
   syncProgressHeaderOffset();
 
   sorted.forEach(st => {
     const m = marks[st.username];
     const tr = el("tr");
-    const name = el("td","pcol-name");
-    name.appendChild(el("b","", st.display_name));
-    name.appendChild(el("span","", st.username));
-    name.addEventListener("click", () => openStudentPreview(st));
+    const user = el("td","pcol-name", st.username || "");
+    tr.appendChild(user);
+    const name = el("td","");
+    const open = el("span","mblink", st.display_name || "");
+    open.title = "Open " + (st.display_name || "their") + "\u2019s work";
+    open.addEventListener("click", () => { if (!(sheet && sheet.moved())) openStudentPreview(st); });
+    name.appendChild(open);
+    name.dataset.copy = st.display_name || "";
     tr.appendChild(name);
+    const total = el("td","pcol-total", m.total.max ? m.total.got + " / " + m.total.max : "");
+    total.dataset.copy = m.total.max ? String(m.total.got) : "";
+    tr.appendChild(total);
     shown.forEach(t => {
       const sc = m.perTask[t.id];
-      const td = el("td","progresscell");
+      const td = el("td","progresscell mbtick");
       /* Hidden by eye rather than by filter: the mark still counts in the
          total, it is only the one cell that is not for showing right now,
          a projector in front of the class being the usual reason. */
-      if (progressHiddenCols.has(t.id)) td.appendChild(el("span","none","\u2022\u2022\u2022"));
-      else if (!attempted(m.data, t.id)) td.appendChild(el("span","none","\u2013"));
+      if (progressHiddenCols.has(t.id)){ td.appendChild(el("span","none","\u2022\u2022\u2022")); td.dataset.copy = ""; }
+      else if (!attempted(m.data, t.id)){ td.appendChild(el("span","none","\u2013")); td.dataset.copy = ""; }
       else{
         const cls = sc.max === 0 ? "none" : sc.got === sc.max ? "yes" : sc.got > 0 ? "part" : "no";
         const mark = el("span", cls + " score", sc.got + "/" + sc.max);
         mark.title = "Open " + st.display_name + "\u2019s " + t.label.toLowerCase();
-        mark.addEventListener("click", () => openTaskPreview(st, t));
+        mark.addEventListener("click", () => { if (!(sheet && sheet.moved())) openTaskPreview(st, t); });
         td.appendChild(mark);
+        /* the mark itself: "1/2" pasted into Excel turns into a date */
+        td.dataset.copy = String(sc.got);
       }
       tr.appendChild(td);
     });
-    const total = el("td","pcol-total");
-    total.appendChild(el("b","", m.total.got + "/" + m.total.max));
-    tr.appendChild(total);
     tbody.appendChild(tr);
   });
+  if (sheet) sheet.selectable(table);
   paintProgressStats(shown, marks);
+}
+/* Include extension tasks, or leave them out: a switch, the same one Unmarked
+   only is, rather than a button that says what pressing it will do. */
+function extToggle(){
+  const sw = el("button","pace-switch progress-ext" + (progressShowExt ? " on" : ""));
+  sw.type = "button";
+  sw.setAttribute("role", "switch");
+  sw.setAttribute("aria-checked", progressShowExt ? "true" : "false");
+  sw.appendChild(el("span","pace-switch-words", "Extension tasks"));
+  sw.appendChild(el("span","pace-knob"));
+  sw.addEventListener("click", () => { progressShowExt = !progressShowExt; paintProgress(); });
+  return sw;
+}
+/* The same columns as the table, in the same order, with the page each task
+   is on spelled out, because a spreadsheet has no row of page names above. */
+function saveLessonMarkbook(shown, marks){
+  const sheet = window.markbook && window.markbook.sheet;
+  const head = ["Username", "Display name", "Marks", "Out of"];
+  shown.forEach(t => head.push(t.pageTitle + ": " + t.label));
+  const out = [head];
+  roster.slice().sort((a, b) => (a.username || "").localeCompare(b.username || "")).forEach(st => {
+    const m = marks[st.username];
+    const row = [st.username || "", st.display_name || "", m.total.max ? m.total.got : "", m.total.max || ""];
+    shown.forEach(t => row.push(attempted(m.data, t.id) ? m.perTask[t.id].got : ""));
+    out.push(row);
+  });
+  if (sheet) sheet.save(out, ((lessonJson && lessonJson.title) || lessonId) + " " + cls);
 }
 
 /* ---------------- comparing against the rest of the unit ----------------
@@ -895,6 +957,7 @@ function paintProgressStats(shown, marks){
   const box = $("progressStats");
   if (!box) return;
   box.innerHTML = "";
+  $("progressTypes").hidden = true;
   const totals = roster.map(st => marks[st.username].total).filter(t => t.max > 0);
   if (!totals.length) return;
   const pctOf = (t) => Math.round(100 * t.got / t.max);
@@ -915,7 +978,8 @@ function paintProgressStats(shown, marks){
   const fullCount = totals.filter(t => t.got === t.max).length;
   const strugglingCount = totals.filter(t => t.got < t.max * 0.5).length;
 
-  box.appendChild(stat(avg + "%", "Class average", pctClass(avg)));
+  box.appendChild(stat(attemptedCount + " of " + roster.length, "Attempted"));
+  box.appendChild(stat(avg + "%", "Average", pctClass(avg)));
   /* Against the lesson before this one in the same unit, once it is known:
      fetched in the background by loadComparison and repainted in when it
      arrives, so the rest of the stats are never held up waiting for it. */
@@ -927,9 +991,8 @@ function paintProgressStats(shown, marks){
       diff > 0 ? "yes" : diff < 0 ? "no" : ""));
   }
   box.appendChild(stat(bands.high + " / " + bands.mid + " / " + bands.low, "80%+ · 50–79% · under 50%"));
-  box.appendChild(stat(attemptedCount + " of " + roster.length, "Attempted something"));
-  box.appendChild(stat(String(fullCount), "Got full marks", fullCount ? "yes" : ""));
-  box.appendChild(stat(String(strugglingCount), "Scored under half", strugglingCount ? "no" : ""));
+  box.appendChild(stat(String(fullCount), "Full marks", fullCount ? "yes" : ""));
+  box.appendChild(stat(String(strugglingCount), "Under half", strugglingCount ? "no" : ""));
 
   /* One average per task type, however many columns of it there are, so
      two checklists on different pages still read as one Coding task
@@ -951,7 +1014,9 @@ function paintProgressStats(shown, marks){
   if (weakest) box.appendChild(stat(weakest.pct + "%",
     "Weakest: " + weakest.t.label + " · " + weakest.t.pageTitle, pctClass(weakest.pct)));
 
-  const typesRow = el("div","progress-types");
+  const typesRow = $("progressTypes");
+  typesRow.innerHTML = "";
+  typesRow.hidden = false;
   typesRow.appendChild(el("b","","By task type"));
   const list = el("div","progress-typeavgs");
   Object.keys(byLabel).forEach(label => {
@@ -961,7 +1026,6 @@ function paintProgressStats(shown, marks){
     list.appendChild(el("span","typeavg " + pctClass(p), label + " " + p + "%"));
   });
   typesRow.appendChild(list);
-  box.appendChild(typesRow);
 }
 
 /* What a student's work looks like with nothing else on the page: no

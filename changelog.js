@@ -9,6 +9,15 @@
    wants to know whether the thing they noticed is meant to be there, not a
    full account of the work. */
 window.CHANGES = [
+  { v:"13.9.7", text:"The New look reaches the sign-in page, the lesson builder, the sandbox and the marking pages." },
+  { v:"13.9.6", text:"A new logo: an open book with code brackets across its pages." },
+  { v:"13.9.5", text:"Lock for marking and Student Voice use the site's own drawn icons instead of emoji." },
+  { v:"13.9.4", text:"Response tasks only appear in a markbook and on a student's summary when the assessment has some." },
+  { v:"13.9.3", text:"Marking, the builder, Preview and the sandbox open in the same tab as the console, with a Console button to go back." },
+  { v:"13.9.2", text:"Refreshing the console keeps you on the screen you were on, including Passwords, Backups and a lesson's Manage." },
+  { v:"13.9.1", text:"Student Voice for a whole year group, from the Student Voice button on the year group's page in Lessons." },
+  { v:"13.9", text:"Lesson, Assessment, Practical assessment or Home learning is chosen when a lesson is started and changed in Lesson options, which has been redesigned." },
+  { v:"13.8.3", text:"A lesson's Progress table is now its Markbook: the same layout as an assessment's, with Copy all, Save for Excel and cells you can pick and copy." },
   { v:"13.8.2", text:"Ticks in the Feedback column, the Strengths and Targets ticked off while marking and a teacher's edits to a student's work are all kept when the work is saved." },
   { v:"13.8.1", text:"The site has a logo, and its name, Computing Lesson Hub, now sits at the top of the console's side menu. Lesson hub is now called Lessons." },
   { v:"13.8", text:"The New look: softer cards, a clearer side menu, rounded tabs and a top bar that stays put. Settings > Design turns all of it off at once for the design the site had before." },
