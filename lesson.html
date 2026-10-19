@@ -107,6 +107,9 @@ const allParam = qs.get("all");                                  // every page o
 const embedParam = qs.get("embed");
 const summaryParam = qs.get("summary");   // show the finished screen instead of a task                              // shown inside the teacher console                          // preview inside the lesson builder
 const highlightParam = qs.get("highlight");   // scroll to and flash one task, for the Progress tab
+/* Mark work on a standard assessment: the marked answers and a score to
+   change on every question, in place of the test as it was sat. */
+const markingParam = qs.get("marking");
 const spectate = previewParam !== null || viewParam !== null || pdfParam !== null || builderParam !== null;
 let inspectName = "";
 let inspectList = null, inspectIdx = 0, keepStep = null, inspectUser = "";
@@ -221,6 +224,13 @@ async function loadMyMark(){
     const mine = (d.results || []).find(x => x.lesson_id === lessonId);
     if (mine){
       myResult = { score: mine.score, outOf: mine.out_of, grade: mine.grade || "" };
+      /* A question a teacher re-marked by hand. Without these the review
+         kept the computer's mark beside a total that had the teacher's in
+         it, and finishing again wrote the computer's back over theirs. */
+      try{
+        const ov = mine.overrides ? JSON.parse(mine.overrides) : null;
+        if (ov && typeof ov === "object" && Object.keys(ov).length) markOverrides = { overrides: ov };
+      }catch(e){}
       /* the sentences are kept here too, in case the work note is missing */
       if (!hasFeedback() && (mine.strength || mine.target))
         teacherNote = Object.assign({}, teacherNote || {}, { strength: mine.strength || "", target: mine.target || "", comment: (teacherNote && teacherNote.comment) || "" });
@@ -1297,6 +1307,10 @@ const handedOver = handedLesson();
         const home = $("homeLink"); if (home) home.hidden = true;
         hideLoader();                       // otherwise the work stays behind it
         sendStrengthAndTarget();            // fills the marking boxes straight away
+        if (markingParam !== null && lesson.assessment && !lesson.practical){
+          showMarkingView();
+          return;
+        }
         if (summaryParam !== null){
           /* The Progress tab's own total already leaves out anything still
              locked for this class; the achievement card on this same
@@ -1406,7 +1420,7 @@ const handedOver = handedLesson();
          left the feedback never asked for, and with it the ticks given while
          marking, the comment and any code the teacher put right. */
       if (!teacherNote) await loadMyFeedback();
-      if (lesson.practical) await loadMyMark();
+      if (lesson.practical || lesson.assessment) await loadMyMark();
       freezeIfFed();
       /* The progress bar on the summary says which pages the teacher kept
          shut, so it needs the same answer the lesson itself starts with. On a
@@ -1585,6 +1599,9 @@ async function loadSaved(){
           inspectIdx = Math.min(Math.max(parseInt(box.idx, 10) || 0, 0), box.list.length - 1);
           const pick = box.list[inspectIdx];
           if (pick && pick.feedback) showFeedback(pick.feedback);   // what has already been written
+          /* any question already re-marked by hand, so the score shown is the one saved */
+          if (pick && pick.overrides && typeof pick.overrides === "object")
+            markOverrides = { overrides: Object.assign({}, pick.overrides) };
           inspectUser = pick && pick.username ? pick.username : "";
           if (typeof box.step === "number") keepStep = box.step;
           box = { lesson: box.lesson, name: pick.name, data: pick.data };
@@ -1642,7 +1659,7 @@ async function loadSaved(){
     if (!r.ok) return;
     const d = await r.json();
     if (d && d.feedback) showFeedback(d.feedback);
-    if (lesson && lesson.practical) await loadMyMark();
+    if (lesson && (lesson.practical || lesson.assessment)) await loadMyMark();
     if (d && d.data){
       restoredData = d.data; wasDone = !!d.data.__done;
       if (wasDone) finished = true;          // so the write-back below keeps it
@@ -5433,6 +5450,8 @@ function codeTaskIds(){
   });
 }
 function noteMarkingEdits(){
+  /* Mark work on a test reads the answers and never changes them. */
+  if (markingParam !== null) return;
   clearTimeout(editTimer);
   editTimer = setTimeout(() => {
     const edits = {};
@@ -8417,6 +8436,10 @@ function normAns(x){
 /* Multiple choice: one selection, no feedback until the end. */
 function rMC(b){
   const s = el("section");
+  /* The program a question asks about goes above the options, drawn the way
+     a short answer draws it, or the heading folds it onto one line. */
+  const asked = splitAtCode(b.prompt);
+  if (asked.code) s.appendChild(el("div","ask-code", asked.code));
   const opts = el("div","opts");
   let chosen = null;
   (b.options || []).forEach((text, j) => {
@@ -8441,7 +8464,8 @@ function rMC(b){
   }};
   return { section:s,
            check:() => (!(b.options || []).length || chosen !== null) ? { ok:true } : { ok:false, message:"Choose an answer" },
-           brief:{ eyebrow:"Question", title:askHtml(b.prompt) || "", text:b.note || "" } };
+           brief:{ eyebrow:"Question", text:b.note || "",
+                   title:askHtml(asked.ask) || (asked.code ? "Look at the code below." : "") } };
 }
 
 /* The order a "put in order" list is dealt in: shuffled, but the same
@@ -8623,7 +8647,7 @@ function rShort(b){
   const row = el("div","short-row");
   row.appendChild(ans);
   const asked = splitAtCode(b.prompt);
-  if (asked.code) s.appendChild(el("div","short-code", asked.code));
+  if (asked.code) s.appendChild(el("div","ask-code", asked.code));
   s.appendChild(row);
 
   /* A short answer is a word or two, and a student who writes a sentence
@@ -8840,10 +8864,14 @@ function computeAssessment(){
     score += pts; outOf += max;
     /* Numbered as the student saw it, so Question 4 in the review is the
        question that was 4 on the page. */
+    /* A program in the question is kept apart from the words, or the title
+       folds every line of it into one. */
+    const asked = (b.type === "mc" || b.type === "short") ? splitAtCode(b.prompt) : { ask: b.prompt, code: "" };
+    const words = asked.ask || b.title || b.task || "";
     perQ.push({ id: b.id, n: questionNo[b.id] || n, type: b.type,
-                title: (stripTags(b.prompt || b.title || b.task || "") || /<img/i.test(b.prompt || "")
-                          ? askHtml(b.prompt || b.title || b.task || "") : "") || REVIEW_NAME[b.type] || b.id,
-                pts, max, review });
+                title: (stripTags(words) || /<img/i.test(asked.ask || "") ? askHtml(words) : "")
+                       || (asked.code ? "Look at the code below." : "") || REVIEW_NAME[b.type] || b.id,
+                code: asked.code, pts, max, review });
     const topic = b.topic || "general";
     byTopic[topic] = byTopic[topic] || { right: 0, total: 0 };
     byTopic[topic].right += pts; byTopic[topic].total += max;
@@ -9079,42 +9107,10 @@ function enterMarkingLock(){
   else showMarkingLocked();
 }
 
-function renderAssessmentComplete(justFinished, res, st, sent){
-  /* A practical is marked by hand, so until the teacher has been there is no
-     score to show and nothing to review. */
-  if (lesson && lesson.practical && !teacherTools){
-    renderPracticalComplete();
-    return;
-  }
-  if (!res){ res = computeAssessment(); }
-  if (!st){ st = starOn() ? computeST(res.byTopic) : NO_STAR; }
-  const pct = Math.round(100*res.score/Math.max(1,res.outOf));
-  const heading = resultHeading(pct);
-  const box = doneShell(heading);
-
-  // hero + score, the tick appears whatever the score
-  const hero = heroBits(heading, lesson.title);
-  hero.appendChild(el("div","done-score", res.score + " / " + res.outOf));
-  hero.appendChild(el("div","done-pct", pct + "%"));
-  /* A way straight into the marked work, where the "result saved" line used
-     to sit. It fades in last, once the cards have settled. */
-  const seeBtn = el("button","btn-primary done-save fadein","View my assessment");
-  hero.appendChild(seeBtn);
-
-  /* The hero and the two cards sit side by side, and the cards slide in
-     from the right once the score has landed. */
-  const layout = el("div","done-layout");
-  const heroCol = el("div","done-hero-col");
-  heroCol.appendChild(hero);
-  layout.appendChild(heroCol);
-  const cards = el("div","done-cards");
-  layout.appendChild(cards);
-  box.appendChild(layout);
-  /* Only when they have just finished, and never when nothing was earned —
-     a celebration over a blank score reads as mockery. */
-  if (justFinished && res.score > 0) confetti();
-
-  // per-question review, shown the way the questions looked
+/* Every question, marked, the way it looked: what the student sees behind
+   View my assessment, and what Mark work shows a teacher. With marking on,
+   each mark is a score to change (see markStepper). */
+function buildReview(res, marking){
   const rev = el("div","review");
   res.perQ.forEach(q => {
     const b = lesson.blocks.find(x => x.id === q.id) || {};
@@ -9124,6 +9120,9 @@ function renderAssessmentComplete(justFinished, res, st, sent){
     row.appendChild(el("div","mark", q.pts === q.max ? "\u2713" : q.pts > 0 ? (q.pts + "/" + q.max) : "\u2717"));
     const body = el("div","body");
     body.appendChild(el("b","", q.n + ". " + q.title));
+    /* computeResults left the program out of the title, so it is put back
+       here as a box, the way the question showed it. */
+    if (q.code) body.appendChild(el("div","ask-code", q.code));
 
     if (q.type === "mc"){
       const opts = el("div","rev-opts");
@@ -9133,7 +9132,10 @@ function renderAssessmentComplete(justFinished, res, st, sent){
         if (j === b.answer) c += " answer";
         const o = el("div", c);
         o.appendChild(el("span","dot",""));
-        o.appendChild(el("span","", askHtml(text)));
+        /* drawn as the question drew it: askHtml would fold an option of
+           several lines, three lines of output say, into one */
+        o.appendChild(el("span","", text));
+        fillImageIds(o);
         if (j === b.answer) o.appendChild(el("span","tag","Correct"));
         else if (j === v) o.appendChild(el("span","tag","Your answer"));
         opts.appendChild(o);
@@ -9199,6 +9201,46 @@ function renderAssessmentComplete(justFinished, res, st, sent){
     row.appendChild(body);
     rev.appendChild(row);
   });
+  return rev;
+}
+
+function renderAssessmentComplete(justFinished, res, st, sent){
+  /* A practical is marked by hand, so until the teacher has been there is no
+     score to show and nothing to review. */
+  if (lesson && lesson.practical && !teacherTools){
+    renderPracticalComplete();
+    return;
+  }
+  if (!res){ res = computeAssessment(); }
+  if (!st){ st = starOn() ? computeST(res.byTopic) : NO_STAR; }
+  const pct = Math.round(100*res.score/Math.max(1,res.outOf));
+  const heading = resultHeading(pct);
+  const box = doneShell(heading);
+
+  // hero + score, the tick appears whatever the score
+  const hero = heroBits(heading, lesson.title);
+  hero.appendChild(el("div","done-score", res.score + " / " + res.outOf));
+  hero.appendChild(el("div","done-pct", pct + "%"));
+  /* A way straight into the marked work, where the "result saved" line used
+     to sit. It fades in last, once the cards have settled. */
+  const seeBtn = el("button","btn-primary done-save fadein","View my assessment");
+  hero.appendChild(seeBtn);
+
+  /* The hero and the two cards sit side by side, and the cards slide in
+     from the right once the score has landed. */
+  const layout = el("div","done-layout");
+  const heroCol = el("div","done-hero-col");
+  heroCol.appendChild(hero);
+  layout.appendChild(heroCol);
+  const cards = el("div","done-cards");
+  layout.appendChild(cards);
+  box.appendChild(layout);
+  /* Only when they have just finished, and never when nothing was earned —
+     a celebration over a blank score reads as mockery. */
+  if (justFinished && res.score > 0) confetti();
+
+  // per-question review, shown the way the questions looked
+  const rev = buildReview(res);
   /* the review lives inside the pop-up now, not on the page */
 
   if (!starOn()){ markOnlySummary({ box, layout, cards, res, rev, seeBtn, justFinished }); return; }
@@ -10915,7 +10957,9 @@ function buildPdf(){
       return out;
     }
     if (b.type === "mc"){
-      out.push({ t: "ask", text: pdfText(b.prompt) || "Multiple choice" });
+      const asked = splitAtCode(b.prompt);
+      out.push({ t: "ask", text: pdfText(asked.ask) || "Multiple choice" });
+      if (asked.code) proseParts(asked.code).forEach(part => out.push(part));
       (b.options || []).forEach((opt, i) => {
         const chose = i === v, right = i === b.answer;
         out.push({ t: "text", face: "p",
