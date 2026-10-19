@@ -8697,7 +8697,6 @@ function rShort(b){
         const got = r.groups.filter(g => g.ok).map(g => g.label);
         if (got.length) fb.appendChild(el("span","", "Good so far: you have " + joinWords(got) + "."));
         if (missing.length) fb.appendChild(el("span","", "Still to add: " + joinWords(missing) + "."));
-        if (b.model) fb.appendChild(el("span","", "A good answer mentions: " + b.model));
       } else if (r.mode === "none"){
         /* No accepted answers were ever typed, so nothing here can be right.
            Saying "wrong" to a student for that would be unfair. */
@@ -8706,8 +8705,9 @@ function rShort(b){
         fb.appendChild(el("b","","Answer saved"));
         fb.appendChild(el("span","", "Your teacher will read this one."));
       } else {
+        /* A short answer has no model answer any more. One left in an older
+           lesson's JSON is ignored, here and everywhere the answer is shown. */
         fb.appendChild(el("span","", "Check your spelling and try again."));
-        if (b.model) fb.appendChild(el("span","", "The answer we are after: " + b.model));
       }
       markDirty();
     });
@@ -8827,8 +8827,7 @@ function computeAssessment(){
       const r = window.shortAnswer.mark(b, v);
       pts = r.ok ? 1 : 0;
       review = { yours: String(v || "").trim() || "(not answered)",
-                 mode: r.mode, groups: r.groups, accepted: r.accepted,
-                 model: b.model || "" };
+                 mode: r.mode, groups: r.groups, accepted: r.accepted };
     } else if (b.type === "exam"){
       /* A one line answer is marked here, the same as a Short answer. A
          written one carries what the student ticked off against the scheme,
@@ -8842,8 +8841,7 @@ function computeAssessment(){
         const r = window.shortAnswer.mark(b, said);
         pts = r.ok ? max : 0;
         review = { yours: said.trim() || "(not answered)",
-                   mode: r.mode, groups: r.groups, accepted: r.accepted,
-                   model: b.model || "" };
+                   mode: r.mode, groups: r.groups, accepted: r.accepted };
       } else {
         const scheme = (Array.isArray(b.scheme) ? b.scheme : []).filter(p => p && p.text);
         if (!max) max = scheme.reduce((t, p) => t + Math.max(1, parseInt(p.marks, 10) || 1), 0);
@@ -9222,10 +9220,6 @@ function buildReview(res, marking){
       } else {
         body.appendChild(el("span","why", marking ? "This one has no answer set, so it is yours to mark."
                                                   : "This one has no answer set, so your teacher marks it."));
-      }
-      if (!q.auto && q.review.model){
-        body.appendChild(el("p","rev-label", "A good answer mentions"));
-        body.appendChild(el("div","rev-quote right", q.review.model));
       }
     }
 
@@ -9742,9 +9736,8 @@ function reviewCode(b, v){
    they are shown. */
 let markSaveTimer = 0;
 let markSaveChain = Promise.resolve();
-let markSaveSay = null;       // the line under the total that says whether it saved
-let markTotalSay = null;      // the total itself
 let markRes = null;           // the marks on screen, changed in place by the steppers
+let markFlashAt = null;       // the stepper last pressed, where its save is said
 const MARK_TAB_KEY = "hub_mark_tab";
 
 function markStepper(q, paintMark){
@@ -9773,6 +9766,7 @@ function markStepper(q, paintMark){
     markOverrides = { overrides: ov };
     paint();
     paintMarkTotal();
+    markFlashAt = box;
     queueMarkSave();
   };
   down.addEventListener("click", () => move(-1));
@@ -9785,36 +9779,56 @@ function markTotals(){
   const list = (markRes && markRes.perQ) || [];
   return { score: list.reduce((n, q) => n + q.pts, 0), outOf: list.reduce((n, q) => n + q.max, 0) };
 }
+/* The total is shown at the top of the Feedback column in the marking
+   screen, not in here, so this page only says what it is. */
 function paintMarkTotal(){
-  if (!markTotalSay) return;
   const t = markTotals();
-  markTotalSay.textContent = t.score + " / " + t.outOf;
+  try{
+    window.parent.postMessage({ hubMarkTotal: { score: t.score, outOf: t.outOf,
+      done: !!(restoredData && restoredData.__done) } }, "*");
+  }catch(e){}
+}
+/* Whether a mark saved, said in a small box beside the mark that was
+   changed and gone again a moment later. Down the right it read as the
+   feedback having saved, which is a different button and a different save.
+   One that did not save stays until the next press, in red. */
+function flashMarkSave(at, state, text){
+  if (!at) return;
+  let tip = at.querySelector(".mark-flash");
+  if (!tip){
+    tip = el("span","mark-flash");
+    tip.setAttribute("role","status");
+    at.appendChild(tip);
+  }
+  clearTimeout(tip._gone);
+  tip.dataset.state = state;
+  tip.textContent = text;
+  tip.classList.add("on");
+  if (state === "done") tip._gone = setTimeout(() => tip.classList.remove("on"), 1400);
 }
 /* A moment after the last press, so going from 0 to 3 is one save, and one
    after another, so the last change made is the last one written. */
 function queueMarkSave(){
   clearTimeout(markSaveTimer);
-  if (markSaveSay){ markSaveSay.dataset.state = "waiting"; markSaveSay.textContent = "Saving…"; }
-  markSaveTimer = setTimeout(() => { markSaveChain = markSaveChain.then(sendMarks); }, 600);
+  const at = markFlashAt;
+  flashMarkSave(at, "waiting", "Saving…");
+  markSaveTimer = setTimeout(() => { markSaveChain = markSaveChain.then(() => sendMarks(at)); }, 600);
 }
-async function sendMarks(){
+async function sendMarks(at){
   const t = markTotals();
   const box = { overrides: Object.assign({}, (markOverrides && markOverrides.overrides) || {}),
                 score: t.score, outOf: t.outOf };
   const who = inspectWho();
-  const say = (state, text) => {
-    if (!markSaveSay) return;
-    markSaveSay.dataset.state = state;
-    markSaveSay.textContent = text;
-  };
+  const say = (state, text) => flashMarkSave(at, state, text);
   /* The marking screen around this keeps its own copy of every student's
      marks, for the markbook and for whoever is opened next, and offline it
      is the only thing that can send them back in the student's link. */
   const tell = () => {
     try{ window.parent.postMessage({ hubMarks: box, hubMarksFor: who ? who.username : "" }, "*"); }catch(e){}
   };
-  if (OFFLINE){ tell(); say("done", "Kept. Press Save to send it back."); return; }
-  if (!who){ say("failed", "Could not tell which student this is."); return; }
+  /* offline it goes back with the feedback, in the link Save makes */
+  if (OFFLINE){ tell(); say("done", "✓ Kept"); return; }
+  if (!who){ say("failed", "Not saved"); return; }
   try{
     const reply = await teacherPost("set-mark", { username: who.username, lesson: lessonId,
       overrides: box.overrides, score: box.score, outOf: box.outOf });
@@ -9822,8 +9836,7 @@ async function sendMarks(){
     tell();
     say("done", "✓ Saved");
   }catch(e){
-    say("failed", (e.message === "Failed to fetch" ? "Could not reach the server." : e.message) +
-                  " Change a mark again to have another go.");
+    say("failed", "Not saved. Try again");
   }
 }
 
@@ -9887,21 +9900,9 @@ function showMarkingView(){
   const view = el("div","markview");
 
   /* ---- the test ---- */
+  /* The total sits at the top of the Feedback column (paintMarkTotal), so
+     the questions start at the top of this one. */
   const testPane = el("div","mv-pane");
-  const head = el("div","mv-head");
-  const total = el("div","mv-total");
-  markTotalSay = el("span","mv-score");
-  total.appendChild(markTotalSay);
-  head.appendChild(total);
-  const words = el("div","mv-words");
-  words.appendChild(el("p","mv-note", restoredData && restoredData.__done
-    ? "Change any question’s mark with − and +. It saves as you go."
-    : "Not finished yet. These are the answers so far. Change any question’s mark with − and +."));
-  markSaveSay = el("p","mv-saved", "");
-  markSaveSay.setAttribute("role","status");
-  words.appendChild(markSaveSay);
-  head.appendChild(words);
-  testPane.appendChild(head);
   if (markRes.perQ.length) testPane.appendChild(buildReview(markRes, true));
   else testPane.appendChild(el("p","mv-note","This test has no questions that are marked."));
   paintMarkTotal();
@@ -11273,14 +11274,11 @@ function buildPdf(){
       if (asked.code) proseParts(asked.code).forEach(part => out.push(part));
       out.push(label("Their answer"));
       out.push(answerBox(String(v || "").trim(), "Not answered"));
-      if (b.model) out.push({ t: "text", face: "small", text: "A good answer mentions: " + b.model });
-      /* Without a model answer the accepted list is the next best thing to
-         print beside their work, so a marked copy can be read on paper. */
-      else {
-        const list = window.shortAnswer.accepted(b);
-        if (list.length) out.push({ t: "text", face: "small",
-          text: (list.length === 1 ? "The answer: " : "Accepted answers: ") + list.join(", ") });
-      }
+      /* the accepted answers printed beside their work, so a marked copy can
+         be read on paper; a model answer in older JSON is not printed */
+      const list = window.shortAnswer.accepted(b);
+      if (list.length) out.push({ t: "text", face: "small",
+        text: (list.length === 1 ? "The answer: " : "Accepted answers: ") + list.join(" / ") });
       return out;
     }
     if (b.type === "mc"){
@@ -11437,7 +11435,8 @@ function buildPdf(){
           out.push({ t: "text", face: "p", text: tick(!!ticked[i]) + pdfText(p.text),
                      colour: ticked[i] ? PDF.GREEN : PDF.MUTED });
         });
-      } else if (b.model){
+      } else if (b.model && b.answer !== "short"){
+        /* a one line answer saved with a model answer before they went */
         out.push(label("A full answer"));
         out.push({ t: "text", face: "p", text: pdfText(b.model), colour: PDF.MUTED });
       }

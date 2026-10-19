@@ -2028,8 +2028,6 @@ EDITORS.short = function(b, k){
        the rest of the afternoon. */
     () => { delete b.wasKeywords; });
   shortAnswerNotes(k.here(), b);
-  F("Model answer", "model", { area:true, rows:2,
-    help:"Shown to a student who gets it wrong, and printed beside their work." });
   settings(() => {
     if (topicTags()) F("Topic tag", "topic");
   });
@@ -2220,8 +2218,6 @@ EDITORS.exam = function(b, k){
       "Capitals, spacing and stray punctuation are ignored, so add a line only for " +
       "answers that are really different, such as CPU and central processing unit.");
     shortAnswerNotes(k.here(), b);
-    F("Model answer", "model", { area:true, rows:2,
-      help:"Shown to a student who gets it wrong, and printed beside their work." });
   } else {
     /* The mark scheme, a point at a time. A student sees these only after
        they have written something, and ticks off the ones they made. */

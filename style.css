@@ -938,26 +938,32 @@ textarea.code{background:var(--code-bg) !important; color:var(--code-fg) !import
   padding:8px 22px; border-radius:999px; cursor:pointer; min-height:40px}
 .mv-tab.on{background:var(--amber); color:var(--amber-ink)}
 .mv-pane[hidden]{display:none}
-.mv-head{display:flex; align-items:center; gap:18px; background:var(--panel); border:1.5px solid var(--line);
-  border-radius:var(--r); padding:14px 18px; margin-bottom:10px}
-.mv-score{font-family:var(--display); font-size:30px; font-weight:800; white-space:nowrap}
-.mv-words{flex:1; min-width:0}
-.mv-note{margin:0; color:var(--muted); font-size:15px}
-.mv-saved{margin:4px 0 0; font-size:14px; font-weight:700; min-height:1.4em; color:var(--muted)}
-.mv-saved[data-state=done]{color:var(--mint)}
-.mv-saved[data-state=failed]{color:var(--red)}
+.mv-note{margin:0 0 10px; color:var(--muted); font-size:15px}
 .markview .review{background:var(--panel); border:1.5px solid var(--line); border-radius:var(--r); padding:4px 16px}
 .markview .review .resq:first-child{border-top:0}
 .markview .resq{flex-wrap:wrap}
 /* room for the question before the score drops underneath it, on a phone */
 .markview .resq .body{flex:1 1 min(240px, 100%)}
-.mark-step{flex:none; display:flex; align-items:center; gap:4px; margin-left:auto;
+.mark-step{position:relative; flex:none; display:flex; align-items:center; gap:4px; margin-left:auto;
   border:1.5px solid var(--line-2); border-radius:999px; padding:3px; background:var(--panel-2)}
 .mark-btn{width:40px; height:40px; min-height:40px; border-radius:50%; border:0; background:var(--panel);
   color:var(--text); font-size:20px; font-weight:800; line-height:1; cursor:pointer; padding:0}
 .mark-btn:hover:not(:disabled){background:var(--amber); color:var(--amber-ink)}
 .mark-btn:disabled{opacity:.35; cursor:default}
 .mark-val{min-width:58px; text-align:center; font-family:var(--mono); font-weight:700; font-size:15px}
+/* Saved, beside the mark just changed, then gone: floated so it never moves
+   the question. To the right where the frame is wide enough for it,
+   underneath where it is not. */
+.mark-flash{position:absolute; top:50%; left:calc(100% + 8px); transform:translateY(-50%);
+  white-space:nowrap; padding:4px 10px; border-radius:8px; font-size:13px; font-weight:700;
+  background:var(--panel); border:1.5px solid var(--line-2); color:var(--muted);
+  box-shadow:0 2px 8px rgba(0,0,0,.12); opacity:0; pointer-events:none; transition:opacity .25s}
+.mark-flash.on{opacity:1}
+.mark-flash[data-state=done]{color:var(--mint); border-color:var(--mint)}
+.mark-flash[data-state=failed]{color:var(--red); border-color:var(--red)}
+@media (max-width: 1040px){
+  .mark-flash{top:calc(100% + 6px); left:auto; right:0; transform:none; z-index:2}
+}
 .mv-resp .responses{margin-top:0}
 .answers-locked textarea, .answers-locked input{cursor:text}
 .answers-locked button:disabled{opacity:.55}
@@ -2199,6 +2205,12 @@ body.workpage .grow{flex:1}
    enough to need as little scrolling as it can: whose work it is goes on the
    heading's line, at the heading's size, and the level and the buttons are
    no bigger than they need to be. */
+.fbscore{display:flex; align-items:baseline; flex-wrap:wrap; gap:0 6px; margin:0 0 8px; padding:0 0 8px;
+  border-bottom:1px solid var(--line); font-size:13px; color:var(--muted)}
+.fbscore[hidden]{display:none}
+.fbscore-label{font-weight:700; text-transform:uppercase; letter-spacing:.04em}
+.fbscore b{font-family:var(--display); font-size:17px; color:var(--text)}
+.fbscore-note{color:var(--amber); font-weight:700}
 .workside h3.fbhead{display:flex; flex-wrap:wrap; align-items:baseline; gap:0 8px; margin:0 0 10px; font-size:15px}
 .fbhead #fbWho{font-family:var(--body); font-size:15px; font-weight:500; color:var(--muted)}
 .workside #markWrap{margin-bottom:10px}

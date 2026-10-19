@@ -70,6 +70,9 @@
       <div class="workframe"><iframe id="workFrame" title="Their work" allow="fullscreen" data-inspect="hub_inspect"></iframe><iframe id="spareFrame" class="spare" title="The next student's work" allow="fullscreen" data-inspect="hub_inspect_next" tabindex="-1" aria-hidden="true"></iframe></div>
     </div>
     <aside class="workside" id="workSide">
+      <!-- A test's score, as Mark work has it now, mark changes and all. Kept
+           to one short line so a Strength and Target still fit under it. -->
+      <p class="fbscore" id="fbScoreRow" hidden><span class="fbscore-label">Score</span> <b id="fbScoreNum"></b> <span class="fbscore-note" id="fbScoreNote"></span></p>
       <!-- whose work it is, on the heading's own line, to leave the room for
            the boxes -->
       <h3 class="fbhead">Feedback <span id="fbWho"></span></h3>
@@ -1340,6 +1343,8 @@ function showStudent(i, step){
   clearTimeout(spareTimer);
   const want = frameFor(i, step, $("workFrame"));
   const held = swapInSpare(want.key);
+  /* the last student's score goes until this one's frame says theirs */
+  $("fbScoreRow").hidden = true;
   if (!held){
     handFrame($("workFrame"), want.box);
     frameGo(want.url);
@@ -3008,6 +3013,14 @@ let manualTicks = {};
 let markingTicks = {};
 window.addEventListener("message", (e) => {
   if (!e || !e.data) return;
+  /* The frame's total, said when it opens and after every mark changed. The
+     spare frame's waits with the rest of what it says until it is shown. */
+  if (e.data.hubMarkTotal && e.source === $("workFrame").contentWindow){
+    const t = e.data.hubMarkTotal;
+    $("fbScoreNum").textContent = t.score + " / " + t.outOf;
+    $("fbScoreNote").textContent = t.done ? "" : "Not finished";
+    $("fbScoreRow").hidden = false;
+  }
   if (e.data.hubMarks && e.source === $("workFrame").contentWindow){
     const m = e.data.hubMarks;
     const user = e.data.hubMarksFor || (roster[idx] && roster[idx].username) || "";

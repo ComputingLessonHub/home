@@ -1370,8 +1370,8 @@
       fb.appendChild(make("b", "", r.ok ? "That is right" : "Not quite yet"));
       if (r.ok) fb.appendChild(make("span", "", marks === 1 ? "One mark." : marks + " marks."));
       else {
+        /* marked like a Short answer, which has no model answer any more */
         fb.appendChild(make("span", "", "Check your spelling and have another go."));
-        if (b.model) fb.appendChild(make("span", "", "The answer we are after: " + b.model));
       }
     }
 
