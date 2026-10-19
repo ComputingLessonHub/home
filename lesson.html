@@ -1792,7 +1792,7 @@ function arrangeAssessment(){
   $("stage").addEventListener("scroll", () => {
     if (queued || !assessPages.onQuestions) return;
     queued = true;
-    requestAnimationFrame(() => { queued = false; noteQuestionInView(); });
+    requestAnimationFrame(() => { queued = false; noteQuestionInView(); sizeQuestionBar(); });
   }, { passive: true });
 }
 /* One question, or one piece of reading, as it sits on its screen. A
@@ -1969,6 +1969,34 @@ function buildAssessTracker(){
   row.insertBefore(nav, $("blocks"));
   A.nav = nav;
 
+  /* The other way of showing it, picked in Settings: one bar up the side of
+     the questions, a piece for each question, filling as they are answered.
+     Less to look at than thirty numbered boxes. Which side it sits on is
+     where paintAssessTracker puts it. */
+  const bar = el("nav","qbar no-print");
+  bar.setAttribute("aria-label","Questions");
+  bar.hidden = true;
+  A.barCount = el("div","qbar-count");
+  bar.appendChild(A.barCount);
+  const track = el("div","qbar-track");
+  A.items.forEach(it => {
+    const piece = el("button","qseg");
+    piece.type = "button";
+    piece.addEventListener("click", () => {
+      if (finished && !spectate) return;
+      goToQuestion(it, true);
+    });
+    track.appendChild(piece);
+    it.piece = piece;
+  });
+  bar.appendChild(track);
+  row.insertBefore(bar, $("blocks"));
+  A.bar = bar;
+  A.barTrack = track;
+  /* The bar is as tall as the part of the questions on screen, which only
+     the page knows once it is laid out, and again whenever that changes. */
+  window.addEventListener("resize", sizeQuestionBar);
+
   const open = tel("button","btn-ghost qnav-open no-print","");
   open.type = "button";
   open.hidden = true;
@@ -1999,8 +2027,8 @@ function questionKey(){
   });
   return key;
 }
-function paintQuestionBox(box, it, has, now){
-  box.className = "qnum" + (has ? " done" : "") + (now ? " now" : "");
+function paintQuestionBox(box, it, has, now, kind){
+  box.className = (kind || "qnum") + (has ? " done" : "") + (now ? " now" : "");
   const words = "Question " + it.num + (has ? ", answered" : ", not answered yet");
   box.title = words;
   box.setAttribute("aria-label", words);
@@ -2014,21 +2042,89 @@ function paintAssessTracker(){
   /* Only while the questions are on screen: the pages before them have no
      questions to count, and the summary has a score to show instead. */
   const showing = A.onQuestions && !onSummaryNow;
-  A.nav.hidden = !showing;
+  const look = questionProgressLook();
+  A.nav.hidden = !showing || look !== "boxes";
+  A.bar.hidden = !showing || look === "boxes";
   A.navBtn.hidden = !showing;
   document.body.classList.toggle("assess-on-questions", showing);
+  /* Which side the bar is on, so the stylesheet can balance it with an empty
+     column of the same width on the other side and keep the questions in
+     the middle of the screen. */
+  document.body.classList.toggle("qbar-left", showing && look === "left");
+  document.body.classList.toggle("qbar-right", showing && look === "right");
+  /* Before the questions or after them. Moved only when it is on the wrong
+     side, so painting on every keystroke does not keep shifting the page. */
+  if (look !== "boxes"){
+    const blocks = $("blocks");
+    const onRight = A.bar.previousElementSibling === blocks;
+    if (look === "right" && !onRight) blocks.after(A.bar);
+    if (look === "left" && onRight) blocks.before(A.bar);
+    A.bar.classList.toggle("right", look === "right");
+  }
   let answered = 0;
   A.items.forEach(it => {
     const has = questionAnswered(it);
     if (has) answered++;
-    paintQuestionBox(it.seg, it, has, showing && it.step === step);
+    const now = showing && it.step === step;
+    paintQuestionBox(it.seg, it, has, now);
+    paintQuestionBox(it.piece, it, has, now, "qseg");
   });
   const total = A.items.length;
   A.navCount.textContent = answered + " of " + total + " answered";
   A.navFill.style.width = (total ? Math.round(answered / total * 100) : 0) + "%";
+  A.barCount.innerHTML = "";
+  A.barCount.appendChild(tel("b","", String(answered)));
+  A.barCount.appendChild(tel("span","", "of " + total));
+  A.bar.title = answered + " of " + total + " answered";
+  if (!A.bar.hidden) sizeQuestionBar();
   A.navBtn.textContent = answered + " of " + total + " answered";
   A.navBtn.setAttribute("aria-label", answered + " of " + total + " questions answered. Show the question numbers.");
 }
+/* Which of the two a student has picked in Settings. Kept on this computer,
+   like the rest of Settings, and numbered boxes until they choose. */
+const QPROGRESS_KEY = "hub_qprogress";
+function questionProgressLook(){
+  let v = "";
+  try{ v = localStorage.getItem(QPROGRESS_KEY) || ""; }catch(e){}
+  return v === "left" || v === "right" ? v : "boxes";
+}
+function sizeQuestionBar(){
+  const A = assessPages;
+  if (!A || !A.bar || A.bar.hidden) return;
+  /* From where the bar's top is to the bottom of the stage, less the gap it
+     keeps below it. Measured, because the brief above and the bar along the
+     bottom change height with the screen and the words in them, and the top
+     moves up until the bar sticks, which is why scrolling measures it again. */
+  const stage = $("stage").getBoundingClientRect();
+  const top = Math.max(A.bar.getBoundingClientRect().top, stage.top + 16);
+  A.bar.style.height = Math.max(160, Math.round(stage.bottom - 16 - top)) + "px";
+}
+/* Settings is drawn the first time it is opened, by settings.js, which asks
+   the page for any group of its own. Only an assessment being sat has the
+   question progress to choose for. */
+window.settingsSection = (holder) => {
+  if (!holder || !assessPages) return;
+  const grp = el("div","set-group");
+  grp.appendChild(tel("span","set-label","Question progress"));
+  const opts = el("div","font-opts");
+  const choices = [["boxes","Numbered boxes"], ["left","A bar on the left"], ["right","A bar on the right"]];
+  const paint = () => opts.querySelectorAll(".set-opt").forEach((b, k) =>
+    b.classList.toggle("on", choices[k][0] === questionProgressLook()));
+  choices.forEach(([look, words]) => {
+    const b = tel("button","set-opt", words);
+    b.type = "button";
+    b.addEventListener("click", () => {
+      try{ localStorage.setItem(QPROGRESS_KEY, look); }catch(e){}
+      paint();
+      paintTracker();             // changes over now, under the pop-up
+    });
+    opts.appendChild(b);
+  });
+  grp.appendChild(opts);
+  grp.appendChild(tel("p","subnote","How the questions you have answered are shown beside them. On a phone they are always under the button at the bottom. Kept on this computer."));
+  holder.appendChild(grp);
+  paint();
+};
 /* The boxes again, in a pop-up, for a phone. Built fresh each time it
    opens, so it always says what is answered now. */
 function openQuestionSheet(){

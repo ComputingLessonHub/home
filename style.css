@@ -6534,10 +6534,12 @@ body.lpvpage{height:100vh; height:100dvh; overflow:hidden; display:flex; flex-di
 .qnav-title{font-family:var(--display); font-weight:800; font-size:15px}
 .qnav-count{font-size:12.5px; font-weight:600; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap}
 .qnav-meter{height:6px; border-radius:999px; background:var(--line); overflow:hidden; margin:0 0 14px}
-.qnav-meter > span{display:block; height:100%; width:0; background:var(--mint); border-radius:inherit; transition:width .25s ease}
+.qnav-meter > span{display:block; height:100%; width:0; background:var(--amber); border-radius:inherit; transition:width .25s ease}
 .qnav-grid{display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:6px}
-/* A box for each question: outlined while it is empty, filled once it has
-   an answer, and ringed in the site's blue for the one on screen. A ring
+/* A box for each question: outlined while it is empty, filled in the
+   site's blue once it has an answer, and ringed in the text colour for the
+   one on screen. Blue rather than green, because green beside a question
+   reads as "right", and nothing is marked until it is handed in. A ring
    rather than a colour, so the one on screen still says whether it is
    answered. */
 .qnum{
@@ -6549,12 +6551,56 @@ body.lpvpage{height:100vh; height:100dvh; overflow:hidden; display:flex; flex-di
 }
 .qnum:hover{border-color:var(--muted)}
 .qnum:focus-visible{outline:2px solid var(--amber); outline-offset:2px}
-.qnum.done{background:var(--mint); border-color:var(--mint); color:var(--amber-ink)}
-.qnum.now{box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--amber)}
+.qnum.done{background:var(--amber); border-color:var(--amber); color:var(--amber-ink)}
+.qnum.now{box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--text)}
 .qnav-key{display:flex; flex-wrap:wrap; gap:6px 14px; margin:14px 0 0; font-size:12.5px; color:var(--muted)}
 .qnav-keyitem{display:inline-flex; align-items:center; gap:6px}
 .qnum-swatch{width:14px; height:14px; border-radius:4px; border:1.5px solid var(--line-2); background:var(--panel)}
-.qnum-swatch.done{background:var(--mint); border-color:var(--mint)}
+.qnum-swatch.done{background:var(--amber); border-color:var(--amber)}
+
+/* The other look, picked in Settings: one bar up the side of the questions,
+   a piece for each, filled in blue as they are answered, with the count on
+   top. Each piece is a button as wide as the bar's column though what shows
+   is a narrow strip, because a strip that narrow is too small to aim at. */
+.qbar{
+  position:sticky; top:16px; z-index:5; flex:0 0 52px; align-self:flex-start;
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  margin:16px 0 0; height:400px;
+}
+.qbar[hidden]{display:none}
+/* The questions stay in the middle of the screen whichever side the bar is
+   on: an empty column as wide as the bar balances it on the other side.
+   Centring the bar and the questions together moved the questions half a
+   bar's width away from the middle, and the other way when it swapped. */
+body.qbar-left.assess-on-questions .stagerow::after,
+body.qbar-right.assess-on-questions .stagerow::before{content:""; flex:0 0 52px}
+.qbar-count{display:flex; flex-direction:column; align-items:center; line-height:1.1;
+  font-variant-numeric:tabular-nums; color:var(--muted); font-size:12px; font-weight:600; white-space:nowrap}
+.qbar-count b{font-family:var(--display); font-size:20px; font-weight:800; color:var(--text)}
+/* Pieces flat and close together, rounded only at the two ends, so it reads
+   as one bar rather than a column of dots. */
+.qbar-track{flex:1 1 auto; min-height:0; width:100%; display:flex; flex-direction:column; gap:2px}
+.qseg{
+  position:relative; flex:1 1 0; min-height:3px; min-width:0; width:100%;
+  padding:0; margin:0; border:0; border-radius:0; background:transparent; cursor:pointer;
+}
+.qseg::before{
+  content:""; position:absolute; top:0; bottom:0; left:50%; width:14px; margin-left:-7px;
+  background:var(--line-2);
+}
+.qseg:first-child::before{border-radius:7px 7px 0 0}
+.qseg:last-child::before{border-radius:0 0 7px 7px}
+.qseg:hover::before{background:var(--muted)}
+.qseg.done::before{background:var(--amber)}
+/* The one on screen: an arrow beside the bar pointing at it, on the side the
+   questions are, in the text colour like the ring round its box. */
+.qseg.now::after{
+  content:""; position:absolute; top:50%; left:calc(50% + 10px); margin-top:-6px;
+  border:6px solid transparent; border-left:0; border-right:8px solid var(--text);
+}
+.qbar.right .qseg.now::after{left:auto; right:calc(50% + 10px); border-right:0; border-left:8px solid var(--text)}
+.qseg:focus-visible{outline:none}
+.qseg:focus-visible::before{outline:2px solid var(--amber); outline-offset:2px}
 
 /* While the questions are up, they sit in a column a line of reading can
    follow, with the numbers beside it, and the pair in the middle of the
@@ -6587,7 +6633,7 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
    the bottom says how many are answered and opens them in a pop-up. */
 .qnav-open{display:none}
 @media (max-width:720px){
-  .qnav{display:none}
+  .qnav, .qbar{display:none}
   .qnav-open:not([hidden]){display:inline-flex; align-items:center; justify-content:center;
     max-width:100%; padding:8px 14px; font-size:14px; font-weight:700; white-space:nowrap}
   .assess-questions > .pg-item{padding:16px 16px 18px; margin-bottom:20px; border-radius:14px}
