@@ -28,6 +28,9 @@
 <script src="dragline.js"></script>
 <script src="author-editors.js"></script>
 <script src="author-extras.js"></script>
+<script src="slides.js"></script>
+<script src="slides-import.js"></script>
+<script src="author-slides.js"></script>
 <script src="ui.js"></script>
 <script src="settings.js"></script>
 </head>
@@ -100,6 +103,7 @@
 <div class="build-top">
   <div class="build-titles">
     <button class="btn-ghost" id="optionsBtn">Lesson options</button>
+    <button class="btn-ghost" id="slidesBtn" type="button" title="Slides students can open beside the lesson">Slides</button>
     <select id="lYear" title="Year group"></select>
     <select id="lUnit" title="Unit"></select>
     <!-- Only for GCSE and A Level, where the unit picker beside it is the
@@ -985,6 +989,9 @@ function compile(){
      home page group by, and neither of those has the specification. */
   if (lesson.subunit) out.subunit = lesson.subunit;
   if (lesson.homework) out.homework = true;
+  /* The lesson's slides (author-slides.js), one deck kept whole. */
+  const slides = window.compileSlides ? window.compileSlides(lesson) : null;
+  if (slides) out.slides = slides;
   /* On unless a teacher turned it off, so only the off ones are written
      down and every lesson saved before the default changed has it on. */
   if (lesson.linger === false) out.linger = false;
@@ -1163,6 +1170,9 @@ function compileOne(b, id, target){
            /* On unless it was turned off, so only the off ones are written
               down and every lesson made before this setting existed keeps it. */
            taskbar: b.taskbar === false ? false : undefined,
+           /* the slide this page opens the slides at, while that slide is
+              still in the deck */
+           slide: b.slide && window.slideIds && window.slideIds(lesson).has(b.slide) ? b.slide : undefined,
            passHash: b.passHash || undefined, blocks: kids });
     return;
   }
@@ -1741,6 +1751,7 @@ function render(){
   const keepPage = window.scrollY;
   renderNow();
   builderRendered();
+  if (window.paintSlidesButton) window.paintSlidesButton();
   const want = scrollToBlock; scrollToBlock = null;
   if (!list) return;
   if (want){
@@ -7616,6 +7627,9 @@ function fromCompiled(data, meta){
                    the plain palette and the task builder stopped knowing what
                    the lesson was about. */
                 point: data.point || "",
+                /* Left out here, a deck would be gone the first time the
+                   lesson was reopened and saved. */
+                slides: window.readSlides ? window.readSlides(data) : null,
                 assessment: !!data.assessment && !data.practical,
                 practical: !!data.practical || !!data.practiceAssessment,
                 /* Practice and the graded rubric are one thing now, so a
@@ -7680,6 +7694,7 @@ function fromCompiled(data, meta){
                                     startLocked: b.startLocked !== false,
                                     extension: b.extension === true,
                                     taskbar: b.taskbar !== false,
+                                    slide: b.slide || undefined,
                                     passHash: b.passHash || undefined,
                                     blocks:(b.blocks || []).map(back) };
     if (b.type === "extension") return { type:"extension", title:b.title || "",
@@ -7823,10 +7838,13 @@ function applyBuildLayout(){
     /* Save and the menu sit beside the cog; Lesson options joins the bar. */
     homeSlot.appendChild(actions);
     if (options) $("buildBarScroll").appendChild(options);
+    /* Slides goes wherever Lesson options goes, so it is there in both */
+    if ($("slidesBtn")) $("buildBarScroll").appendChild($("slidesBtn"));
     $("buildBar").hidden = false;
     $("saveSite").textContent = "Save";
   } else {
     if (options) titles.insertBefore(options, titles.firstChild);
+    if ($("slidesBtn") && options) titles.insertBefore($("slidesBtn"), options.nextSibling);
     topSlot.appendChild(titles);
     topSlot.appendChild(actions);
     $("buildBar").hidden = true;

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Present slides</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="look.css">
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<script src="config.js"></script>
+<script src="teacher.js"></script>
+<script src="settings.js"></script>
+<script src="slides.js"></script>
+</head>
+<body class="sl-start">
+<!-- The teacher's presenter, opened from Manage on a class. Presenting from
+     here also tells that class which slide is showing, so anyone following
+     live turns with it. Full screen needs a press first, which is what the
+     big button is for. -->
+<main class="sl-startbox">
+  <p class="modal-eyebrow" id="who">Slides</p>
+  <h1 id="title">Loading the slides&hellip;</h1>
+  <p class="sl-startsub" id="sub"></p>
+  <div class="sl-startgrid" id="grid"></div>
+  <div class="sl-startacts">
+    <button class="btn-primary" id="go" type="button" disabled>&#9654; Present</button>
+    <label class="sl-startlive" id="liveRow" hidden><input type="checkbox" id="live" checked> Let the class follow along live</label>
+  </div>
+  <p class="sl-startkeys">Arrow keys or a click to move on. <b>L</b> laser, <b>P</b> pen, <b>C</b> clear the pen, <b>B</b> black screen, <b>W</b> white screen, <b>N</b> your notes in their own window, a slide number then pause to jump, <b>Esc</b> to stop.</p>
+</main>
+<script>
+(function(){
+const $ = (id) => document.getElementById(id);
+const qs = new URLSearchParams(location.search);
+const lessonId = qs.get("id") || "";
+const group = qs.get("group") || "";
+const OFFLINE = !!(window.HUB && window.HUB.OFFLINE);
+const API = (window.HUB && window.HUB.API) || "";
+let lesson = null, start = 0;
+
+async function load(){
+  /* The builder hands over a deck that may not be saved yet. */
+  if (qs.get("from") === "builder"){
+    const d = JSON.parse(localStorage.getItem("hub_slides_present") || "null");
+    if (d && d.slides) return d;
+  }
+  if (OFFLINE){
+    const r = await fetch("lessons/" + encodeURIComponent(lessonId) + ".json");
+    if (!r.ok) throw new Error("missing");
+    return r.json();
+  }
+  const r = await fetch(API + "/api/catalog?lesson=" + encodeURIComponent(lessonId) +
+                        (group ? "&group=" + encodeURIComponent(group) : ""),
+                        { headers: window.teacherAuth.headers(), cache: "no-store" });
+  if (!r.ok) throw new Error("missing");
+  const d = await r.json();
+  if (!d.lesson) throw new Error("missing");
+  return d.lesson;
+}
+
+/* Telling the class. A failure here is never shown in front of the room:
+   the slides carry on, and following live simply does not happen. */
+function liveTo(){
+  if (OFFLINE || !group || !$("live").checked) return null;
+  const post = (body) => fetch(API + "/api/release", { method: "POST", headers: window.teacherAuth.json(),
+    body: JSON.stringify(Object.assign({ lesson: lessonId, group }, body)), keepalive: true }).catch(() => {});
+  return { post: (n) => post({ live: true, slide: n }), stop: () => post({ live: false }) };
+}
+
+function paint(){
+  $("title").textContent = lesson.title || "Slides";
+  const n = lesson.slides.list.length;
+  $("who").textContent = group ? "Presenting to " + group : "Slides";
+  $("sub").textContent = n + " slide" + (n === 1 ? "" : "s") + ". Pick one to start from, or start at the beginning.";
+  const grid = $("grid");
+  grid.innerHTML = "";
+  lesson.slides.list.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "sl-thumb" + (i === start ? " on" : "");
+    b.title = "Start from slide " + (i + 1);
+    b.appendChild(window.hubSlides.draw(s, lesson.slides));
+    const num = document.createElement("div"); num.className = "sl-thumbn"; num.textContent = String(i + 1);
+    b.appendChild(num);
+    b.addEventListener("click", () => { start = i; paint(); });
+    grid.appendChild(b);
+  });
+  $("go").disabled = false;
+  $("liveRow").hidden = OFFLINE || !group;
+}
+$("go").addEventListener("click", () => {
+  window.hubSlides.present(lesson.slides, { start, live: liveTo(), liveLabel: "Live to " + group, onClose: (at) => { start = at; paint(); } });
+});
+
+load().then(l => {
+  lesson = l;
+  document.title = "Present: " + (l.title || "slides");
+  if (!window.hubSlides.has(l)){
+    $("title").textContent = "This lesson has no slides yet";
+    $("sub").textContent = "Add them in the lesson builder, from the Slides button beside Lesson options.";
+    return;
+  }
+  paint();
+}).catch(() => {
+  $("title").textContent = "These slides could not be opened";
+  $("sub").textContent = "Check you are signed in to the console, then try again.";
+});
+})();
+</script>
+</body>
+</html>

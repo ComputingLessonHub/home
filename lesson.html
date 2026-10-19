@@ -25,6 +25,7 @@
 <script src="config.js"></script>
 <script src="worklink.js"></script>
 <script src="settings.js"></script>
+<script src="slides.js"></script>
 </head>
 <body class="lesson">
 
@@ -1195,6 +1196,29 @@ function hideWaitModal(){ $("waitModal").hidden = true; }
    student to the next: nothing could be drawn until it came back. Only a
    teacher looking at work ever sees this, and only where the id matches, so
    a leftover box from another lesson cannot stand in for the real one. */
+/* The lesson's slides, if it has any: a button in the top bar and a window
+   a student can float, pin beside the work, fill the screen with or shrink
+   (slides.js). Never on a page made for marking or for the PDF, where
+   there is nobody to move it about. */
+let slideViewer = null;
+function startSlides(l){
+  if (!window.hubSlides || !window.hubSlides.has(l)) return;
+  if (embedParam !== null || pdfParam !== null || allParam !== null) return;
+  const teacher = spectate || !!(window.teacherAuth && window.teacherAuth.have() && !token);
+  slideViewer = window.hubSlides.viewer({
+    deck: l.slides, lessonId, before: $("setBtn"),
+    /* the builder can tie a slide to a page; the page carries its id */
+    slideForPage: (i) => { const b = l.blocks && l.blocks[i]; return b && b.slide ? b.slide : null; },
+    /* Following the teacher needs to know the class, and there is no class
+       to follow in offline mode or in a teacher's own preview. */
+    live: (!OFFLINE && group && !spectate) ? { lesson: lessonId, group } : null,
+    present: teacher ? (at) => window.hubSlides.present(l.slides, { start: at }) : null
+  });
+}
+window.settingsSection = (holder) => {
+  if (window.hubSlides && lesson && window.hubSlides.has(lesson)) window.hubSlides.settingsGroup(holder);
+};
+
 function handedLesson(){
   if (OFFLINE || !spectate || viewParam === null) return null;
   try{
@@ -1228,6 +1252,7 @@ const handedOver = handedLesson();
     l.blocks.forEach(renderBlock);
     if (assessLayout()) arrangeAssessment();
     buildTracker();
+    startSlides(l);
     /* Asked before anything is restored: a name change means a different
        child, and the work waiting on this machine is cleared, so restoring
        first would put the last one's answers on screen. */
@@ -2563,6 +2588,7 @@ function showStep(i){
      had room that had already gone and ran on under the bottom bar. */
   paintRail();
   refreshGate();
+  if (slideViewer) slideViewer.page(step);
 }
 function refreshGate(){
   /* Continue is never locked, and nothing is written along the bottom bar

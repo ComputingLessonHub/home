@@ -9,6 +9,7 @@
    wants to know whether the thing they noticed is meant to be there, not a
    full account of the work. */
 window.CHANGES = [
+  { v:"14.1", text:"Slides in a lesson. Import a PowerPoint, add pictures of your slides or write new ones under Slides in the builder. Students open them from a Slides button and can float them, pin them beside their work, fill the screen or shrink them to a bubble. Present them to a class from Manage, with a laser, pen and notes. Settings has Slides experiments to try." },
   { v:"14.0", text:"Forgot username? on the sign-in page shows how a username is made: surname, first initial and the year they started, such as SmithJ26." },
   { v:"13.9.9", text:"Students sign in a step at a time: their username, then Continue, then their password slides open underneath. Anyone without a password yet is asked to make one straight after Continue." },
   { v:"13.9.8", text:"A new logo and browser tab icon: a computer screen like a blackboard, with </> written on it." },

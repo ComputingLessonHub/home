@@ -7035,3 +7035,271 @@ button.mbvoice-row.on .mbvoice-opt{color:var(--text); font-weight:700}
 @media (pointer:coarse){
   .mbvoice-pill, button.mbvoice-row{min-height:44px}
 }
+
+/* =====================================================================
+   SLIDES (slides.js). Every class here starts sl-, so nothing above is
+   overridden by it being last; the one exception is the room a pinned
+   window takes from body.lesson, which has to beat the shell above.
+
+   A slide is a size container. Everything inside it is measured in cq
+   units, so it is the same slide at any size: --u is one point of
+   PowerPoint text, worked out from the slide's height in points.
+   ===================================================================== */
+.sl-slide{position:relative; width:100%; aspect-ratio:var(--r, 1.7778); container-type:size;
+  overflow:hidden; background:var(--panel); color:var(--text); line-height:1.2}
+.sl-canvas{position:absolute; inset:0; overflow:hidden; --u:calc(100cqh / var(--hpt, 405))}
+.sl-bgpic{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+.sl-el{position:absolute; box-sizing:border-box}
+.sl-el img{display:block; width:100%; height:100%; object-fit:fill; user-select:none}
+.sl-pic{overflow:hidden}
+.sl-line svg{position:absolute; inset:0; width:100%; height:100%; overflow:visible}
+.sl-tx{position:absolute; inset:0; display:flex; flex-direction:column; overflow-wrap:break-word}
+/* pre-wrap: tabs and runs of spaces are part of the layout on a slide */
+.sl-tx p{margin:0; white-space:pre-wrap}
+.sl-nowrap p{white-space:pre}
+.sl-tx a{color:inherit; text-decoration:underline}
+.sl-bu{display:inline-block; text-indent:0}
+.sl-tabled{display:block}
+/* every cell carries its own padding, fill and edges from the file */
+.sl-tbl{width:100%; border-collapse:collapse; table-layout:fixed}
+.sl-tbl td{padding:0}
+
+/* a slide written in the builder follows the site's own theme */
+.sl-plain{display:grid; grid-template-rows:auto 1fr; gap:3cqh; padding:7cqh 6cqw;
+  background:var(--panel); color:var(--text); border-top:1.6cqh solid var(--brand)}
+.sl-plain.with-pic{grid-template-columns:1.15fr .85fr; column-gap:4cqw}
+.sl-plain h2{grid-column:1 / -1; font-size:8.5cqh; line-height:1.1; margin:0}
+.sl-plainbody{font-size:6cqh; line-height:1.4; overflow:hidden; min-height:0}
+.sl-plainbody p{margin:0 0 1.6cqh}
+.sl-plainbody ul, .sl-plainbody ol{margin:0 0 1.6cqh; padding-left:5cqh}
+.sl-plainbody img{max-width:100%}
+.sl-plainpic{min-height:0; display:grid; place-items:center}
+.sl-plainpic img{max-width:100%; max-height:100%; object-fit:contain; border-radius:1cqh}
+.sl-picslide{background:var(--panel-2)}
+.sl-picslide img{position:absolute; inset:0; width:100%; height:100%; object-fit:contain}
+
+/* ---- moving between slides ---- */
+.sl-hold{position:relative; width:min(100cqw, calc(100cqh * var(--r, 1.7778))); aspect-ratio:var(--r, 1.7778)}
+.sl-hold > .sl-slide{position:absolute; inset:0; width:100%; height:100%}
+.sl-hold.sl-moving{perspective:1800px}
+.sl-glide.sl-in.sl-fwd{animation:slInFwd .28s ease both}
+.sl-glide.sl-out.sl-fwd{animation:slOutFwd .28s ease both}
+.sl-glide.sl-in.sl-back{animation:slInBack .28s ease both}
+.sl-glide.sl-out.sl-back{animation:slOutBack .28s ease both}
+.sl-flip{backface-visibility:hidden}
+.sl-flip.sl-out.sl-fwd{animation:slFlipOutFwd .27s ease-in both}
+.sl-flip.sl-in.sl-fwd{animation:slFlipInFwd .27s .26s ease-out both}
+.sl-flip.sl-out.sl-back{animation:slFlipOutBack .27s ease-in both}
+.sl-flip.sl-in.sl-back{animation:slFlipInBack .27s .26s ease-out both}
+@keyframes slInFwd{from{opacity:0; transform:translateX(5%)}}
+@keyframes slOutFwd{to{opacity:0; transform:translateX(-5%)}}
+@keyframes slInBack{from{opacity:0; transform:translateX(-5%)}}
+@keyframes slOutBack{to{opacity:0; transform:translateX(5%)}}
+@keyframes slFlipOutFwd{to{transform:rotateY(-90deg) scale(.92)}}
+@keyframes slFlipInFwd{from{transform:rotateY(90deg) scale(.92)}}
+@keyframes slFlipOutBack{to{transform:rotateY(90deg) scale(.92)}}
+@keyframes slFlipInBack{from{transform:rotateY(-90deg) scale(.92)}}
+
+/* ---- the button in the lesson's top bar ---- */
+.sl-open{display:inline-flex; align-items:center; gap:7px; padding:6px 12px; font-size:var(--text-base); position:relative}
+.sl-open-ic{width:16px; height:11px; border:2px solid currentColor; border-radius:2px; position:relative}
+.sl-open-ic::after{content:""; position:absolute; left:2px; right:2px; bottom:-6px; height:2px; background:currentColor; border-radius:2px}
+.sl-open.on{border-color:var(--amber); color:var(--amber)}
+.sl-open.sl-hint{animation:slNudge 2.4s ease-in-out infinite}
+.sl-open.sl-live::after{content:""; position:absolute; top:-3px; right:-3px; width:10px; height:10px; border-radius:50%;
+  background:var(--red); box-shadow:0 0 0 2px var(--panel); animation:slBeat 1.4s ease-in-out infinite}
+@keyframes slNudge{0%,100%{box-shadow:0 0 0 0 transparent} 50%{box-shadow:0 0 0 4px color-mix(in srgb, var(--amber) 35%, transparent)}}
+@keyframes slBeat{50%{transform:scale(1.35); opacity:.7}}
+
+/* ---- the window ---- */
+.sl-win{position:fixed; z-index:60; display:flex; flex-direction:column; overflow:hidden;
+  background:var(--panel); color:var(--text); border:1px solid var(--line-2); border-radius:var(--rad-md);
+  box-shadow:0 18px 50px rgba(10,14,22,.28); outline:none}
+.sl-win.sl-dragging{user-select:none; transition:none}
+.sl-win.ghost:not(:hover):not(.sl-dragging){opacity:.3}
+.sl-win.ghost{transition:opacity .35s}
+.sl-bar{display:flex; align-items:center; gap:4px; padding:4px 6px 4px 12px; border-bottom:1px solid var(--line);
+  cursor:grab; user-select:none; touch-action:none; flex:none; min-width:0}
+.sl-win.sl-dragging .sl-bar{cursor:grabbing}
+.sl-grip{flex:1; display:flex; align-items:center; gap:8px; min-width:0; font-size:var(--text-sm); font-weight:600; color:var(--muted)}
+.sl-tools{display:flex; gap:2px; flex:none}
+.sl-tool{padding:3px 8px; font-size:var(--text-base); line-height:1.3; background:transparent; border:1px solid transparent;
+  color:var(--muted); border-radius:var(--rad-sm); font-weight:600}
+.sl-tool:hover{border-color:var(--line-2); color:var(--text)}
+.sl-tool.on{color:var(--amber); border-color:var(--amber)}
+.sl-tool-text{font-size:var(--text-sm)}
+.sl-livechip{font-size:var(--text-2xs); font-weight:700; letter-spacing:.04em; padding:1px 8px; border-radius:var(--rad-pill);
+  background:var(--red); color:var(--panel); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.sl-livechip.away{background:var(--amber); color:var(--amber-ink)}
+.sl-stage{position:relative; container-type:size; display:grid; place-items:center; flex:1 1 auto; min-height:0;
+  background:var(--panel-2)}
+.sl-zone{position:absolute; top:50%; transform:translateY(-50%); z-index:2; padding:6px 10px; font-size:var(--text-3xl); line-height:1;
+  background:color-mix(in srgb, var(--panel) 85%, transparent); border:1px solid var(--line-2); color:var(--text);
+  opacity:0; transition:opacity .2s}
+.sl-zone-prev{left:6px}
+.sl-zone-next{right:6px}
+.sl-stage:hover .sl-zone, .sl-zone:focus-visible{opacity:.92}
+.sl-foot{display:flex; align-items:center; gap:6px; padding:6px 8px; border-top:1px solid var(--line); flex:none}
+.sl-step{padding:4px 12px; font-size:var(--text-lg); line-height:1.2; background:var(--panel); border:1px solid var(--line-2); color:var(--text)}
+.sl-step:disabled{opacity:.35}
+.sl-track{flex:1; height:8px; border-radius:var(--rad-pill); background:var(--line); cursor:pointer; overflow:hidden; min-width:40px}
+.sl-trackfill{height:100%; border-radius:var(--rad-pill); background:var(--amber); transition:width .25s}
+.sl-thumbs{display:flex; gap:8px; overflow-x:auto; padding:8px; border-top:1px solid var(--line); flex:none; scrollbar-width:thin}
+.sl-thumb{flex:none; width:118px; padding:0; position:relative; border:2px solid var(--line); border-radius:var(--rad-sm);
+  overflow:hidden; background:none}
+.sl-thumb.on{border-color:var(--amber)}
+.sl-thumb .sl-slide{pointer-events:none}
+.sl-thumbn{position:absolute; left:3px; bottom:3px; font-size:var(--text-2xs); font-weight:700; padding:0 5px;
+  border-radius:var(--rad-xs); background:color-mix(in srgb, var(--panel) 85%, transparent); color:var(--text)}
+.sl-sizer{position:absolute; right:0; bottom:0; width:18px; height:18px; cursor:nwse-resize; touch-action:none; display:none;
+  background:linear-gradient(135deg, transparent 50%, var(--line-2) 50%, var(--line-2) 60%, transparent 60%, transparent 72%, var(--line-2) 72%, var(--line-2) 82%, transparent 82%)}
+.sl-split{position:absolute; top:0; bottom:0; width:10px; cursor:ew-resize; touch-action:none; display:none; z-index:3}
+.sl-split::after{content:""; position:absolute; top:50%; left:3px; width:4px; height:44px; margin-top:-22px; border-radius:4px; background:var(--line-2)}
+.sl-split:hover::after{background:var(--amber)}
+.sl-backlive{position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:3; padding:6px 14px; font-size:var(--text-sm);
+  background:var(--amber); color:var(--amber-ink); border-color:var(--amber); box-shadow:0 6px 18px rgba(10,14,22,.25); white-space:nowrap}
+.sl-note{position:absolute; left:10px; right:10px; bottom:10px; z-index:4; padding:8px 12px; border-radius:var(--rad-sm);
+  background:var(--text); color:var(--panel); font-size:var(--text-sm)}
+.sl-ink{position:absolute; z-index:2; pointer-events:none; touch-action:none}
+.sl-ink.drawing{pointer-events:auto; cursor:crosshair}
+.sl-lens{position:absolute; z-index:4; border-radius:50%; overflow:hidden; pointer-events:none;
+  border:3px solid var(--panel); box-shadow:0 10px 30px rgba(10,14,22,.4), 0 0 0 1px var(--line-2)}
+.sl-lens > .sl-slide{position:absolute}
+
+/* where it is */
+.sl-win[data-mode=float] .sl-stage{aspect-ratio:var(--r); flex:none}
+.sl-win[data-mode=float] .sl-sizer{display:block}
+.sl-win[data-mode=left], .sl-win[data-mode=right]{top:0; bottom:0; width:var(--sl-side, 420px); border-radius:0; box-shadow:none}
+.sl-win[data-mode=left]{left:0; border-width:0 1px 0 0}
+.sl-win[data-mode=right]{right:0; border-width:0 0 0 1px}
+/* Pinned, the column is far taller than a slide. The slide sits at the
+   top under its bar, and All slides fills what is left as a grid rather
+   than a strip, instead of a band of nothing above and below. */
+.sl-win[data-mode=left] .sl-stage, .sl-win[data-mode=right] .sl-stage{flex:none; aspect-ratio:var(--r)}
+.sl-win[data-mode=left] .sl-thumbs, .sl-win[data-mode=right] .sl-thumbs,
+.sl-win[data-mode=full] .sl-thumbs{flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; flex-wrap:wrap; align-content:flex-start}
+.sl-win[data-mode=left] .sl-thumb, .sl-win[data-mode=right] .sl-thumb{width:calc(50% - 4px)}
+.sl-win[data-mode=full] .sl-thumbs{flex:0 1 auto; max-height:30%}
+.sl-win[data-mode=left] .sl-split{display:block; right:-5px}
+.sl-win[data-mode=right] .sl-split{display:block; left:-5px}
+.sl-win[data-mode=full]{inset:0; z-index:95; border-radius:0; border:0}
+.sl-win[data-mode=full] .sl-bar{cursor:default}
+.sl-win[data-mode=mini]{right:16px; bottom:72px; width:200px; cursor:pointer}
+.sl-win[data-mode=mini] .sl-tools > :not(:last-child), .sl-win[data-mode=mini] .sl-foot,
+.sl-win[data-mode=mini] .sl-thumbs, .sl-win[data-mode=mini] .sl-zone{display:none}
+.sl-win[data-mode=mini] .sl-stage{aspect-ratio:var(--r); flex:none; pointer-events:none}
+.sl-win[data-mode=mini] .sl-bar{cursor:pointer; padding:2px 4px 2px 10px}
+.sl-win[data-mode=sheet]{left:0; right:0; bottom:0; height:46vh; height:46dvh; border-radius:var(--rad-lg) var(--rad-lg) 0 0;
+  border-width:1px 0 0; padding-bottom:env(safe-area-inset-bottom)}
+.sl-win[data-mode=pip]{position:static; width:100%; height:100vh; height:100dvh; border:0; border-radius:0; box-shadow:none}
+body.sl-pipbody{margin:0; overflow:hidden; background:var(--panel)}
+body.lesson.sl-pin-left{padding-left:var(--sl-side, 420px)}
+body.lesson.sl-pin-right{padding-right:var(--sl-side, 420px)}
+body.lesson.sl-sheet{padding-bottom:46vh; padding-bottom:46dvh}
+
+.sl-snaphint{position:fixed; top:8px; bottom:8px; width:min(420px, 36vw); z-index:59; pointer-events:none;
+  border:2px dashed var(--amber); border-radius:var(--rad-md); background:color-mix(in srgb, var(--amber) 12%, transparent)}
+.sl-snaphint[data-side=left]{left:8px}
+.sl-snaphint[data-side=right]{right:8px}
+.sl-snaphint[data-side=full]{left:8px; right:8px; width:auto}
+.sl-peek{position:fixed; right:228px; bottom:72px; width:min(560px, 60vw); z-index:61; pointer-events:none;
+  border-radius:var(--rad-md); overflow:hidden; border:1px solid var(--line-2); box-shadow:0 18px 50px rgba(10,14,22,.3)}
+
+/* ---- the Settings rows for the experiments ---- */
+.sl-lab{display:flex; align-items:center; gap:12px; width:100%; margin:0 0 8px; padding:10px 12px; text-align:left;
+  font-size:var(--text-base); font-weight:500; color:var(--text); background:var(--panel-2);
+  border:1px solid var(--line); border-radius:var(--rad-md)}
+.sl-lab:hover{border-color:var(--line-2)}
+.sl-lab.on{border-color:var(--amber)}
+.sl-lab-words{flex:1; display:flex; flex-direction:column; gap:2px; min-width:0}
+.sl-lab-words span{font-size:var(--text-sm); color:var(--muted); line-height:1.35}
+.sl-lab-pill{flex:none; min-width:46px; text-align:center; font-size:var(--text-xs); font-weight:700; padding:3px 10px;
+  border-radius:var(--rad-pill); background:var(--line); color:var(--muted)}
+.sl-lab.on .sl-lab-pill{background:var(--amber); color:var(--amber-ink)}
+
+/* ---- the presenter ---- */
+body.sl-presenting{overflow:hidden}
+.sl-present{position:fixed; inset:0; z-index:9600; background:black; user-select:none}
+.sl-pstage{position:absolute; inset:0; container-type:size; display:grid; place-items:center}
+.sl-pink, .sl-ptrail{position:fixed; inset:0; width:100%; height:100%; pointer-events:none}
+.sl-present[data-tool=laser]{cursor:none}
+.sl-present[data-tool=pen]{cursor:crosshair}
+.sl-cover{position:absolute; inset:0; z-index:2}
+.sl-cover[data-c=black]{background:black}
+.sl-cover[data-c=white]{background:white}
+.sl-hud{position:absolute; left:50%; bottom:18px; transform:translate(-50%, 8px); z-index:3; display:flex; align-items:center; gap:4px;
+  padding:6px 10px; border-radius:var(--rad-pill); background:rgba(22,24,30,.86); color:white; opacity:0;
+  transition:opacity .3s, transform .3s; max-width:calc(100vw - 24px); overflow-x:auto}
+.sl-present.sl-awake .sl-hud, .sl-hud:hover, .sl-hud:focus-within{opacity:1; transform:translate(-50%, 0)}
+.sl-hudb{padding:5px 11px; font-size:var(--text-lg); line-height:1.2; background:transparent; border:1px solid transparent; color:white; border-radius:var(--rad-pill)}
+.sl-hudb:hover{border-color:rgba(255,255,255,.35)}
+.sl-hudb.on{background:white; color:black}
+.sl-hudb:disabled{opacity:.35}
+.sl-hudcount, .sl-hudclock{font-size:var(--text-sm); font-weight:600; padding:0 8px; white-space:nowrap; font-variant-numeric:tabular-nums}
+.sl-hudclock{opacity:.7}
+.sl-hudlive{font-size:var(--text-2xs); font-weight:700; letter-spacing:.06em; padding:2px 9px; border-radius:var(--rad-pill); background:var(--red); color:white; white-space:nowrap}
+
+@media (max-width: 480px){
+  .sl-open{padding:6px 9px}
+  .sl-open-word{display:none}
+}
+@media (pointer:coarse){
+  .sl-tool{padding:6px 10px}
+  .sl-zone{opacity:.8}
+}
+@media (prefers-reduced-motion: reduce){
+  .sl-open.sl-hint, .sl-open.sl-live::after{animation:none}
+}
+@media print{
+  .sl-win, .sl-open, .sl-present, .sl-peek, .sl-snaphint{display:none !important}
+  body.lesson.sl-pin-left, body.lesson.sl-pin-right, body.lesson.sl-sheet{padding:0}
+}
+
+/* ---- the builder's Slides pop-up (author-slides.js) ---- */
+.sle-lead{margin:0 0 14px; font-size:var(--text-base)}
+.sle-acts{display:flex; flex-wrap:wrap; gap:8px}
+.sle-acts button{font-size:var(--text-base); padding:8px 14px}
+.sle-danger{color:var(--red)}
+.sle-msg{min-height:1.4em; margin:8px 0; font-size:var(--text-sm); color:var(--muted)}
+.sle-main{display:grid; grid-template-columns:240px minmax(0, 1fr); gap:18px; align-items:start; text-align:left}
+.sle-list{display:flex; flex-direction:column; gap:10px; max-height:64vh; max-height:64dvh; overflow-y:auto; padding:2px 6px 2px 2px}
+.sle-empty{color:var(--muted); font-size:var(--text-base); margin:0}
+.sle-card{display:block; position:relative; width:100%; padding:0; text-align:left; background:var(--panel);
+  border:2px solid var(--line); border-radius:var(--rad-sm); overflow:hidden; flex:none}
+.sle-card.on{border-color:var(--amber)}
+.sle-card.over{border-color:var(--brand); border-style:dashed}
+.sle-card.dragging{opacity:.45}
+.sle-card .sl-slide{pointer-events:none}
+.sle-cap{display:block; padding:4px 8px; font-size:var(--text-sm); font-weight:600; color:var(--text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-top:1px solid var(--line)}
+.sle-pagetag{position:absolute; top:4px; right:4px; font-size:var(--text-2xs); font-weight:700; padding:1px 7px;
+  border-radius:var(--rad-pill); background:var(--amber); color:var(--amber-ink)}
+.sle-detail{min-width:0}
+.sle-big{border:1px solid var(--line-2); border-radius:var(--rad-sm); margin:0 0 6px}
+.sle-big [contenteditable=true]{cursor:text; outline:none}
+.sle-big [contenteditable=true]:hover{box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--brand) 60%, transparent)}
+.sle-big [contenteditable=true]:focus{box-shadow:inset 0 0 0 2px var(--brand)}
+.sle-fields{display:grid; gap:14px; margin-top:12px}
+.sle-field{display:flex; flex-direction:column; gap:6px; margin:0; font-weight:600; font-size:var(--text-base)}
+.sle-field > span:first-child{font-weight:700}
+.sle-field input[type=text], .sle-field textarea, .sle-field select{font-size:var(--text-base); padding:9px 12px}
+.sle-field .subnote{font-weight:400}
+.sle-row{display:flex; flex-wrap:wrap; gap:8px}
+.sle-row button{font-size:var(--text-sm); padding:7px 12px}
+@media (max-width: 760px){
+  .sle-main{grid-template-columns:minmax(0, 1fr)}
+  .sle-list{flex-direction:row; overflow-x:auto; overflow-y:hidden; max-height:none}
+  .sle-card{width:150px}
+}
+
+/* ---- slides.html, before presenting ---- */
+body.sl-start{min-height:100vh; min-height:100dvh}
+.sl-startbox{max-width:1100px; margin:0 auto; padding:40px 20px}
+.sl-startbox h1{font-size:var(--text-5xl); margin:0 0 6px}
+.sl-startsub{color:var(--muted); font-size:var(--text-lg); margin:0 0 20px}
+.sl-startgrid{display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:12px; margin:0 0 22px}
+.sl-startgrid .sl-thumb{width:auto}
+.sl-startacts{display:flex; flex-wrap:wrap; align-items:center; gap:16px}
+.sl-startacts .btn-primary{font-size:var(--text-xl); padding:12px 28px}
+.sl-startlive{display:flex; align-items:center; gap:8px; margin:0; font-size:var(--text-base)}
+.sl-startkeys{color:var(--muted); font-size:var(--text-sm); margin-top:22px; line-height:1.6}

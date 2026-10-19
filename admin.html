@@ -5020,6 +5020,15 @@ function openManage(){
     const sch = el("button","btn-ghost","Schedule");
     sch.addEventListener("click", () => { closeModal(); schedulePopup(lessonId); });
     bar.appendChild(sch);
+    /* Presenting from here tells this class which slide is up, so a student
+       following live turns with it. Its own tab, because it goes full
+       screen and the console should still be there afterwards. */
+    if (lessonJson.slides && Array.isArray(lessonJson.slides.list) && lessonJson.slides.list.length){
+      const pres = el("button","btn-ghost","▶ Present slides");
+      pres.addEventListener("click", () => window.open("slides.html?id=" + encodeURIComponent(lessonId) +
+                                                       "&group=" + encodeURIComponent(cls), "_blank"));
+      bar.appendChild(pres);
+    }
     if (canLockPages()){
       /* An assessment has no summary page in the list to lock with the rest. */
       const every = lessonJson.blocks.map((_, i) => i)
