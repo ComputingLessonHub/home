@@ -2096,6 +2096,7 @@ function buildAssessTracker(){
   /* The bar is as tall as the part of the questions on screen, which only
      the page knows once it is laid out, and again whenever that changes. */
   window.addEventListener("resize", sizeQuestionBar);
+  window.addEventListener("resize", () => { if (assessPages.onQuestions) roomBelowQuestions(); });
 
   const open = tel("button","btn-ghost qnav-open no-print","");
   open.type = "button";
@@ -2154,7 +2155,10 @@ function paintAssessTracker(){
     const has = questionAnswered(it);
     if (has) answered++;
     paintQuestionBox(it.piece, it, has, showing && it.step === step, "qseg");
+    it.item.classList.toggle("q-current", showing && it.step === step);
   });
+  document.body.classList.toggle("qfocus", showing && questionFocusOn());
+  if (showing) roomBelowQuestions();
   const total = A.items.length;
   A.barCount.innerHTML = "";
   A.barCount.appendChild(tel("b","", String(answered)));
@@ -2164,6 +2168,64 @@ function paintAssessTracker(){
   A.navBtn.textContent = answered + " of " + total + " answered";
   A.navBtn.setAttribute("aria-label", answered + " of " + total + " questions answered. Show the question numbers.");
 }
+/* Focus on one question: the one in view stays bright and the rest fade
+   back. Kept with the other display choices in hub_prefs, so it is per
+   device like the theme and the font, and off until someone turns it on. */
+function questionFocusOn(){
+  try{ return JSON.parse(localStorage.getItem("hub_prefs") || "{}").qFocus === true; }catch(e){ return false; }
+}
+/* With the focus look on, the last few questions could never scroll up to
+   the top, so at the bottom of the page three cards sat on screen and only
+   the last was lit, because the bottom of the page counts as the last
+   question. Room under the questions lets each one reach the top in turn,
+   so the one lit is always the one at the top. Measured against the room
+   already added, not by taking it off first: taking it off while a student
+   is at the bottom pulls the page up under them. */
+function roomBelowQuestions(){
+  const A = assessPages;
+  const q = A && A.screens[A.qAt] && A.screens[A.qAt].el;
+  if (!q) return;
+  const want = document.body.classList.contains("qfocus") && A.items.length;
+  const had = parseFloat(q.style.paddingBottom) || 0;
+  let room = 0;
+  if (want){
+    const stage = $("stage");
+    const last = A.items[A.items.length - 1];
+    const below = stage.scrollHeight - had - questionTop(last);
+    room = Math.max(0, Math.ceil(stage.clientHeight - below));
+  }
+  if (Math.abs(room - had) > 1) q.style.paddingBottom = room ? room + "px" : "";
+}
+/* Offered in Settings only on an assessment laid out as questions, the one
+   place it does anything. The pop-up is built the first time it opens, by
+   which time the lesson is loaded and assessLayout() can say. */
+window.settingsSection = (holder) => {
+  if (!holder || !assessLayout()) return;
+  const grp = el("div","set-group");
+  grp.appendChild(tel("span","set-label","Questions"));
+  const opts = el("div","font-opts");
+  const choices = [[false, "Show every question the same"],
+                   [true, "Fade the questions I am not on"]];
+  const paint = () => opts.querySelectorAll(".set-opt").forEach((b, k) =>
+    b.classList.toggle("on", choices[k][0] === questionFocusOn()));
+  choices.forEach(([on, label]) => {
+    const b = tel("button","set-opt", label);
+    b.type = "button";
+    b.addEventListener("click", () => {
+      try{
+        const p = JSON.parse(localStorage.getItem("hub_prefs") || "{}");
+        p.qFocus = on;
+        localStorage.setItem("hub_prefs", JSON.stringify(p));
+      }catch(e){}
+      paint();
+      paintTracker();
+    });
+    opts.appendChild(b);
+  });
+  grp.appendChild(opts);
+  holder.appendChild(grp);
+  paint();
+};
 function sizeQuestionBar(){
   const A = assessPages;
   if (!A || !A.bar || A.bar.hidden) return;
