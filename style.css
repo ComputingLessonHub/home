@@ -744,6 +744,10 @@ html[data-bg=night] .result-card .st i{color:#F0938E}
 @keyframes tickpop{from{transform:scale(.2); opacity:0} to{transform:scale(1); opacity:1}}
 .done-title{font-family:var(--display); font-size:var(--text-6xl); font-weight:700; margin:0 0 6px}
 .done-sub{color:var(--muted); font-size:var(--text-xl); margin:0 0 10px}
+/* the screenshots a practical handed in, small enough to glance at */
+.done-shots{display:flex; flex-wrap:wrap; justify-content:center; gap:12px; margin:14px 0 6px}
+.done-shots .done-shot{margin:0}
+.done-shots .shot-img{max-height:220px; cursor:zoom-in}
 /* where Back to my work would be, while the teacher has it locked */
 .done-locked{margin:0 0 6px; padding:10px 14px; border-radius:10px; font-weight:700;
   border-left:4px solid var(--amber); background:color-mix(in srgb, var(--amber) 10%, transparent)}

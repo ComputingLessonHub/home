@@ -8091,6 +8091,11 @@ function rImage(b){
       }catch(e){
         err.textContent = "That picture is too big to store. Download your PDF now to keep your work.";
       }
+      /* Sent now rather than half a minute later. A paste is one finished
+         thing, not typing that may carry on, so there is nothing to wait
+         for, and the pause timer was long enough for a student to paste,
+         close the tab and leave the teacher looking at an empty task. */
+      if (lesson && lesson.linger !== false) lingerSave();
     });
   }
   const NO_PICTURE = "There was no picture on the clipboard. Take a screenshot first with Windows + Shift + S.";
@@ -8723,6 +8728,8 @@ function renderPracticalComplete(){
            : "Your teacher will mark your assessment.");
   /* the mark sits where a percentage would on a normal assessment */
   if (scored) hero.appendChild(el("p","done-score", myResult.score + " / " + myResult.outOf));
+  const shots = submittedShots();
+  if (shots) hero.appendChild(shots);
   box.appendChild(hero);
 
   /* No View my work here. Back to my work at the top is the way into it, a
@@ -8762,6 +8769,42 @@ function renderPracticalComplete(){
   }
   /* No Back to Home either: Home is in the bar along the top, and a second
      one under the work was the button pressed instead of Back to my work. */
+}
+
+/* The screenshots handed in, small, under the tick. A teacher going down a
+   class in View Work can see at a glance whether each one actually shows the
+   work, without opening every page to find it. Read from the live task where
+   it was built and from what was saved where it was not, as earlierScreenshot
+   does. Null when there are none, so the page is as it was. */
+function submittedShots(){
+  const ids = [];
+  const walk = (list) => (list || []).forEach(x => {
+    if (!x) return;
+    if (x.type === "image" && x.id) ids.push(x.id);
+    walk(x.blocks);
+    (x.options || []).forEach(o => walk(o.blocks));
+  });
+  walk(lesson && lesson.blocks);
+  const pics = [];
+  ids.forEach(id => {
+    let v = "";
+    try{ v = fields[id] ? fields[id].get() : ""; }catch(e){}
+    if (!v && restoredData && typeof restoredData[id] === "string") v = restoredData[id];
+    if (v && !pics.some(p => p.src === v)) pics.push({ id, src: v });
+  });
+  if (!pics.length) return null;
+  const row = el("div","done-shots");
+  pics.forEach(p => {
+    const frame = el("div","shot-frame done-shot");
+    const img = el("img","shot-img");
+    img.src = p.src;
+    img.alt = "The screenshot you handed in";
+    frame.appendChild(img);
+    /* the whole picture opens it: it is too small to read anything in here */
+    img.addEventListener("click", () => showPictureFull(p.src, ""));
+    row.appendChild(frame);
+  });
+  return row;
 }
 
 /* Locked for marking before they had finished. There is nothing to show
