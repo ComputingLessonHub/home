@@ -6701,6 +6701,17 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
 .hotspot-pic[data-verdict=no] .hotspot-pin{background:var(--red)}
 .hotspot-ring{position:absolute; aspect-ratio:1; transform:translate(-50%,-50%); border-radius:50%;
   border:3px dashed var(--mint); background:color-mix(in srgb, var(--mint) 15%, transparent); pointer-events:none}
+.hotspot-ring[data-shape=rect]{aspect-ratio:auto; border-radius:6px}
+/* In the builder the shape is picked up to move it and the square on its
+   edge to size it. Nothing scrolls under a finger while either is dragged. */
+.hotspot-edit{touch-action:none}
+.hotspot-edit .hotspot-ring{pointer-events:auto; cursor:move}
+/* a knob on the outline itself, drawn like the pin so it reads as part of
+   the ring rather than something laid on top of it */
+.hotspot-grip{position:absolute; width:14px; height:14px; transform:translate(-50%,-50%); border-radius:50%;
+  background:var(--mint); border:2px solid var(--panel); box-shadow:0 1px 3px rgba(0,0,0,.35); cursor:nwse-resize}
+/* a fingertip is wider than the square, so the place to press is too */
+.hotspot-grip::before{content:""; position:absolute; inset:-14px}
 .hotspot-check{display:block; margin-top:12px}
 .hotspot-said{margin:8px 0 0; font-weight:600}
 .hotspot-said[hidden]{display:none}

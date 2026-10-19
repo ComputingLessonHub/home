@@ -9203,7 +9203,11 @@ function reviewHotspot(b, q, v){
   const ring = el("div","hotspot-ring");
   ring.style.left = Number(b.x || 0) + "%";
   ring.style.top = Number(b.y || 0) + "%";
-  ring.style.width = (2 * Number(b.r || 0)) + "%";
+  if (b.shape === "rect"){
+    ring.dataset.shape = "rect";
+    ring.style.width = Number(b.w || 0) + "%";
+    ring.style.height = Number(b.h || 0) + "%";
+  } else ring.style.width = (2 * Number(b.r || 0)) + "%";
   holder.appendChild(ring);
   if (v && typeof v.x === "number"){
     const pin = el("div","hotspot-pin");
@@ -9212,8 +9216,8 @@ function reviewHotspot(b, q, v){
     holder.appendChild(pin);
   }
   wrap.appendChild(holder);
-  wrap.appendChild(el("span","why", !(v && typeof v.x === "number") ? "Not answered. The ring shows the right spot."
-    : q.pts ? "You clicked the right spot." : "Your click is outside the ring, which shows the right spot."));
+  wrap.appendChild(el("span","why", !(v && typeof v.x === "number") ? "Not answered. The green outline shows the right spot."
+    : q.pts ? "You clicked the right spot." : "Your click is outside the green outline, which shows the right spot."));
   return wrap;
 }
 /* The picture with what they dropped on it, marked, and underneath it each

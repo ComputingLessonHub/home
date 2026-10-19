@@ -42,10 +42,13 @@
     });
     return { got: got, max: max };
   }
-  /* Inside the ring or not: the same rule as window.hotspotHit in
-     tasks-extra.js, which this page does not load. */
+  /* Inside the ring or the rectangle or not: the same rule as
+     window.hotspotHit in tasks-extra.js, which this page does not load. */
   function hotspotScore(b, v){
     if (!v || typeof v.x !== "number" || typeof v.y !== "number") return { got: 0, max: 1 };
+    if (b.shape === "rect")
+      return { got: Math.abs(v.x - Number(b.x || 0)) <= Number(b.w || 0) / 2 &&
+                    Math.abs(v.y - Number(b.y || 0)) <= Number(b.h || 0) / 2 ? 1 : 0, max: 1 };
     const ratio = Number(b.ratio) > 0 ? Number(b.ratio) : 1;
     const dx = v.x - Number(b.x || 0), dy = (v.y - Number(b.y || 0)) * ratio;
     return { got: Math.sqrt(dx * dx + dy * dy) <= Number(b.r || 0) ? 1 : 0, max: 1 };

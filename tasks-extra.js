@@ -698,16 +698,21 @@
 
   /* ===================================================================
      CLICK THE RIGHT SPOT
-     { type:"hotspot", image, x, y, r, ratio }
+     { type:"hotspot", image, x, y, r, ratio, shape, w, h }
      The student clicks once on a picture. The right spot is a point, x
      and y as percentages of the picture's width and height, with a circle
      round it r per cent of the picture's width across. ratio is the
      picture's height over its width, so the circle stays a circle on a
-     picture that is not square. What they clicked is saved as a point,
+     picture that is not square. With shape "rect" it is a rectangle
+     instead, centred on the point, w per cent of the width across and h
+     per cent of the height down. What they clicked is saved as a point,
      never as a picture.
      =================================================================== */
   window.hotspotHit = function(b, v){
     if (!v || typeof v.x !== "number" || typeof v.y !== "number") return false;
+    if (b.shape === "rect")
+      return Math.abs(v.x - Number(b.x || 0)) <= Number(b.w || 0) / 2 &&
+             Math.abs(v.y - Number(b.y || 0)) <= Number(b.h || 0) / 2;
     const ratio = Number(b.ratio) > 0 ? Number(b.ratio) : 1;
     const dx = v.x - Number(b.x || 0);
     const dy = (v.y - Number(b.y || 0)) * ratio;

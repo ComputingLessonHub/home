@@ -953,6 +953,11 @@ function optionHtml(x){
   const words = h.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
   return words || /<img/i.test(h) ? h : "";
 }
+/* A Click the right spot task saved before rectangles existed has no shape,
+   and is a circle. */
+function hotspotShape(b){ return b && b.shape === "rect" ? "rect" : "circle"; }
+/* the picture's height over its width, 1 until the picture has been seen */
+function hotspotRatio(b){ return Number(b && b.ratio) > 0 ? Number(b.ratio) : 1; }
 function keepArrays(o){
   Object.keys(o).forEach(k => {
     const v = o[k];
@@ -1360,11 +1365,18 @@ function compileOne(b, id, target){
         topic: lesson.assessment ? b.topic : "" }));
     else if (b.type === "hotspot"){
       /* The spot and the size of the circle are percentages of the picture,
-         and ratio keeps the circle round on a picture that is not square. */
+         and ratio keeps the circle round on a picture that is not square.
+         A rectangle is w by h per cent of the picture's width and height,
+         centred on the spot, so it needs no ratio. The circle's r is kept
+         on a rectangle too, so changing back finds it where it was. */
       const pct = (n, d) => Math.round(Math.min(100, Math.max(0, Number(n) || d)) * 10) / 10;
+      const rect = hotspotShape(b) === "rect";
       push(keepArrays({ type:"hotspot", id, title: b.title || "", task: b.task || "",
         image: b.image || "", alt: b.alt || "",
+        shape: rect ? "rect" : undefined,
         x: pct(b.x, 50), y: pct(b.y, 50), r: Math.max(1, Math.min(50, Number(b.r) || 8)),
+        w: rect ? Math.max(1, pct(b.w, 16)) : undefined,
+        h: rect ? Math.max(1, pct(b.h, 16)) : undefined,
         ratio: Number(b.ratio) > 0 ? Math.round(Number(b.ratio) * 10000) / 10000 : undefined,
         topic: lesson.assessment ? b.topic : "" }));
     }

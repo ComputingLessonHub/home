@@ -1612,53 +1612,174 @@ EDITORS.hotspot = function(b, k){
   const { F, add, settings } = k;
   F("Heading (optional)", "title");
   F("Instruction (optional)", "task", { area:true, rows:2 });
-  F("Picture address", "image", { help:"Paste a link to the picture, or the address of one in the site's images folder." });
+  /* The picture is drawn into a box of its own and drawn again as the
+     address is typed. It used to be built once with the card, so a
+     picture pasted in did not show until the task was shut and opened. */
+  let picWait = 0;
+  F("Picture address", "image", { help:"Paste a link to the picture, or the address of one in the site's images folder.",
+    then: () => { clearTimeout(picWait); picWait = setTimeout(paintPic, 300); } });
   F("What the picture shows (optional)", "alt", { help:"Read out by a screen reader. Do not give the answer away." });
   const w = el("div","bfield");
   const head = el("div","brow");
   head.appendChild(el("label","","The right spot"));
-  head.appendChild(helpDot("Click on the picture to put the right spot there. Anywhere inside the ring counts as right."));
+  head.appendChild(helpDot("Drag across the picture to draw the right spot, or click to move it there. Drag the shape to move it and the dot on its edge to change its size. Anywhere inside counts as right."));
   w.appendChild(head);
-  if (!b.image) w.appendChild(el("p","hint","Paste a picture address above to start."));
-  else {
+
+  const shapes = el("div","brow");
+  const shapeBtns = [["circle","Circle"],["rect","Rectangle"]].map(pair => {
+    const btn = el("button","btn-ghost bmini2", pair[1]);
+    btn.type = "button";
+    btn.addEventListener("click", () => {
+      if (hotspotShape(b) === pair[0]) return;
+      /* The first rectangle is the square the circle sat in, so changing
+         shape leaves the spot where it was rather than somewhere new. */
+      if (pair[0] === "rect" && !(Number(b.w) > 0 && Number(b.h) > 0)){
+        const r = Number(b.r) || 8;
+        b.w = Math.round(2 * r * 10) / 10;
+        b.h = Math.round(2 * r / hotspotRatio(b) * 10) / 10;
+      }
+      b.shape = pair[0];
+      paintArea(); saveDraft(); schedulePreview();
+    });
+    shapes.appendChild(btn);
+    return { btn, shape: pair[0] };
+  });
+  w.appendChild(shapes);
+  const picBox = el("div");
+  w.appendChild(picBox);
+  add(w);
+
+  /* filled in by paintPic once there is a picture to paint on */
+  let paintArea = () => shapeBtns.forEach(s => s.btn.classList.toggle("right", s.shape === hotspotShape(b)));
+  function paintPic(){
+    picBox.innerHTML = "";
+    paintArea = () => shapeBtns.forEach(s => s.btn.classList.toggle("right", s.shape === hotspotShape(b)));
+    if (!String(b.image || "").trim()){
+      picBox.appendChild(el("p","hint","Paste a picture address above to start."));
+      paintArea();
+      return;
+    }
     const holder = el("div","hotspot-pic hotspot-edit");
     const img = el("img"); img.src = b.image; img.draggable = false;
     holder.appendChild(img);
-    const ring = el("div","hotspot-ring");
+    const area = el("div","hotspot-ring");
     const dot = el("div","hotspot-pin");
-    holder.appendChild(ring); holder.appendChild(dot);
-    const paint = () => {
-      ring.style.left = dot.style.left = (Number(b.x) || 0) + "%";
-      ring.style.top = dot.style.top = (Number(b.y) || 0) + "%";
-      ring.style.width = (2 * (Number(b.r) || 8)) + "%";
+    const grip = el("div","hotspot-grip");
+    grip.title = "Drag to change the size";
+    holder.appendChild(area); holder.appendChild(dot); holder.appendChild(grip);
+    const missing = el("p","hint","There is no picture at that address yet.");
+    missing.hidden = true;
+    picBox.appendChild(holder);
+    picBox.appendChild(missing);
+
+    const size = el("div","brow");
+    size.appendChild(el("span","bhelp","How big the ring is"));
+    const range = el("input");
+    range.type = "range"; range.min = "1"; range.max = "50"; range.step = "0.5";
+    range.addEventListener("input", () => { b.r = Number(range.value); paintArea(); saveDraft(); schedulePreview(); });
+    size.appendChild(range);
+    picBox.appendChild(size);
+
+    paintArea = () => {
+      const rect = hotspotShape(b) === "rect";
+      shapeBtns.forEach(s => s.btn.classList.toggle("right", s.shape === hotspotShape(b)));
+      const x = Number(b.x) || 0, y = Number(b.y) || 0;
+      area.dataset.shape = rect ? "rect" : "circle";
+      area.style.left = dot.style.left = x + "%";
+      area.style.top = dot.style.top = y + "%";
+      if (rect){
+        const half = { w: (Number(b.w) || 16) / 2, h: (Number(b.h) || 16) / 2 };
+        area.style.width = 2 * half.w + "%"; area.style.height = 2 * half.h + "%";
+        grip.style.left = (x + half.w) + "%"; grip.style.top = (y + half.h) + "%";
+      } else {
+        const r = Number(b.r) || 8;
+        area.style.width = 2 * r + "%"; area.style.height = "";
+        grip.style.left = (x + r) + "%"; grip.style.top = y + "%";
+        range.value = String(r);
+      }
+      size.hidden = rect;
+      grip.style.cursor = rect ? "nwse-resize" : "ew-resize";
     };
+
     /* The circle is a share of the picture's width, so how tall it is on
        the picture depends on the picture's shape, measured here. */
     img.addEventListener("load", () => {
+      missing.hidden = true; holder.hidden = false;
       if (img.naturalWidth){
         const ratio = Math.round(img.naturalHeight / img.naturalWidth * 10000) / 10000;
         if (ratio !== b.ratio){ b.ratio = ratio; saveDraft(); }
       }
     });
-    holder.addEventListener("click", (e) => {
+    img.addEventListener("error", () => { missing.hidden = false; holder.hidden = true; size.hidden = true; });
+
+    /* One press does one of three things, decided by what it lands on:
+       the dot on the edge resizes, the shape itself moves, and the bare
+       picture draws a new spot from where the press started (or, if the
+       pointer barely moved, puts the spot there at the size it was). */
+    const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+    const tenth = (n) => Math.round(n * 10) / 10;
+    const at = (e) => {
       const r = img.getBoundingClientRect();
-      if (!r.width) return;
-      b.x = Math.round((e.clientX - r.left) / r.width * 1000) / 10;
-      b.y = Math.round((e.clientY - r.top) / r.height * 1000) / 10;
-      paint(); saveDraft(); schedulePreview();
+      return { x: (e.clientX - r.left) / r.width * 100, y: (e.clientY - r.top) / r.height * 100,
+               ratio: r.width ? r.height / r.width : 1 };
+    };
+    let press = null;
+    holder.addEventListener("pointerdown", (e) => {
+      if (!img.getBoundingClientRect().width) return;
+      e.preventDefault();
+      holder.setPointerCapture(e.pointerId);
+      const p = at(e);
+      const kind = e.target === grip ? "size" : e.target === area ? "move" : "draw";
+      press = { kind, from: p, moved: false,
+                off: { x: p.x - (Number(b.x) || 0), y: p.y - (Number(b.y) || 0) },
+                corner: { x: (Number(b.x) || 0) - (Number(b.w) || 16) / 2,
+                          y: (Number(b.y) || 0) - (Number(b.h) || 16) / 2 } };
     });
-    paint();
-    w.appendChild(holder);
-    const size = el("div","brow");
-    size.appendChild(el("span","bhelp","How big the ring is"));
-    const range = el("input");
-    range.type = "range"; range.min = "2"; range.max = "30"; range.step = "0.5";
-    range.value = String(Number(b.r) || 8);
-    range.addEventListener("input", () => { b.r = Number(range.value); paint(); saveDraft(); schedulePreview(); });
-    size.appendChild(range);
-    w.appendChild(size);
+    holder.addEventListener("pointermove", (e) => {
+      if (!press) return;
+      const p = at(e);
+      const rect = hotspotShape(b) === "rect";
+      /* how far the press is from a point, in the circle's own units:
+         per cent of the width, with the height scaled to match */
+      const reach = (c) => Math.hypot(p.x - c.x, (p.y - c.y) * p.ratio);
+      if (!press.moved && reach(press.from) < 1.5) return;   // a click, so far
+      press.moved = true;
+      if (press.kind === "move"){
+        b.x = tenth(clamp(p.x - press.off.x, 0, 100));
+        b.y = tenth(clamp(p.y - press.off.y, 0, 100));
+      } else if (press.kind === "size" && rect){
+        /* the top left corner stays put and the dot drags the other */
+        const wide = clamp(p.x - press.corner.x, 2, 100), tall = clamp(p.y - press.corner.y, 2, 100);
+        b.w = tenth(wide); b.h = tenth(tall);
+        b.x = tenth(press.corner.x + wide / 2); b.y = tenth(press.corner.y + tall / 2);
+      } else if (press.kind === "size"){
+        b.r = tenth(clamp(reach({ x: Number(b.x) || 0, y: Number(b.y) || 0 }), 1, 50));
+      } else if (rect){
+        const left = clamp(Math.min(press.from.x, p.x), 0, 100), right = clamp(Math.max(press.from.x, p.x), 0, 100);
+        const top = clamp(Math.min(press.from.y, p.y), 0, 100), bottom = clamp(Math.max(press.from.y, p.y), 0, 100);
+        b.w = tenth(Math.max(2, right - left)); b.h = tenth(Math.max(2, bottom - top));
+        b.x = tenth((left + right) / 2); b.y = tenth((top + bottom) / 2);
+      } else {
+        b.x = tenth(clamp(press.from.x, 0, 100)); b.y = tenth(clamp(press.from.y, 0, 100));
+        b.r = tenth(clamp(reach(press.from), 1, 50));
+      }
+      paintArea();
+    });
+    const letGo = (e) => {
+      if (!press) return;
+      if (!press.moved && press.kind !== "size"){
+        const p = at(e);
+        b.x = tenth(clamp(p.x, 0, 100)); b.y = tenth(clamp(p.y, 0, 100));
+        paintArea();
+      }
+      press = null;
+      saveDraft(); schedulePreview();
+    };
+    holder.addEventListener("pointerup", letGo);
+    holder.addEventListener("pointercancel", () => { press = null; saveDraft(); });
+    paintArea();
   }
-  add(w);
+  paintPic();
   settings(() => {
     if (topicTags()) F("Topic tag", "topic");
   });
@@ -1668,7 +1789,10 @@ EDITORS.label = function(b, k){
   const { F, add } = k;
   F("Heading (optional)", "title");
   F("Instruction (optional)", "task", { area:true, rows:2 });
-  F("Picture address", "image", { help:"Paste a link to the picture they will label." });
+  /* drawn again as the address is typed, the same as Click the right spot */
+  let labelWait = 0;
+  F("Picture address", "image", { help:"Paste a link to the picture they will label.",
+    then: () => { clearTimeout(labelWait); labelWait = setTimeout(paintLabelPic, 300); } });
   if (!Array.isArray(b.spots)) b.spots = [];
 
   const w = el("div","bfield");
@@ -1681,8 +1805,14 @@ EDITORS.label = function(b, k){
      shows. This used to return from card() instead, which handed
      appendChild an undefined card: adding a Label a picture task blanked
      the whole page in the builder, because a fresh one has no image yet. */
-  if (!b.image) w.appendChild(el("p","hint","Paste a picture address above to start."));
-  else {
+  const labelBox = el("div");
+  w.appendChild(labelBox);
+  function paintLabelPic(){
+    labelBox.innerHTML = "";
+    if (!String(b.image || "").trim()){
+      labelBox.appendChild(el("p","hint","Paste a picture address above to start."));
+      return;
+    }
     const holder = el("div","label-pic label-edit");
     const img = el("img");
     img.src = b.image;
@@ -1691,10 +1821,10 @@ EDITORS.label = function(b, k){
     const ghost = el("div","label-ghost");
     ghost.hidden = true;
     holder.appendChild(ghost);
-    w.appendChild(holder);
+    labelBox.appendChild(holder);
 
     const list = el("div","label-list");
-    w.appendChild(list);
+    labelBox.appendChild(list);
 
     function paintSpots(){
       holder.querySelectorAll(".label-spot").forEach(n => n.remove());
@@ -1764,6 +1894,7 @@ EDITORS.label = function(b, k){
 
     paintSpots();
   }
+  paintLabelPic();
   add(w);
   /* Each label is a mark in an assessment, so it needs a topic for the
      Strength and Target the same as any other question. */
