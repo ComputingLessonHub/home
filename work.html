@@ -43,6 +43,13 @@
   <div class="mbstats" id="progressStats"></div>
 </div>
 
+<!-- ================= the markbook =================
+     In place of Progress for an assessment, standard or practical: drawn by
+     markbook.js out of the same class, work and results this page fetches. -->
+<div id="markbookPane" class="workwrap mbpane" hidden>
+  <div id="mbHolder"></div>
+</div>
+
 <!-- ================= viewing work ================= -->
 <div id="workPane" class="workwrap" hidden>
   <div class="worksplit">
@@ -133,6 +140,9 @@
 <script src="settings.js"></script>
 <script src="shortmatch.js"></script>
 <script src="progressmath.js"></script>
+<script src="voice.js"></script>
+<script src="xlsx.js"></script>
+<script src="markbook.js"></script>
 <script>
 /* Puts everything except the cross and the closing buttons into a part that
    scrolls on its own, so a long pop-up can be read on a small screen without
@@ -263,6 +273,7 @@ async function boot(){
     /* A practical is handed in to be marked by hand, and the console's
        button into it says Mark work, so the tab it opens on does too. */
     if (lessonJson && lessonJson.practical) $("tabWork").textContent = "Mark work";
+    if (markbookMode()) $("tabProgress").textContent = "Markbook";
     roster = students.sort(byUsername);
     rows = work;
     if (!PRACTICE) await loadMarks();
@@ -276,11 +287,12 @@ async function boot(){
         (lessonJson && lessonJson.title ? lessonJson.title : lessonId);
       document.title = "Student work \u00b7 " + (lessonJson && lessonJson.title ? lessonJson.title : lessonId);
     }
-    if (!PRACTICE) paintProgress();
+    if (!PRACTICE) paintSecondTab();
     /* Never held up for this: it is a second fetch on top of the ones the
        markbook already needed, and the table above it is worth showing
-       whether or not it ever arrives. */
-    if (!PRACTICE) loadComparison().then(() => { if (!PRACTICE) paintProgress(); });
+       whether or not it ever arrives. An assessment has the markbook in
+       place of Progress, and nothing to compare against a sibling lesson. */
+    if (!PRACTICE && !markbookMode()) loadComparison().then(() => { if (!PRACTICE) paintProgress(); });
     /* Opened on one student, from a class list or the username search: start
        on them rather than on whoever is first alphabetically. */
     const asked = (qs.get("student") || "").toLowerCase();
@@ -380,9 +392,12 @@ async function fetchWork(){
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || "Could not load their work.");
   /* Lines ticked while marking live in the feedback. Laid over the work as
-     it arrives, so every total on this screen counts them. */
+     it arrives, so every total on this screen counts them. raw keeps what
+     the student saved, which is what an assessment's questions are marked
+     from in the markbook, the same as the lesson page marks them. */
   return (d.rows || []).map(row => Object.assign({}, row,
-    { data: window.progressMath.withMarkingTicks(
+    { raw: row.data,
+      data: window.progressMath.withMarkingTicks(
         window.progressMath.withTeacherEdits(row.data, row.feedback), row.feedback) }));
 }
 /* What has been marked so far. Pulled out of boot so Refresh can ask for it
@@ -393,6 +408,9 @@ async function loadMarks(){
     const r = await fetch(API + "/api/teacher/results?lesson=" + encodeURIComponent(lessonId) +
                           "&group=" + encodeURIComponent(cls), { headers: H(), cache:"no-store" });
     const d = await r.json();
+    /* Kept whole for the markbook, which also wants the time taken and any
+       mark a teacher changed by hand. */
+    resultRows = d.rows || [];
     (d.rows || []).forEach(row => {
       /* By username: two students with the same name took each other's
          mark. The name is only for a server too old to send the username. */
@@ -445,7 +463,7 @@ async function refreshWork(){
        added to the class since would otherwise shift everyone along. */
     const back = roster.findIndex(x => x.username === who);
     paintPicker();
-    if (!PRACTICE) paintProgress();
+    if (!PRACTICE) paintSecondTab();
     showStudent(back < 0 ? 0 : back);
     const now = new Date();
     $("workFresh").textContent = "Up to date as of " +
@@ -461,21 +479,66 @@ on("refreshWork", "click", refreshWork);
    remembered then, and the markbook or the work comes up once there is
    something to put in it: a teacher who knows they want the markbook should
    not have to wait for the work to arrive before they can say so. */
-let wantedTab = qs.get("tab") === "progress" ? "progress" : "work";
+/* An assessment's Markbook button in the console asks for "markbook";
+   either word opens whichever of the two this lesson has. */
+let wantedTab = (qs.get("tab") === "progress" || qs.get("tab") === "markbook") ? "progress" : "work";
 function tab(which){
   const progress = which === "progress";
   wantedTab = progress ? "progress" : "work";
   $("tabProgress").classList.toggle("on", progress);
   $("tabWork").classList.toggle("on", !progress);
   if (!$("loadPane").hidden) return;      // nothing to show yet
-  $("progressPane").hidden = !progress;
+  const mb = markbookMode();
+  $("progressPane").hidden = !progress || mb;
+  $("markbookPane").hidden = !progress || !mb;
   $("workPane").hidden = progress;
-  if (progress) syncProgressHeaderOffset();
+  /* Drawn again on the way in, because marking on the other tab changes
+     what it says: a mark saved there is a mark here. */
+  if (progress && mb) paintMarkbookPane();
+  else if (progress) syncProgressHeaderOffset();
   if (!progress && !framedYet) showStudent(idx);
 }
 on("tabProgress", "click", () => tab("progress"));
 on("tabWork", "click", () => tab("work"));
 tab(wantedTab);
+
+/* ---------------- the markbook ----------------
+   An assessment, standard or practical, has the markbook where a lesson has
+   Progress. It moved here from a pop-up in the console, so the marks and
+   the work behind them are one tab apart. markbook.js draws it; this page
+   only hands over what it has already fetched. */
+let resultRows = [];      // /api/teacher/results as it came, for the markbook
+function markbookMode(){
+  return !PRACTICE && !!(lessonJson && lessonJson.assessment);
+}
+function paintSecondTab(){
+  if (markbookMode()) paintMarkbookPane(); else paintProgress();
+}
+function paintMarkbookPane(){
+  if (!window.markbook) return;
+  /* A mark saved on this page since it opened is in marks, not in the rows
+     the server sent, so it is laid over them: the markbook says what Mark
+     work just saved without waiting for Refresh. */
+  const results = roster.map(st => {
+    const row = resultRows.find(x => x.username ? x.username === st.username : x.display_name === st.display_name);
+    const m = marks[st.username];
+    if (!row && !m) return null;
+    const out = Object.assign({ username: st.username, display_name: st.display_name }, row || {});
+    if (m){
+      out.score = m.score; out.out_of = m.outOf; out.grade = m.grade || "";
+      if (m.strength !== undefined) out.strength = m.strength;
+      if (m.target !== undefined) out.target = m.target;
+    }
+    return out;
+  }).filter(Boolean);
+  window.markbook.build({ lesson: lessonJson, roster: roster, work: rows, results: results,
+                          title: (lessonJson && lessonJson.title) || lessonId, group: cls,
+                          say: (t, text) => openModal(box => {
+                            box.appendChild(el("h2","", t));
+                            box.appendChild(el("p","modal-text", text));
+                          }) });
+  window.markbook.paint($("mbHolder"));
+}
 
 /* ---------------- the progress markbook ----------------
    A student's saved work already holds everything a quantifiable task needs

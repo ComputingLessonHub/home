@@ -11,6 +11,7 @@
 <script src="lessoncompat.js"></script>
 <script src="shortmatch.js"></script>
 <script>window.richTextBarOnFocus = true;   /* see richtext.js */</script>
+<script src="voice.js"></script>
 <!-- for the wording a practical uses for a student who was not there, kept
      in one place with the marking screens that use it -->
 <script src="progressmath.js"></script>
@@ -1001,6 +1002,10 @@ function compile(){
      response tasks are still saved with it, so turning it back on finds
      them where they were. */
   if (starOff()) out.star = false;
+  /* Your say: only written when something is asked, and only on a standard
+     assessment, which is the one place the lesson page draws it. */
+  if (lesson.assessment && !lesson.practical && Array.isArray(lesson.voice) && lesson.voice.length)
+    out.voice = lesson.voice.slice();
   /* For a student with nothing saved in a practical. Only written when
      the teacher wrote one; otherwise the site's own wording stands. */
   if (lesson.practical && String(lesson.absentStrength || "").trim()) out.absentStrength = lesson.absentStrength.trim();
@@ -4120,6 +4125,7 @@ on("optionsBtn", "click", () => {
          "Off: they get their mark and nothing more, and the same extension tasks for everyone at "
          + "the bottom of their summary. The tabs above change to Questions and Extension tasks."]));
       w5.appendChild(row5); box.appendChild(w5);
+      box.appendChild(voiceField());
     }
 
     box.appendChild(versionField());
@@ -4170,6 +4176,58 @@ async function loadTeacherCodes(){
 function lastTeacher(){
   try{ return localStorage.getItem("hub_me") || ""; }catch(e){ return ""; }
 }
+/* Your say: the short questions about the half term at the bottom of a
+   standard assessment. Off until it is turned on, because a class asked
+   the same five things at the end of every test soon stops answering
+   honestly. Turned on it asks all of them, and any can be left out. Only
+   the ids are kept, in lesson.voice: the questions themselves live in
+   voice.js, so improving the wording there reaches every lesson. */
+function voiceField(){
+  const w = el("div","bfield");
+  w.appendChild(el("label","","Student voice"));
+  const all = (window.studentVoice && window.studentVoice.QUESTIONS) || [];
+  const row = el("div","brow");
+  const tog = el("button","btn-ghost bmini2","");
+  const list = el("div","voice-picks");
+  const on = () => Array.isArray(lesson.voice) && lesson.voice.length > 0;
+  const changed = () => { paint(); saveDraft(); schedulePreview(); };
+  const paint = () => {
+    tog.textContent = "Your say: " + (on() ? "on" : "off");
+    tog.classList.toggle("right", on());
+    list.hidden = !on();
+    list.querySelectorAll("input").forEach(box => { box.checked = on() && lesson.voice.indexOf(box.value) >= 0; });
+  };
+  tog.addEventListener("click", () => {
+    lesson.voice = on() ? [] : all.map(q => q.id);
+    changed();
+  });
+  row.appendChild(tog);
+  row.appendChild(helpDot(
+    ["On: after the summary of their marks, students are asked a few quick questions about how "
+     + "the half term went. Every one is optional, and an answer is saved the moment it is picked.",
+     "Their answers are in the Student voice tab of the markbook."]));
+  w.appendChild(row);
+  all.forEach(q => {
+    const line = el("label","voice-pick");
+    const box = el("input");
+    box.type = "checkbox";
+    box.value = q.id;
+    box.addEventListener("change", () => {
+      /* Kept in voice.js's order whatever order they were ticked in. */
+      const keep = new Set(lesson.voice || []);
+      if (box.checked) keep.add(q.id); else keep.delete(q.id);
+      lesson.voice = all.map(x => x.id).filter(id => keep.has(id));
+      changed();
+    });
+    line.appendChild(box);
+    line.appendChild(el("span","", q.ask));
+    list.appendChild(line);
+  });
+  w.appendChild(list);
+  paint();
+  return w;
+}
+
 function versionField(){
   const w = el("div","bfield");
   w.appendChild(el("label","","Versions"));
@@ -7505,6 +7563,7 @@ function fromCompiled(data, meta){
                 unsavedComment: data.unsavedComment || "",
                 linger: data.linger !== false,
                 star: data.star !== false,
+                voice: Array.isArray(data.voice) ? data.voice.slice() : [],
                 versionOf: data.versionOf || "", versionName: data.versionName || "",
                 versionNote: data.versionNote || "", versionCode: data.versionCode || "",
                 /* A practice one saved with a total chosen underneath was

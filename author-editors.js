@@ -1474,14 +1474,13 @@ EDITORS.blanks = function(b, k){
     w.appendChild(el("label","", "Sentence with gaps"));
     const raw = String(b.text || "");
     const shown = b.rich
-      ? raw.replace(/[[(.*?)]]/g, (_, g) => "[[" + esc(g) + "]]")
-      : esc(raw).replace(/?
-/g, "<br>");
+      ? raw.replace(/\[\[(.*?)\]\]/g, (_, g) => "[[" + esc(g) + "]]")
+      : esc(raw).replace(/\r?\n/g, "<br>");
     const ed = window.richText(shown, (html) => {
       const box = document.createElement("div");
-      b.text = String(html || "").replace(/[[([sS]*?)]]/g, (_, g) => {
-        box.innerHTML = g.replace(/<brs*/?>/gi, " ");
-        return "[[" + box.textContent.replace(/s+/g, " ").trim() + "]]";
+      b.text = String(html || "").replace(/\[\[([\s\S]*?)\]\]/g, (_, g) => {
+        box.innerHTML = g.replace(/<br\s*\/?>/gi, " ");
+        return "[[" + box.textContent.replace(/\s+/g, " ").trim() + "]]";
       });
       b.rich = true;
       saveDraft(); schedulePreview();

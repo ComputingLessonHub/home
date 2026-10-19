@@ -1779,19 +1779,6 @@ html[data-bg=dark] .mbtick .yes{color:var(--mint)}
 .mbtabs{width:fit-content; margin:0}
 .mbtools{display:flex; gap:8px; margin-left:auto}
 .mbhint{margin:-8px 0 0; font-size:13px}
-/* The markbook pop-up does not scroll; its table does. The middle of the
-   pop-up is made a column that the table fills, so a long class makes the
-   table scroll inside a pop-up that fits the screen, rather than the pop-up
-   scrolling the table, the figures and the tabs out of sight together. A
-   short class still gets a short pop-up: nothing here sets a height, only
-   lets the table give way when there is not room. Not on a screen too
-   short for the figures and tabs to leave the table any room at all. */
-@media (min-height:560px){
-  .modal.markbook > .modal-scroll{display:flex; flex-direction:column; overflow:hidden}
-  .modal.markbook .mbholder{display:flex; flex-direction:column; flex:1 1 auto; min-height:0}
-  .modal.markbook .mbholder > *{flex:0 0 auto}
-  .modal.markbook .mbholder > .mbscroll{flex:1 1 auto; min-height:120px; max-height:none}
-}
 /* Holds the picked cells for the moment the browser copies them. Off the
    screen rather than display:none, because nothing hidden can be selected. */
 .mbcopybox{position:fixed; left:-9999px; top:0; width:1px; height:1px; opacity:0}
@@ -6742,3 +6729,65 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
 .hotspot-said[data-verdict=yes]{color:var(--mint)}
 .hotspot-said[data-verdict=no]{color:var(--red)}
 .rev-hotspot{max-width:520px; cursor:default}
+
+/* Your say, at the bottom of a standard assessment. A scale reads left to
+   right as one row of equal steps, so its options share the width evenly; a
+   choice is a list of different things and wraps as its words need. Classes
+   of their own, so nothing here reaches a quiz option. */
+.voice-card{display:flex; flex-direction:column; gap:18px}
+.voice-card .sect-head{margin:0}
+.st-card p.voice-sub{margin:-10px 0 0; color:var(--muted); font-size:15.5px}
+.voice-q{display:flex; flex-direction:column; gap:10px}
+.st-card p.voice-ask{margin:0; font-weight:700; font-size:17px}
+.voice-opts{display:flex; flex-wrap:wrap; gap:8px}
+.voice-q[data-kind=scale] .voice-opts{display:grid; grid-template-columns:repeat(5, minmax(0,1fr))}
+.voice-opt{min-height:44px; padding:9px 12px; border:1.5px solid var(--line-2); border-radius:12px;
+  background:var(--panel); color:var(--text); font:inherit; font-size:15.5px; line-height:1.3;
+  cursor:pointer; text-align:center; transition:border-color .12s, background .12s}
+.voice-opt:hover{border-color:var(--amber); background:var(--panel-2)}
+.voice-opt[aria-pressed=true]{border-color:var(--amber); background:var(--panel-2);
+  box-shadow:0 0 0 3px rgba(220,138,62,.15); font-weight:700}
+.st-card p.voice-thanks{margin:0; min-height:1.4em; font-weight:700; color:var(--mint); font-size:15.5px}
+.st-card p.voice-thanks.again{color:var(--red)}
+/* Five steps side by side do not fit a phone, so they stack like a choice. */
+@media (max-width:600px){
+  .voice-q[data-kind=scale] .voice-opts{display:flex; flex-direction:column}
+  .voice-opt{text-align:left}
+}
+
+/* the builder: which Your say questions an assessment asks */
+.voice-picks{display:flex; flex-direction:column; gap:6px; margin-top:10px}
+.voice-picks[hidden]{display:none}
+/* .bfield label makes every label in the pop-up a bold heading on a line of
+   its own; these are choices, so the selector has to be as long as that one */
+.bfield label.voice-pick{display:flex; align-items:flex-start; gap:10px; margin:0; font-size:14.5px;
+  font-weight:400; line-height:1.4; cursor:pointer}
+.bfield label.voice-pick input{width:18px; height:18px; margin:1px 0 0; flex:none; accent-color:var(--amber)}
+
+/* The markbook as a tab of the work page rather than a pop-up. The page
+   is the height of the window, so the table takes whatever the figures and
+   the tabs leave and scrolls inside it, its headings held at the top. Under
+   1000px the page scrolls instead, the way Progress does, so the table is
+   given a height of its own to scroll within. */
+/* The pane scrolls only when there is too much to fit, which the Student
+   voice totals can be on a laptop: clipped, the table under them was simply
+   gone off the bottom of the window. */
+.mbpane{overflow-y:auto}
+.mbpane #mbHolder{display:flex; flex-direction:column; flex:1 1 auto; min-height:0}
+.mbpane #mbHolder > *{flex:0 0 auto}
+.mbpane #mbHolder > .mbscroll{flex:1 1 auto; min-height:280px; max-height:none}
+@media (max-width:1000px){
+  .mbpane #mbHolder > .mbscroll{flex:none; height:72vh; height:72dvh; min-height:360px}
+}
+/* Student voice: how the class answered each question, before who said what */
+.mbvoice{display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; margin:0 0 14px}
+.mbvoice-q{display:flex; flex-direction:column; gap:6px; padding:12px 14px;
+  border:1px solid var(--line); border-radius:12px; background:var(--panel)}
+.mbvoice-q > b{font-size:14px; line-height:1.35; margin-bottom:2px}
+.mbvoice-row{display:grid; grid-template-columns:minmax(0,11em) minmax(0,1fr) 2.2em; align-items:center; gap:8px; font-size:13px}
+/* wrapped rather than cut short: "The lesson on th..." says nothing */
+.mbvoice-opt{color:var(--muted); line-height:1.3}
+.mbvoice-bar{height:10px; border-radius:99px; background:var(--panel-2); overflow:hidden}
+.mbvoice-fill{display:block; height:100%; border-radius:99px; background:var(--amber)}
+.mbvoice-n{text-align:right; font-weight:700}
+.mbvoice-of{font-size:12px; color:var(--dim)}

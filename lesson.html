@@ -11,6 +11,7 @@
 <script src="autograder.js"></script>
 <script src="scratchhub.js"></script>
 <script src="shortmatch.js"></script>
+<script src="voice.js"></script>
 <script src="richtext.js"></script>
 <script src="pyedit.js"></script>
 <script src="teacher.js"></script>
@@ -547,8 +548,15 @@ function snapshot(){
     data[id] = (workFrozen && Object.prototype.hasOwnProperty.call(workFrozen, id))
       ? workFrozen[id] : f.get();
   });
+  /* What they said in Your say. Read from what was restored until they
+     answer something here, because a save goes out on the way in, before
+     the summary is drawn, and leaving it out of that one would wipe their
+     answers. Never held by workFrozen: it is not work being marked. */
+  const voice = voiceAnswers || (restoredData && restoredData.__voice);
+  if (voice && typeof voice === "object" && Object.keys(voice).length) data.__voice = voice;
   return data;
 }
+let voiceAnswers = null;          // question id -> option picked, once they answer here
 
 /* ---------- work a teacher has given feedback on ----------
    Once a Strength or a Target has come back, the work it is about stays as
@@ -9164,6 +9172,11 @@ function renderAssessmentComplete(justFinished, res, st, sent){
   seeBtn.addEventListener("click", () => review2.open());
 
 
+  /* Your say sits above the response tasks rather than under them, where a
+     long list of tasks would leave it unseen. */
+  const voice = voiceCard();
+  if (voice) box.appendChild(voice);
+
   // response tasks for the target topic
   const respHolder = el("div","responses-anchor fadelast");
   box.appendChild(respHolder);
@@ -9186,6 +9199,7 @@ function renderAssessmentComplete(justFinished, res, st, sent){
     stCard.classList.add("in");
     respCard.classList.add("in");
     box.querySelectorAll(".fadein").forEach(n => n.classList.add("in"));
+    if (voice) voice.classList.add("in");
     respHolder.classList.add("in");
   };
   if (!justFinished){ showEverything(); }
@@ -9200,6 +9214,8 @@ function renderAssessmentComplete(justFinished, res, st, sent){
       setTimeout(() => respCard.classList.add("in"), 1250);
       setTimeout(() => box.querySelectorAll(".fadein").forEach(n => n.classList.add("in")), 2050);
       setTimeout(() => respHolder.classList.add("in"), 2750);
+      /* last of all, once there is something to look at above it */
+      if (voice) setTimeout(() => voice.classList.add("in"), 3300);
     }, 950);
   }
 }
@@ -9224,12 +9240,15 @@ function markOnlySummary(o){
   if (teacherTools) o.box.appendChild(markEditor(o.res));
   const review = marksButton(o.res, o.rev);
   o.seeBtn.addEventListener("click", () => review.open());
+  const voice = voiceCard();
+  if (voice) o.box.appendChild(voice);
   const holder = el("div","fadelast");
   o.box.appendChild(holder);
   assessmentExtension(holder);
   const showAll = () => {
     Array.from(o.cards.children).forEach(c => c.classList.add("in"));
     o.box.querySelectorAll(".fadein").forEach(n => n.classList.add("in"));
+    if (voice) voice.classList.add("in");
     holder.classList.add("in");
   };
   /* The mark lands first, then the rest, as with STAR feedback on. */
@@ -9274,6 +9293,72 @@ function assessmentExtension(holder){
     if (linkPossible()) wrap.appendChild(pdfButton(status, false));
   }
   holder.appendChild(wrap);
+}
+
+/* ---------- Your say ----------
+   A few questions about how the half term went, at the bottom of a standard
+   assessment whose teacher turned them on (voice.js has the list). Every one
+   is optional, nothing waits on them, and each answer is saved the moment it
+   is picked: a child who answers one and closes the tab has still said it.
+   Picking a different option changes the answer, so a slip is not final.
+
+   Not drawn where it would mean nothing: offline there is no markbook for an
+   answer to reach, locked for marking nothing can be saved, and in the
+   marking screen the answers are the student's, read in the markbook. The
+   builder's preview draws it so a teacher can see it, and saves nothing. */
+function voiceCard(){
+  const asked = window.studentVoice ? window.studentVoice.asked(lesson) : [];
+  if (!asked.length || OFFLINE) return null;
+  if (markingLocked && !spectate) return null;
+  if (teacherTools || viewParam !== null || pdfParam !== null) return null;
+  const card = el("div","st-card voice-card fadelast");
+  card.appendChild(el("h2","sect-head","Your say"));
+  card.appendChild(el("p","voice-sub",
+    "Answer as many as you like. Your answer saves as soon as you pick it."));
+  const had = (restoredData && restoredData.__voice) || {};
+  asked.forEach(q => {
+    const box = el("div","voice-q");
+    box.dataset.kind = q.kind;
+    const ask = el("p","voice-ask", q.ask);
+    ask.id = "voice_" + q.id;
+    box.appendChild(ask);
+    const opts = el("div","voice-opts");
+    opts.setAttribute("role","group");
+    opts.setAttribute("aria-labelledby", ask.id);
+    const thanks = el("p","voice-thanks","");
+    thanks.setAttribute("aria-live","polite");
+    const now = window.studentVoice.answerOf({ __voice: voiceAnswers || had }, q);
+    const buttons = q.options.map((text, i) => {
+      const b = el("button","voice-opt", text);
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(now === i));
+      b.addEventListener("click", () => pickVoice(q, i, buttons, thanks));
+      opts.appendChild(b);
+      return b;
+    });
+    if (now !== null) thanks.textContent = "Thanks!";
+    box.appendChild(opts);
+    box.appendChild(thanks);
+    card.appendChild(box);
+  });
+  return card;
+}
+async function pickVoice(q, i, buttons, thanks){
+  voiceAnswers = Object.assign({}, (restoredData && restoredData.__voice) || {}, voiceAnswers || {});
+  voiceAnswers[q.id] = i;
+  buttons.forEach((b, k) => b.setAttribute("aria-pressed", String(k === i)));
+  /* Thanked straight away: the answer is already kept in this browser by
+     the save below, and the server copy follows it. Only a refusal changes
+     what the line says. */
+  thanks.textContent = "Thanks!";
+  thanks.classList.remove("again");
+  if (spectate) return;              // the builder's preview: nothing is saved
+  save();
+  const st = await submitWork();
+  if (st === "failed" && voiceAnswers[q.id] === i){
+    thanks.textContent = "That did not save. Pick your answer again to have another go.";
+    thanks.classList.add("again");
+  }
 }
 
 /* A table in the review, drawn as the table it was, with each box showing
