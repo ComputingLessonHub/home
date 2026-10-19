@@ -1941,9 +1941,8 @@ function goToQuestion(it, flash){
     setTimeout(() => it.item.classList.remove("justopened"), 1800);
   }
 }
-/* The questions page moves a question at a time: one turn of the wheel, or
-   one push on a trackpad, slides the next card up to where the last one
-   was, rather than leaving half of two questions on screen. The slide is
+/* The questions page moves a question at a time on a mouse wheel: one turn
+   of the wheel slides the next card up to where the last one was, rather than leaving half of two questions on screen. The slide is
    done here and not by scrollTo's "smooth", which a browser may skip when
    prefers-reduced-motion is on, and every machine in school reports that
    (Windows Animation effects is off across the estate). It is short, so it
@@ -2028,6 +2027,26 @@ function wheelTarget(dir){
   const prev = tops[cur - 1];
   return at - prev <= view ? prev : Math.max(prev, at - pageStep);
 }
+/* Whether a wheel step came from the notched wheel of a mouse rather than a
+   trackpad. Only a wheel sends lines or pages (Firefox does for a mouse).
+   Chrome and Edge send pixels for both, but still say how far the wheel
+   turned in the old units, where a notch is exactly 120; a trackpad's steps
+   are small and uneven. A free-spinning wheel, which has no notches, is
+   taken as a trackpad and scrolls smoothly, which suits it. */
+function fromWheelNotch(e){
+  if (e.deltaMode !== 0) return true;
+  const old = e.wheelDeltaY;
+  if (typeof old === "number" && old !== 0) return old % 120 === 0;
+  return Math.abs(e.deltaY) >= 50;
+}
+/* Stops a slide where it has got to, so a trackpad picks the page up from
+   there rather than having it snatched away to the slide's end. */
+function stopGlide(){
+  if (!glide) return;
+  cancelAnimationFrame(glide.frame); clearTimeout(glide.timer);
+  glide = null;
+  $("stage").style.scrollSnapType = "";
+}
 function questionWheel(e){
   const A = assessPages;
   if (!A || !A.onQuestions || e.ctrlKey || e.defaultPrevented) return;
@@ -2042,17 +2061,27 @@ function questionWheel(e){
       if (dir > 0 ? n.scrollTop + n.clientHeight < n.scrollHeight - 1 : n.scrollTop > 0) return;
     }
   }
-  e.preventDefault();
-  /* A trackpad sends a long run of small steps for one push, and keeps
-     sending them as it coasts to a stop. One run moves one question; the run
-     is over once the steps stop for a moment.
-     A run is a run whichever way its steps point. Starting a new one on every
-     change of direction meant the tail of one push, still coasting, and the
-     start of the next pulled the page both ways in turn.
-     It moves once enough of it has added up, so a finger resting on a
-     trackpad, or a nudge meant to read a line, does not throw a whole
-     question past. One notch of a mouse wheel is more than enough on its own. */
   const now = Date.now();
+  /* A trackpad scrolls the page the ordinary way. Moving it a question per
+     push did not work: a push keeps sending steps as it coasts to a stop, so
+     the next push arrived inside the same run and was ignored, and a small
+     drag meant to read a line threw a whole question past. Once one step
+     looks like a trackpad's, the steps close behind it are taken as the
+     same, so a stray one that happens to look like a notch does not jolt
+     the page in the middle of a swipe. */
+  if (!fromWheelNotch(e)) A.padUntil = now + 400;
+  if (now < (A.padUntil || 0)){
+    stopGlide();
+    A.wheelSum = 0; A.wheelMoved = false;
+    return;
+  }
+  e.preventDefault();
+  /* A fast turn of the wheel sends its notches close together. One run
+     moves one question; the run is over once the notches stop for a moment.
+     A run is a run whichever way its steps point, so turning the wheel back
+     and forth quickly does not pull the page both ways in turn.
+     It moves once enough of it has added up. One notch of a mouse wheel is
+     more than enough on its own. */
   if (now - A.wheelLast >= 140){ A.wheelSum = 0; A.wheelMoved = false; }
   A.wheelLast = now;
   if (A.wheelMoved) return;
