@@ -6734,13 +6734,13 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
 .hotspot-said[data-verdict=no]{color:var(--red)}
 .rev-hotspot{max-width:520px; cursor:default}
 
-/* Your say, at the bottom of a standard assessment. Made to look like
+/* Student Voice, at the bottom of a standard assessment. Made to look like
    nothing else on the summary: a soft tinted panel with a speech bubble,
    and answers that are pictures with a word under them rather than a list
    of buttons, so it reads as being asked something, not as one more
-   question in the test. A scale is five faces side by side, worst to best;
-   a choice is a tile each. Picking swaps the whole panel for a thank you,
-   in the mint every "done" on the site is. */
+   question in the test. A scale is faces side by side, worst to best;
+   a choice is a tile each. Four faces, not five: no middle to sit on. Picking swaps the whole panel for a thank you,
+   in the mint every "done" on the site is, with its tick. */
 .voice-card{margin-top:28px; padding:22px 24px 24px; border-radius:18px;
   background:color-mix(in srgb, var(--amber) 7%, var(--panel));
   border:1.5px solid color-mix(in srgb, var(--amber) 28%, var(--line));
@@ -6749,14 +6749,18 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
 .voice-badge{flex:none; width:46px; height:46px; border-radius:50%; display:grid; place-items:center;
   font-size:24px; line-height:1; background:var(--panel);
   border:1.5px solid color-mix(in srgb, var(--amber) 28%, var(--line))}
-.voice-headwords{min-width:0}
+.voice-headwords{min-width:0; flex:1 1 auto}
+/* Skip, in the top right corner, where leaving is always found */
+.voice-skip{flex:none; align-self:flex-start}
+.voice-tick{color:var(--mint); font-weight:800; font-size:22px}
 .voice-card p{margin:0}
 .voice-eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.1em; text-transform:uppercase;
   color:var(--amber-dark); font-weight:700}
 .voice-card p.voice-note{margin-top:2px; font-size:14.5px; color:var(--muted); line-height:1.45}
 .voice-ask{font-family:var(--display); font-size:21px; line-height:1.35; color:var(--text)}
 .voice-opts{display:grid; gap:10px}
-.voice-opts[data-kind=scale]{grid-template-columns:repeat(5, minmax(0,1fr))}
+/* one column per option, however many the scale has: --opts is set on it */
+.voice-opts[data-kind=scale]{grid-template-columns:repeat(var(--opts, 4), minmax(0,1fr))}
 .voice-opts[data-kind=choice]{grid-template-columns:repeat(auto-fit, minmax(150px,1fr))}
 .voice-opt{display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:8px;
   min-height:44px; padding:14px 8px 12px; border-radius:16px; border:1.5px solid transparent;
@@ -6777,7 +6781,7 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
    turned off, as it is on every school machine, it simply appears. */
 .voice-thanks{animation:voice-in .35s ease}
 @keyframes voice-in{from{opacity:0; transform:scale(.97)} to{opacity:1; transform:none}}
-/* On a phone the five faces still sit in one row, smaller, because a
+/* On a phone the faces still sit in one row, smaller, because a
    scale read top to bottom stops looking like a scale. The tiles of a
    choice become a list, picture beside the words. */
 @media (max-width:600px){
@@ -6792,7 +6796,7 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
   .voice-opts[data-kind=choice] .voice-word{text-align:left}
 }
 
-/* the builder: which Your say questions an assessment asks */
+/* the builder: which Student Voice questions an assessment asks */
 .voice-picks{display:flex; flex-direction:column; gap:6px; margin-top:10px}
 .voice-picks[hidden]{display:none}
 /* .bfield label makes every label in the pop-up a bold heading on a line of
@@ -6816,7 +6820,7 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
 @media (max-width:1000px){
   .mbpane #mbHolder > .mbscroll{flex:none; height:72vh; height:72dvh; min-height:360px}
 }
-/* Student voice: a filter per question along the top, then how it was
+/* Student Voice: a filter per question along the top, then how it was
    answered, then who said what */
 .mbvoice-filters{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px}
 .mbvoice-pill{display:inline-flex; align-items:center; gap:8px; padding:6px 8px 6px 14px; border-radius:999px;
@@ -6847,6 +6851,8 @@ button.mbvoice-row.on{border-color:var(--amber); background:color-mix(in srgb, v
 button.mbvoice-row.on .mbvoice-opt{color:var(--text); font-weight:700}
 .mbvoice-bar{height:10px; border-radius:99px; background:var(--panel-2); overflow:hidden}
 .mbvoice-fill{display:block; height:100%; border-radius:99px; background:var(--amber)}
+.mbvoice-bar.empty{background:transparent}
+.mbvoice-row.skip .mbvoice-opt{font-style:italic}
 .mbvoice-n{text-align:right; font-weight:700}
 .mbvoice-of{font-size:12px; color:var(--dim)}
 .mbvoice-showing{margin:-4px 0 12px; font-size:14px}

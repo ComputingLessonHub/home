@@ -548,7 +548,7 @@ function snapshot(){
     data[id] = (workFrozen && Object.prototype.hasOwnProperty.call(workFrozen, id))
       ? workFrozen[id] : f.get();
   });
-  /* What they said in Your say. Read from what was restored until they
+  /* What they said in Student Voice. Read from what was restored until they
      answer something here, because a save goes out on the way in, before
      the summary is drawn, and leaving it out of that one would wipe their
      answers. Never held by workFrozen: it is not work being marked. */
@@ -9237,7 +9237,7 @@ function renderAssessmentComplete(justFinished, res, st, sent){
   seeBtn.addEventListener("click", () => review2.open());
 
 
-  /* Your say sits above the response tasks rather than under them, where a
+  /* Student Voice sits above the response tasks rather than under them, where a
      long list of tasks would leave it unseen. */
   const voice = voiceCard();
   if (voice) box.appendChild(voice);
@@ -9360,7 +9360,7 @@ function assessmentExtension(holder){
   holder.appendChild(wrap);
 }
 
-/* ---------- Your say ----------
+/* ---------- Student Voice ----------
    One question about how the half term went, at the bottom of a standard
    assessment whose teacher turned it on. Each student gets one of the
    questions the lesson asks, picked at random the first time this is drawn
@@ -9371,6 +9371,9 @@ function assessmentExtension(holder){
    it is picked. Picking hides the question there and then and says thank
    you: an answer that stays on screen, highlighted, reads like a test
    answer waiting to be marked, and invites changing it to the "right" one.
+   Skip, in the corner, is there for anybody who would rather not say: it
+   takes the question away for good and the markbook shows it as skipped,
+   which is an answer of its own and not the same as never reaching it.
 
    Not drawn where it would mean nothing: offline there is no markbook for an
    answer to reach, locked for marking nothing can be saved, and in the
@@ -9383,6 +9386,7 @@ function voiceCard(){
   if (markingLocked && !spectate) return null;
   if (teacherTools || viewParam !== null || pdfParam !== null) return null;
   const box = voiceAnswers || (restoredData && restoredData.__voice) || {};
+  if (sv.skippedOf({ __voice: box })) return null;
   let q = sv.givenOf({ __voice: box });
   if (!q){
     q = asked[Math.floor(Math.random() * asked.length)];
@@ -9402,16 +9406,21 @@ function voiceAsk(card, q, trouble){
   const head = el("div","voice-head");
   head.appendChild(el("span","voice-badge","\u{1F4AC}")).setAttribute("aria-hidden","true");
   const words = el("div","voice-headwords");
-  words.appendChild(el("p","voice-eyebrow","Your say"));
-  words.appendChild(el("p","voice-note","One quick question. There is no right or wrong answer, and you can skip it."));
+  words.appendChild(el("p","voice-eyebrow","Student Voice"));
+  words.appendChild(el("p","voice-note","One quick question. There is no right or wrong answer."));
   head.appendChild(words);
+  const skip = el("button","btn-ghost bmini2 voice-skip","Skip");
+  skip.type = "button";
+  skip.title = "Skip this question";
+  skip.addEventListener("click", () => skipVoice(card, q));
+  head.appendChild(skip);
   card.appendChild(head);
   const ask = el("p","voice-ask", q.ask);
   ask.id = "voiceAsk";
   card.appendChild(ask);
   const opts = el("div","voice-opts");
   opts.dataset.kind = q.kind;
-  opts.dataset.count = String(q.options.length);
+  opts.style.setProperty("--opts", String(q.options.length));
   opts.setAttribute("role","group");
   opts.setAttribute("aria-labelledby", ask.id);
   q.options.forEach((text, i) => {
@@ -9426,12 +9435,14 @@ function voiceAsk(card, q, trouble){
   card.appendChild(opts);
   if (trouble) card.appendChild(el("p","voice-trouble", trouble)).setAttribute("role","alert");
 }
+/* A tick in a circle, the site's own sign for done, rather than a picture
+   with feelings in it. */
 function voiceThanks(card){
   card.innerHTML = "";
   card.classList.add("voice-done");
   const done = el("div","voice-thanks");
   done.setAttribute("role","status");
-  done.appendChild(el("span","voice-badge","\u{1F49B}")).setAttribute("aria-hidden","true");
+  done.appendChild(el("span","voice-badge voice-tick","✓")).setAttribute("aria-hidden","true");
   const words = el("div","voice-headwords");
   words.appendChild(el("p","voice-thanks-head","Thank you!"));
   words.appendChild(el("p","voice-note","Your teacher reads what the class says, and it helps them plan your lessons."));
@@ -9455,6 +9466,19 @@ async function pickVoice(card, q, i){
     save();
     voiceAsk(card, q, "That did not save. Pick your answer again to have another go.");
   }
+}
+/* Gone at once, with nothing to dismiss. A Skip that did not save is not
+   worth bringing the question back for: at worst it is asked again next
+   time the page is opened. */
+function skipVoice(card, q){
+  const box = Object.assign({}, (restoredData && restoredData.__voice) || {}, voiceAnswers || {});
+  box.__asked = q.id;
+  box.__skipped = true;
+  voiceAnswers = box;
+  card.remove();
+  if (spectate) return;
+  save();
+  submitWork();
 }
 
 /* A table in the review, drawn as the table it was, with each box showing

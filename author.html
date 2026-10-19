@@ -1002,7 +1002,7 @@ function compile(){
      response tasks are still saved with it, so turning it back on finds
      them where they were. */
   if (starOff()) out.star = false;
-  /* Your say: only written when something is asked, and only on a standard
+  /* Student Voice: only written when something is asked, and only on a standard
      assessment, which is the one place the lesson page draws it. */
   if (lesson.assessment && !lesson.practical && Array.isArray(lesson.voice) && lesson.voice.length)
     out.voice = lesson.voice.slice();
@@ -4176,7 +4176,7 @@ async function loadTeacherCodes(){
 function lastTeacher(){
   try{ return localStorage.getItem("hub_me") || ""; }catch(e){ return ""; }
 }
-/* Your say: the short question about the half term at the bottom of a
+/* Student Voice: the short question about the half term at the bottom of a
    standard assessment, one per student, drawn at random from the ones
    ticked here. Off until it is turned on, because a class asked at the end
    of every test soon stops answering honestly. Turned on, any of the
@@ -4185,7 +4185,7 @@ function lastTeacher(){
    voice.js, so improving the wording there reaches every lesson. */
 function voiceField(){
   const w = el("div","bfield");
-  w.appendChild(el("label","","Student voice"));
+  w.appendChild(el("label","","Student Voice"));
   const all = (window.studentVoice && window.studentVoice.QUESTIONS) || [];
   const row = el("div","brow");
   const tog = el("button","btn-ghost bmini2","");
@@ -4193,7 +4193,7 @@ function voiceField(){
   const on = () => Array.isArray(lesson.voice) && lesson.voice.length > 0;
   const changed = () => { paint(); saveDraft(); schedulePreview(); };
   const paint = () => {
-    tog.textContent = "Your say: " + (on() ? "on" : "off");
+    tog.textContent = "Student Voice: " + (on() ? "on" : "off");
     tog.classList.toggle("right", on());
     list.hidden = !on();
     list.querySelectorAll("input").forEach(box => { box.checked = on() && lesson.voice.indexOf(box.value) >= 0; });
@@ -4205,9 +4205,9 @@ function voiceField(){
   row.appendChild(tog);
   row.appendChild(helpDot(
     ["On: under the summary of their marks, each student is asked one of the ticked questions "
-     + "about how the half term went, picked at random. It is optional, and their answer is saved "
-     + "the moment they pick it.",
-     "Their answers are in the Student voice tab of the markbook, one question at a time."]));
+     + "about how the half term went, picked at random. It is optional, with a Skip button, and "
+     + "their answer is saved the moment they pick it.",
+     "Their answers are in the Student Voice tab of the markbook, one question at a time."]));
   w.appendChild(row);
   all.forEach(q => {
     const line = el("label","voice-pick");

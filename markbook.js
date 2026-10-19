@@ -1,6 +1,6 @@
 /* The markbook for an assessment, standard or practical: the marks question
    by question, who has done the response tasks, and what the class said in
-   Your say, a tab each.
+   Student Voice, a tab each.
 
    It used to be a pop-up in the console. It lives on the View work / Mark
    work page now, as the tab Progress is for a lesson, so the marks and the
@@ -33,12 +33,12 @@
   let title = "", group = "";
   let say = function(){};
   let markbookRows = [], markbookTasks = [], markbookQs = [], voiceQs = [];
-  /* What the Student voice tab is narrowed to: one question or all of
+  /* What the Student Voice tab is narrowed to: one question or all of
      them, and within a question one answer, picked by pressing its bar. */
   let voiceFilter = { q: "", a: null };
   let mbSort = { key:"username", dir:1 };
   /* Which table is up: the marks, who has done the response tasks, or what
-     the class said in Your say. They used to be stacked, and the second was
+     the class said in Student Voice. They used to be stacked, and the second was
      found by scrolling past the first. */
   let mbView = "marks";
   /* What this markbook holds, settled as it is built. kind is "test" for a
@@ -155,7 +155,7 @@
     });
     return out;
   }
-  /* The Your say questions worth a filter: the ones the lesson asks, and
+  /* The Student Voice questions worth a filter: the ones the lesson asks, and
      any it has stopped asking that somebody was given before it stopped. */
   function voiceQuestions(work){
     const sv = window.studentVoice;
@@ -253,6 +253,7 @@
          what they picked, or null where they were given it and moved on. */
       const voiceQ = window.studentVoice && !practical ? window.studentVoice.givenOf(raw) : null;
       const voiceA = voiceQ ? window.studentVoice.answerOf(raw, voiceQ) : null;
+      const voiceSkip = !!voiceQ && voiceA === null && window.studentVoice.skippedOf(raw);
       return { name: st.display_name, username: st.username, grade: grade,
                score: r ? r.score : null, outOf: r ? r.out_of : null,
                /* nor does one nobody has graded yet, or a practice one, which is
@@ -262,7 +263,7 @@
                strength: awayWords ? awayWords.strength : r ? (r.strength || "") : "",
                target: awayWords ? awayWords.target : r ? (r.target || "") : "",
                level: level, levelAt: levelAt, range: range, ticks: ticks,
-               marks: marks, voiceQ: voiceQ, voiceA: voiceA, data: seen };
+               marks: marks, voiceQ: voiceQ, voiceA: voiceA, voiceSkip: voiceSkip, data: seen };
     });
   }
 
@@ -281,7 +282,7 @@
       /* The question by where it is in the list; the answer by the
          option's place, so a scale sorts low to high. */
       if (k === "vq") return r.voiceQ ? voiceQs.indexOf(r.voiceQ) : -1;
-      if (k === "va") return r.voiceA === null || r.voiceA === undefined ? -1 : r.voiceA;
+      if (k === "va") return r.voiceA !== null && r.voiceA !== undefined ? r.voiceA : r.voiceSkip ? -1 : -2;
       return r[k] === null || r[k] === undefined ? -1 : r[k];
     };
     markbookRows.sort((a, b) => {
@@ -325,7 +326,7 @@
   }
   function mbTicks(r){ return r.ticks ? r.ticks.got + " / " + r.ticks.max : ""; }
 
-  /* ---------- Student voice ----------
+  /* ---------- Student Voice ----------
      Every student is given one of the questions, so the tab is read one
      question at a time: a row of filters along the top, one per question
      with how many answered it, then how that question was answered, a bar
@@ -335,7 +336,7 @@
   function voiceRows(){
     return markbookRows.filter(r => r.voiceQ &&
       (!voiceFilter.q || r.voiceQ.id === voiceFilter.q) &&
-      (voiceFilter.a === null || r.voiceA === voiceFilter.a));
+      (voiceFilter.a === null || (voiceFilter.a === "skip" ? r.voiceSkip : r.voiceA === voiceFilter.a)));
   }
   function voiceAnswered(q){
     return markbookRows.filter(r => r.voiceQ === q && r.voiceA !== null).length;
@@ -378,8 +379,19 @@
     const given = markbookRows.filter(r => r.voiceQ === q);
     given.forEach(r => { if (r.voiceA !== null) counts[r.voiceA]++; });
     const n = counts.reduce((x, y) => x + y, 0);
-    q.options.forEach((text, i) => {
-      const line = el(picked ? "button" : "div", "mbvoice-row" + (picked && voiceFilter.a === i ? " on" : ""));
+    const skips = given.filter(r => r.voiceSkip).length;
+    /* The most at the top: Very well above Not at all, Too fast above Too
+       slow, the way a chart of how something went is read. A choice
+       between different things stays in its own order. */
+    const order = q.options.map((_, i) => i);
+    if (q.ordered) order.reverse();
+    /* Skipped is a row of its own under a picked question, so who skipped
+       can be listed too, but it is not an answer and has no bar. */
+    if (picked && skips) order.push("skip");
+    order.forEach(i => {
+      const isSkip = i === "skip";
+      const text = isSkip ? "Skipped" : q.options[i];
+      const line = el(picked ? "button" : "div", "mbvoice-row" + (picked && voiceFilter.a === i ? " on" : "") + (isSkip ? " skip" : ""));
       if (picked){
         line.type = "button";
         line.setAttribute("aria-pressed", String(voiceFilter.a === i));
@@ -389,20 +401,23 @@
           paint(holder);
         });
       }
-      const icon = (q.icons && q.icons[i]) || "";
+      const icon = (!isSkip && q.icons && q.icons[i]) || "";
       line.appendChild(el("span","mbvoice-opt", (icon ? icon + " " : "") + text));
       const bar = el("span","mbvoice-bar");
-      const fill = el("span","mbvoice-fill");
-      fill.style.width = (n ? Math.round(100 * counts[i] / n) : 0) + "%";
-      bar.appendChild(fill);
+      if (!isSkip){
+        const fill = el("span","mbvoice-fill");
+        fill.style.width = (n ? Math.round(100 * counts[i] / n) : 0) + "%";
+        bar.appendChild(fill);
+      } else bar.classList.add("empty");
       line.appendChild(bar);
-      line.appendChild(el("span","mbvoice-n", String(counts[i])));
+      line.appendChild(el("span","mbvoice-n", String(isSkip ? skips : counts[i])));
       card.appendChild(line);
     });
-    const skipped = given.length - n;
+    const passed = given.length - n - skips;
     card.appendChild(el("span","mbvoice-of",
       (n === 1 ? "1 answer" : n + " answers") +
-      (skipped ? " · " + skipped + " moved on without answering" : "")));
+      (skips ? " · " + skips + " skipped" : "") +
+      (passed ? " · " + passed + " moved on without answering" : "")));
     return card;
   }
   /* The filters, the bars and then the table, which has a Question column
@@ -418,7 +433,8 @@
     }
     if (q && voiceFilter.a !== null){
       const note = el("p","mbvoice-showing");
-      note.appendChild(document.createTextNode("Showing only the students who picked “" + q.options[voiceFilter.a] + "”. "));
+      note.appendChild(document.createTextNode(voiceFilter.a === "skip" ? "Showing only the students who skipped it. "
+        : "Showing only the students who picked “" + q.options[voiceFilter.a] + "”. "));
       const all = el("button","bank-link","Show everyone");
       all.type = "button";
       all.addEventListener("click", () => { voiceFilter.a = null; mbSel = null; paint(holder); });
@@ -438,8 +454,8 @@
         tr.appendChild(td);
       }
       if (r.voiceA === null){
-        const none = el("td","mbvoice-none","No answer");
-        none.dataset.copy = "";
+        const none = el("td","mbvoice-none", r.voiceSkip ? "Skipped" : "No answer");
+        none.dataset.copy = r.voiceSkip ? "Skipped" : "";
         tr.appendChild(none);
       } else tr.appendChild(mbCell(r.voiceQ.options[r.voiceA]));
       table.appendChild(tr);
@@ -475,12 +491,12 @@
 
     /* The tables, a tab each, with what can be done with the table at the
        other end of the same row: never scrolled away, and small, because
-       the table is what the page is for. Student voice only where the
+       the table is what the page is for. Student Voice only where the
        assessment asks for it, or somebody has answered. */
     const bar = el("div","mbbar");
     const tabs = el("div","subtabs mbtabs");
     const views = [["marks","Marks"],["responses","Response tasks"]];
-    if (voiceQs.length) views.push(["voice","Student voice"]);
+    if (voiceQs.length) views.push(["voice","Student Voice"]);
     views.forEach(pair => {
       const b = el("button", mbView === pair[0] ? "on" : "", pair[1]);
       b.type = "button";
@@ -747,12 +763,12 @@
     if (mbShape.kind !== "test") return exportPracticalMarkbook();
     /* The markbook's own columns first, in its order, then what the
        table leaves to the figures above it and to the feedback, then what
-       they said in Your say. */
+       they said in Student Voice. */
     const head = ["Username","Display name","Marks","Out of"];
     markbookQs.forEach(q => head.push(q.label + " " + q.title));
     head.push("Percent","Time taken","Strength","Target");
     markbookTasks.forEach(t => head.push(t.label));
-    if (voiceQs.length) head.push("Your say question","Your say answer");
+    if (voiceQs.length) head.push("Student Voice question","Student Voice answer");
     const rows = [head];
     markbookRows.forEach(r => {
       const row = [r.username || "", r.name,
@@ -761,7 +777,7 @@
       row.push(r.pct === null ? "" : r.pct, r.seconds ? niceTime(r.seconds) : "", r.strength, r.target);
       markbookTasks.forEach(t => row.push(attempted(r.data, t.id) ? "Yes" : "No"));
       if (voiceQs.length) row.push(r.voiceQ ? r.voiceQ.ask : "",
-                                   r.voiceQ && r.voiceA !== null ? r.voiceQ.options[r.voiceA] : "");
+                                   r.voiceQ && r.voiceA !== null ? r.voiceQ.options[r.voiceA] : r.voiceSkip ? "Skipped" : "");
       rows.push(row);
     });
     mbSave(rows);
