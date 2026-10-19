@@ -57,7 +57,10 @@
     <button class="btn-ghost" id="refreshWork" title="Fetch what has been saved since this page was opened">Refresh</button>
     <span class="hint" id="workFresh"></span>
   </div>
-      <div class="workframe"><iframe id="workFrame" title="Their work" allow="fullscreen"></iframe></div>
+      <!-- The second frame is the next student, loaded while this one is
+           being marked, so Save and next has their work ready to show. The
+           two swap ids when it is used (see swapInSpare). -->
+      <div class="workframe"><iframe id="workFrame" title="Their work" allow="fullscreen" data-inspect="hub_inspect"></iframe><iframe id="spareFrame" class="spare" title="The next student's work" allow="fullscreen" data-inspect="hub_inspect_next" tabindex="-1" aria-hidden="true"></iframe></div>
     </div>
     <aside class="workside" id="workSide">
       <!-- whose work it is, on the heading's own line, to leave the room for
@@ -993,12 +996,159 @@ function openStudentPreview(st){
    changed or not, so the timestamp can go and the cache can do its job. */
 let framedYet = false;
 function frameGo(url){
-  const frame = $("workFrame");
   framedYet = true;
+  sendFrame($("workFrame"), url);
+}
+function sendFrame(frame, url){
   try{
     if (frame.contentWindow) return frame.contentWindow.location.replace(url);
   }catch(e){}
   frame.src = url;
+}
+
+/* ---------------- the next student, ready before they are asked for -------
+   The frame is a whole lesson page, started again for every student, and
+   that takes long enough to show its loading dots. Once Save and next stopped
+   waiting for the save, the feedback column moved on at once and the work
+   beside it sat on those dots, which is the wait that was left.
+
+   So the next student is loaded in a second frame, out of sight behind this
+   one, a moment after this one has finished arriving. Save and next, Next or
+   the arrow then swaps the two over, and the work is already there. Anything
+   else, or a next student whose work or page has changed since, loads the
+   ordinary way.
+
+   Each frame reads its student from its own storage key (data-inspect), so
+   loading one never changes what the other is about to read. */
+let spareKey = "";          // what the spare was loaded as, to tell if it still fits
+let spareLesson = null;     // the lesson it was given; Refresh hands out a new one
+let spareScroll = 0;        // how far down it was asked to open
+let spareTimer = 0;
+const spareHeld = [];       // what it said while out of sight, kept for when it is shown
+/* Starting a lesson page holds up this one too, the two sharing a thread, so
+   the spare waits until the work on screen has been drawn and settled. */
+const SPARE_WAIT_MS = 700;
+
+/* The box and address for one student, the same whichever frame shows them. */
+function frameFor(i, step, frame){
+  const st = roster[i];
+  const row = rows.find(r => r.username === st.username);
+  const draft = drafts[st.username] || null;
+  /* Coming back to unsaved marking, the frame is shown it too: the code as
+     it was being put right, and the lines ticked, so the work and the boxes
+     beside it agree. */
+  let frameFeedback = row ? (row.feedback || "") : "";
+  if (draft){
+    let f = {};
+    try{ f = JSON.parse(frameFeedback || "{}") || {}; }catch(e){ f = { comment: frameFeedback }; }
+    f.ticks = draft.markingTicks;
+    frameFeedback = JSON.stringify(f);
+  }
+  /* The lesson page reads this to know whose work to put on the screen, and
+     the lesson itself goes with it. The frame is loaded again for every
+     student, and it used to ask the API for the same lesson every time: one
+     round trip to the server, in front of the work, thirty times for a class
+     of thirty. This page already fetched it when it opened. Refresh is what
+     fetches it again, so a lesson edited next door is one press away. */
+  const box = {
+    /* Offline the frame reads the lesson out of the lessons folder and could
+       not use this copy anyway, and that browser's storage is where a
+       student's own work lives. */
+    lesson: lessonId, idx: 0, json: OFFLINE ? undefined : lessonJson,
+    list: [{ name: st.display_name, username: st.username,
+             data: Object.assign({}, row ? row.data : {}, draft ? draft.pendingEdits : {}),
+             feedback: frameFeedback }]
+  };
+  /* The progress bar in the frame counts the summary as one past the last
+     page, the same as the teacher console does, and posts that number out
+     when it opens. Asking for it again by number would clamp to the last
+     page, so it is asked for by name. */
+  const pages = ((lessonJson && lessonJson.blocks) || []).length;
+  const onSummary = !allPages && step !== undefined && step >= pages;
+  const page = "lesson.html?id=" + encodeURIComponent(lessonId) + "&group=" + encodeURIComponent(cls) +
+    "&view=1&embed=1" + (allPages ? "&all=1" : "") +
+    (onSummary ? "&summary=1" : "") +
+    (step !== undefined && !allPages && !onSummary ? "&step=" + step : "") +
+    /* A screenshot open full screen stays open, now showing this student's,
+       so a class's pictures can be read one after another at full size. The
+       frame is a new page for every student and would otherwise close it. */
+    (lastFull ? "&full=" + encodeURIComponent(lastFull) : "");
+  return {
+    box: box,
+    /* the scroll is left out: the spare is told that on being shown */
+    key: JSON.stringify([page, box.list]),
+    url: page + (frame.dataset.inspect === "hub_inspect_next" ? "&box=next" : "") +
+      /* the same distance down as well as the same page, so the question
+         being read down the class stays where the eye already is */
+      (lastScroll > 0 ? "&scroll=" + lastScroll : "")
+  };
+}
+function handFrame(frame, box){
+  const key = frame.dataset.inspect || "hub_inspect";
+  try{ localStorage.setItem(key, JSON.stringify(box)); }
+  catch(e){
+    /* A long lesson and a page of work together can be more than this
+       browser will keep. The work is the part that cannot be asked for
+       again from inside the frame, so the lesson is what goes. */
+    delete box.json;
+    localStorage.setItem(key, JSON.stringify(box));
+  }
+}
+
+/* Asked for once the frame on screen has finished arriving, and again when
+   the teacher turns to another page, which the spare has to be on as well. */
+function planSpare(wait){
+  clearTimeout(spareTimer);
+  if (OFFLINE || PRACTICE || !$("spareFrame")) return;
+  spareTimer = setTimeout(loadSpare, wait);
+}
+function loadSpare(){
+  const i = stepFrom(idx, 1);
+  if (i < 0) return;
+  const spare = $("spareFrame");
+  const want = frameFor(i, lastStep, spare);
+  if (want.key === spareKey && spareLesson === lessonJson) return;   // ready already
+  handFrame(spare, want.box);
+  spareKey = want.key;
+  spareLesson = lessonJson;
+  spareScroll = lastScroll;
+  spareHeld.length = 0;
+  sendFrame(spare, want.url);
+}
+/* The spare becomes the frame on screen, if it is the student wanted. What
+   it said while out of sight is handed back, to be heard now. */
+function swapInSpare(key){
+  const spare = $("spareFrame"), live = $("workFrame");
+  if (!spare || !spareKey || key !== spareKey || spareLesson !== lessonJson) return null;
+  live.id = "spareFrame"; spare.id = "workFrame";
+  live.classList.add("spare"); spare.classList.remove("spare");
+  live.setAttribute("aria-hidden", "true"); spare.removeAttribute("aria-hidden");
+  live.tabIndex = -1; spare.removeAttribute("tabindex");
+  const title = live.title; live.title = spare.title; spare.title = title;
+  spareKey = "";
+  const held = spareHeld.splice(0);
+  if (lastScroll !== spareScroll){
+    try{ spare.contentWindow.postMessage({ hubWorkScrollTo: lastScroll }, location.origin); }catch(e){}
+  }
+  framedYet = true;
+  return held;
+}
+/* Everything the spare says waits until it is the one on screen: it is
+   somebody else's work, and its Strength and Target, its ticks and its page
+   are about them, not the student whose feedback is in the boxes. This is
+   the first message listener on the page, so it is heard before the rest. */
+window.addEventListener("message", (e) => {
+  const spare = $("spareFrame");
+  if (!spare || !e || !e.source || e.source !== spare.contentWindow) return;
+  e.stopImmediatePropagation();
+  spareHeld.push(e.data);
+});
+function replayHeld(held){
+  const from = $("workFrame").contentWindow;
+  held.forEach(data => {
+    try{ window.dispatchEvent(new MessageEvent("message", { data: data, source: from, origin: location.origin })); }
+    catch(e){}
+  });
 }
 /* Two students sharing a display name are still two different rows in the
    picker, so whichever shares it is given as much of their username as
@@ -1087,6 +1237,10 @@ window.addEventListener("message", (e) => {
   if (e && e.data && typeof e.data.hubWorkFull === "string" &&
       e.source === $("workFrame").contentWindow) lastFull = e.data.hubWorkFull;
   if (e && e.data && typeof e.data.hubWorkScroll === "number") lastScroll = e.data.hubWorkScroll;
+  /* the next student has to open on the page this one is on now */
+  if (e && e.data && e.source === $("workFrame").contentWindow &&
+      (typeof e.data.hubWorkStep === "number" || typeof e.data.hubWorkFull === "string"))
+    planSpare(SPARE_WAIT_MS);
 });
 function showStudent(i, step){
   if (i < 0 || i >= roster.length) return;
@@ -1100,56 +1254,13 @@ function showStudent(i, step){
   const st = roster[i];
   const row = rows.find(r => r.username === st.username);
   const draft = drafts[st.username] || null;
-  /* Coming back to unsaved marking, the frame is shown it too: the code as
-     it was being put right, and the lines ticked, so the work and the boxes
-     beside it agree. */
-  let frameFeedback = row ? (row.feedback || "") : "";
-  if (draft){
-    let f = {};
-    try{ f = JSON.parse(frameFeedback || "{}") || {}; }catch(e){ f = { comment: frameFeedback }; }
-    f.ticks = draft.markingTicks;
-    frameFeedback = JSON.stringify(f);
+  clearTimeout(spareTimer);
+  const want = frameFor(i, step, $("workFrame"));
+  const held = swapInSpare(want.key);
+  if (!held){
+    handFrame($("workFrame"), want.box);
+    frameGo(want.url);
   }
-  /* The lesson page reads this to know whose work to put on the screen, and
-     the lesson itself goes with it. The frame is loaded again for every
-     student, and it used to ask the API for the same lesson every time: one
-     round trip to the server, in front of the work, thirty times for a class
-     of thirty. This page already fetched it when it opened. Refresh is what
-     fetches it again, so a lesson edited next door is one press away. */
-  const box = {
-    /* Offline the frame reads the lesson out of the lessons folder and could
-       not use this copy anyway, and that browser's storage is where a
-       student's own work lives. */
-    lesson: lessonId, idx: 0, json: OFFLINE ? undefined : lessonJson,
-    list: [{ name: st.display_name, username: st.username,
-             data: Object.assign({}, row ? row.data : {}, draft ? draft.pendingEdits : {}),
-             feedback: frameFeedback }]
-  };
-  try{ localStorage.setItem("hub_inspect", JSON.stringify(box)); }
-  catch(e){
-    /* A long lesson and a page of work together can be more than this
-       browser will keep. The work is the part that cannot be asked for
-       again from inside the frame, so the lesson is what goes. */
-    delete box.json;
-    localStorage.setItem("hub_inspect", JSON.stringify(box));
-  }
-  /* The progress bar in the frame counts the summary as one past the last
-     page, the same as the teacher console does, and posts that number out
-     when it opens. Asking for it again by number would clamp to the last
-     page, so it is asked for by name. */
-  const pages = ((lessonJson && lessonJson.blocks) || []).length;
-  const onSummary = !allPages && step !== undefined && step >= pages;
-  frameGo("lesson.html?id=" + encodeURIComponent(lessonId) + "&group=" + encodeURIComponent(cls) +
-    "&view=1&embed=1" + (allPages ? "&all=1" : "") +
-    (onSummary ? "&summary=1" : "") +
-    (step !== undefined && !allPages && !onSummary ? "&step=" + step : "") +
-    /* the same distance down as well as the same page, so the question being
-       read down the class stays where the eye already is */
-    (lastScroll > 0 ? "&scroll=" + lastScroll : "") +
-    /* A screenshot open full screen stays open, now showing this student's,
-       so a class's pictures can be read one after another at full size. The
-       frame is a new page for every student and would otherwise close it. */
-    (lastFull ? "&full=" + encodeURIComponent(lastFull) : ""));
   $("fbWho").textContent = st.display_name + " · " + st.username + (row ? "" : " · nothing saved");
   /* a practical assessment is marked by hand, so the boxes appear */
   paintMarking(st.username);
@@ -1165,6 +1276,14 @@ function showStudent(i, step){
   paintFb(draft ? "idle" : savedFeedback(row) ? "saved" : "idle");
   if (draft) $("fbMsg").textContent = "Not saved yet. This is where you left it.";
   paintBehind();
+  if (held){
+    /* the spare said these as it opened, before it was anyone's on screen */
+    replayHeld(held);
+    /* Arrived already, so no load is coming to ask for the next one. One
+       still arriving asks for it itself when it gets there. */
+    const doc = $("workFrame").contentDocument;
+    if (doc && doc.readyState === "complete") planSpare(SPARE_WAIT_MS);
+  }
 }
 
 /* ---------------- unsaved marking, kept while the page is open ----------
@@ -2323,8 +2442,14 @@ document.addEventListener("keydown", saveNextKey);
 /* Keys pressed inside the frame stay inside it, and clicking the work to
    read it puts the focus there. It is the same site, so it can be listened
    to; the frame is loaded again for every student, hence every load. */
-$("workFrame").addEventListener("load", () => {
-  try{ $("workFrame").contentWindow.addEventListener("keydown", saveNextKey); }catch(e){}
+["workFrame","spareFrame"].forEach(id => {
+  const frame = $(id);
+  if (!frame) return;
+  frame.addEventListener("load", () => {
+    try{ frame.contentWindow.addEventListener("keydown", saveNextKey); }catch(e){}
+    /* the one on screen has arrived, so the next can be readied behind it */
+    if (frame.id === "workFrame" && framedYet) planSpare(SPARE_WAIT_MS);
+  });
 });
 function askMissing(missing, given, andNext){
   openModal(box => {

@@ -109,6 +109,12 @@ const highlightParam = qs.get("highlight");   // scroll to and flash one task, f
 const spectate = previewParam !== null || viewParam !== null || pdfParam !== null || builderParam !== null;
 let inspectName = "";
 let inspectList = null, inspectIdx = 0, keepStep = null, inspectUser = "";
+/* The marking screen loads the next student in a second, hidden frame while
+   the teacher is still on this one, so Save and next has their work ready.
+   Each frame is handed its student under its own key: with one key between
+   them, a frame still starting up could read the box meant for the other
+   and show the wrong child. */
+const INSPECT_KEY = qs.get("box") === "next" ? "hub_inspect_next" : "hub_inspect";
 let teacherTools = false;   // a teacher is looking at this work
 const lessonId = qs.get("id") || "demo";
 const WORK_KEY = "hub_work_" + lessonId;
@@ -910,7 +916,7 @@ function clearStudentWork(){
       if (k && (k.indexOf("hub_work_") === 0 || k.indexOf("hub_rel_") === 0 ||
                 k.indexOf("hub_page_") === 0 || k.indexOf("hub_unlock_") === 0 ||
                 k === "hub_results" || k === "hub_close" || k === "hub_inspect" ||
-                k === "hub_sandbox_inspect")) doomed.push(k);
+                k === "hub_inspect_next" || k === "hub_sandbox_inspect")) doomed.push(k);
     }
     doomed.forEach(k => localStorage.removeItem(k));
   }catch(e){}
@@ -1169,7 +1175,7 @@ function hideWaitModal(){ $("waitModal").hidden = true; }
 function handedLesson(){
   if (OFFLINE || !spectate || viewParam === null) return null;
   try{
-    const box = JSON.parse(localStorage.getItem("hub_inspect") || "null");
+    const box = JSON.parse(localStorage.getItem(INSPECT_KEY) || "null");
     if (box && box.lesson === lessonId && box.json && Array.isArray(box.json.blocks))
       return box.json;
   }catch(e){}
@@ -1327,10 +1333,10 @@ const handedOver = handedLesson();
         const go = (i) => {
           if (i < 0 || i >= inspectList.length) return;
           try{
-            const box = JSON.parse(localStorage.getItem("hub_inspect") || "{}");
+            const box = JSON.parse(localStorage.getItem(INSPECT_KEY) || "{}");
             box.idx = i;
             box.step = step;                 // stay on the same page for the next student
-            localStorage.setItem("hub_inspect", JSON.stringify(box));
+            localStorage.setItem(INSPECT_KEY, JSON.stringify(box));
           }catch(e){}
           location.reload();
         };
@@ -1565,7 +1571,7 @@ async function loadSaved(){
       }
       if (handedIn) linkBroken = true;
       try{
-        let box = JSON.parse(localStorage.getItem("hub_inspect") || "null");
+        let box = JSON.parse(localStorage.getItem(INSPECT_KEY) || "null");
         if (box && Array.isArray(box.list) && box.list.length){
           inspectList = box.list;
           inspectIdx = Math.min(Math.max(parseInt(box.idx, 10) || 0, 0), box.list.length - 1);
@@ -2050,6 +2056,15 @@ function keepPlaceForParent(){
   const put = () => { if (settling) stage.scrollTop = want; };
   [0, 80, 300, 800].forEach(ms => setTimeout(put, ms));
 }
+/* Loaded ahead of time as the next student, this page was put at whatever
+   distance down the teacher had reached then. Shown later, it is told where
+   they have got to since. */
+window.addEventListener("message", (e) => {
+  if (embedParam === null || !e || e.source !== window.parent || !e.data ||
+      typeof e.data.hubWorkScrollTo !== "number") return;
+  const stage = $("stage");
+  if (stage) stage.scrollTop = e.data.hubWorkScrollTo;
+});
 /* Scrolls to and briefly flashes one task on the page just shown, for the
    Progress tab: it opens a page already knowing which mark it is asking
    about, and this is what points at it. Every block on a page carries its
@@ -9006,8 +9021,12 @@ function sendStrengthAndTarget(){
 
 /* ---- what a teacher can do while looking at a student's work ---- */
 function inspectWho(){
+  /* Whoever this page opened on. The box in storage is written again every
+     time the marking screen moves on, so reading it now could name somebody
+     else. */
+  if (inspectList && inspectList[inspectIdx]) return inspectList[inspectIdx];
   try{
-    const box = JSON.parse(localStorage.getItem("hub_inspect") || "null");
+    const box = JSON.parse(localStorage.getItem(INSPECT_KEY) || "null");
     if (box && Array.isArray(box.list) && box.list.length) return box.list[box.idx || 0];
   }catch(e){}
   return null;

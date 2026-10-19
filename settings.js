@@ -49,7 +49,7 @@
            written by teacher.js. Its cookie can stay: the tag on its own is
            a random number that opens nothing. */
         if (k === "hub_tkey" || k === "hub_keep" || k === "hub_inspect" ||
-            k === "hub_sandbox_inspect" ||
+            k === "hub_inspect_next" || k === "hub_sandbox_inspect" ||
             k === "hub_preview" || k.indexOf("hub_rel_") === 0) strays.push(k);
       }
       strays.forEach(k => localStorage.removeItem(k));
