@@ -1693,14 +1693,17 @@ function rubricOnSummary(){
    screens are only boxes the steps are moved into, and `step` is the
    question in view, so a student who comes back lands where they were.
 
-   A teacher reading the work, printing it or marking it sees it a question
-   at a time as before. The builder's preview and the console's preview are
-   what a student sees, so they get this too. A practical is sat in pages
-   and is left alone. */
+   A teacher reading or marking the work sees it the way the student did,
+   the questions in their cards with the bar beside them: a question at a
+   time was the old look, and it made the marking screen a different test
+   from the one the class sat. Printing it and All on one page are the
+   exceptions, because they lay every step out themselves. The builder's
+   preview and the console's preview get it too. A practical is sat in
+   pages and is left alone. */
 let assessPages = null;
 function assessLayout(){
   return !!(lesson && lesson.assessment && !lesson.practical) &&
-    viewParam === null && pdfParam === null && allParam === null && embedParam === null;
+    pdfParam === null && allParam === null;
 }
 function briefOf(st, plain){
   const was = (plain && st.plainBrief) ? st.plainBrief : st.brief;
@@ -1794,6 +1797,10 @@ function arrangeAssessment(){
     queued = true;
     requestAnimationFrame(() => { queued = false; noteQuestionInView(); sizeQuestionBar(); });
   }, { passive: true });
+  /* Not passive: the page's own scroll is what is being replaced. */
+  $("stage").addEventListener("wheel", questionWheel, { passive: false });
+  assessPages.wheelLast = 0;
+  assessPages.wheelDir = 0;
 }
 /* One question, or one piece of reading, as it sits on its screen. A
    question says which number it is on a line of its own above its words,
@@ -1830,7 +1837,8 @@ function questionAnswered(it){
     /* A list starts shuffled, so it counts once it has been moved. */
     case "order": return Array.isArray(v) && v.join(",") !== orderStart(b).join(",");
     case "blanks": return Array.isArray(v) && v.every(filled);
-    case "short": return filled(v);
+    /* An answer with the "only two words" line under it is not done yet. */
+    case "short": return window.shortAnswer.complete(b, v);
     case "table": return Array.isArray(v) && v.every(filled);
     case "label": return (b.spots || []).every((_, i) => !!(v && v.placed && v.placed[i]));
     case "hotspot": return !!(v && typeof v.x === "number");
@@ -1917,11 +1925,113 @@ function goToQuestion(it, flash){
   assessPages.pinnedUntil = Date.now() + 900;
   step = it.step;
   paintTracker();
-  $("stage").scrollTo({ top: questionTop(it), behavior: "smooth" });
+  glideStage(questionTop(it));
   if (flash){
     it.item.classList.add("justopened");
     setTimeout(() => it.item.classList.remove("justopened"), 1800);
   }
+}
+/* The questions page moves a question at a time: one turn of the wheel, or
+   one push on a trackpad, slides the next card up to where the last one
+   was, rather than leaving half of two questions on screen. The slide is
+   done here and not by scrollTo's "smooth", which a browser may skip when
+   prefers-reduced-motion is on, and every machine in school reports that
+   (Windows Animation effects is off across the estate). It is short, so it
+   reads as moving rather than as waiting. If no frame comes at all, as in a
+   hidden tab, the timer at the end puts it where it was going anyway. */
+const GLIDE_MS = 260;
+let glide = null;
+function glideStage(top){
+  const stage = $("stage");
+  const max = Math.max(0, stage.scrollHeight - stage.clientHeight);
+  const to = Math.min(Math.max(0, Math.round(top)), max);
+  const from = stage.scrollTop;
+  if (glide){ cancelAnimationFrame(glide.frame); clearTimeout(glide.timer); }
+  if (Math.abs(to - from) < 1){ glide = null; stage.style.scrollSnapType = ""; return; }
+  const start = performance.now();
+  const g = glide = { to: to, frame: 0, timer: 0 };
+  /* On a touch screen the stage snaps to the cards by itself (style.css),
+     and a snapping box pulls every step of a glide back to the card it
+     started on, so snapping is off until the glide lands. */
+  stage.style.scrollSnapType = "none";
+  const finish = () => {
+    if (glide !== g) return;
+    cancelAnimationFrame(g.frame); clearTimeout(g.timer);
+    stage.scrollTop = to;
+    stage.style.scrollSnapType = "";
+    glide = null;
+  };
+  const tick = (now) => {
+    if (glide !== g) return;
+    const t = Math.min(1, (now - start) / GLIDE_MS);
+    const ease = 1 - Math.pow(1 - t, 3);
+    stage.scrollTop = from + (to - from) * ease;
+    if (t < 1) g.frame = requestAnimationFrame(tick); else finish();
+  };
+  g.frame = requestAnimationFrame(tick);
+  g.timer = setTimeout(finish, GLIDE_MS + 120);
+}
+/* Where one wheel step on the questions page should go: the top of the next
+   or the last card. A card taller than the screen, one with a long piece of
+   code in it say, is read through first, most of a screen at a time, so
+   nothing in it is jumped over. The text and Finish under the last card are
+   one more step down. */
+function wheelTarget(dir){
+  const A = assessPages;
+  const stage = $("stage");
+  const box = stage.getBoundingClientRect();
+  const at = stage.scrollTop;
+  const view = stage.clientHeight;
+  const pageStep = Math.max(120, Math.round(view * 0.8));
+  /* Every card on the page, a piece of reading between questions as well,
+     or the wheel would carry a student straight past it. */
+  const cards = Array.from(A.screens[A.qAt].el.children).filter(c => c.classList.contains("pg-item"));
+  const tops = cards.map(c => questionTop({ item: c }));
+  /* the card whose top is at or above the top of the screen; a few pixels
+     either way, because the last glide may have been rounded */
+  let cur = -1;
+  tops.forEach((t, i) => { if (t <= at + 4) cur = i; });
+  if (dir > 0){
+    if (cur >= 0){
+      const r = cards[cur].getBoundingClientRect();
+      if (r.bottom > box.bottom + 4) return Math.min(at + pageStep, at + (r.bottom - box.bottom) + 24, tops[cur + 1] !== undefined ? tops[cur + 1] : Infinity);
+    }
+    /* past the gap above the first card too, or the first turn of the
+       wheel from the top of the page moved it 16px */
+    const next = tops.find(t => t > at + 24);
+    return next !== undefined ? next : at + pageStep;
+  }
+  /* Going up inside a tall card reads back through it before leaving it. */
+  if (cur >= 0 && tops[cur] < at - 4) return Math.max(tops[cur], at - pageStep);
+  if (cur <= 0) return 0;
+  /* and into a tall card above from its bottom, not straight to its top */
+  const prev = tops[cur - 1];
+  return at - prev <= view ? prev : Math.max(prev, at - pageStep);
+}
+function questionWheel(e){
+  const A = assessPages;
+  if (!A || !A.onQuestions || e.ctrlKey || e.defaultPrevented) return;
+  if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || !e.deltaY) return;
+  const dir = e.deltaY > 0 ? 1 : -1;
+  const stage = $("stage");
+  /* A box that scrolls itself, a code editor or a long answer, keeps the
+     wheel while it has further to go that way. */
+  for (let n = e.target; n && n !== stage && n.nodeType === 1; n = n.parentNode){
+    const oy = getComputedStyle(n).overflowY;
+    if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight + 1){
+      if (dir > 0 ? n.scrollTop + n.clientHeight < n.scrollHeight - 1 : n.scrollTop > 0) return;
+    }
+  }
+  e.preventDefault();
+  /* A trackpad sends a long run of small steps for one push, and keeps
+     sending them as it coasts to a stop. Only the first one of a run moves a
+     question; the run is over once the steps stop for a moment. */
+  const now = Date.now();
+  const sameRun = now - A.wheelLast < 140 && dir === A.wheelDir;
+  A.wheelLast = now;
+  if (sameRun) return;
+  A.wheelDir = dir;
+  glideStage(wheelTarget(dir));
 }
 function noteQuestionInView(){
   const A = assessPages;
@@ -2312,8 +2422,10 @@ function showStep(i){
   }
   if (assessPages){
     /* Anyone coming back with answers already saved goes straight to the
-       questions rather than through the welcome again. */
-    const resuming = !assessPages.shown && restoredWork && !wasDone;
+       questions rather than through the welcome again, and so does a
+       teacher opening a student's work, who has come to read the answers. */
+    const resuming = !assessPages.shown &&
+      (viewParam !== null ? i === 0 : restoredWork && !wasDone);
     showAssessScreen(resuming ? assessPages.qAt : i > 0 ? screenOfStep(i) : 0, i);
     return;
   }
@@ -2422,6 +2534,10 @@ async function tryContinue(){
       return;
     }
     if (workFrozen){ backToFeedback(); return; }
+    /* A teacher reading the work goes on to the marked summary, as they
+       always did. Asking them whether to hand it in would be asking about
+       somebody else's test. */
+    if (viewParam !== null){ finishLesson(); return; }
     /* Handing in has started already: a second press while the score is on
        its way would hand it in twice. */
     if (finished && !spectate) return;
@@ -8347,12 +8463,46 @@ function rOrder(b){
            brief:{ eyebrow:"Put in order", title:askHtml(b.prompt) || "", text:b.note || "" } };
 }
 
+/* The sentence of a fill in the gaps, with fill(i, answer) drawn in place
+   of each gap. A sentence written in the builder's formatting box is HTML
+   ("rich"), and is cleaned the way every other formatting box is; one from
+   before that is plain text, and its new lines are kept as new lines. Either
+   way the answers inside [[ ]] are plain words, so they are taken out first
+   and a marker left in their place, and the gaps go in where the markers
+   land once the HTML is in the page: a gap can then sit inside bold or a
+   code box without the HTML around it being cut in half. */
+const GAP_MARK = "\uE000";
+function blanksSentence(b, fill){
+  const box = el("div","blanks");
+  const answers = [];
+  const text = String(b.text || "").replace(/\[\[(.*?)\]\]/g, (_, g) => { answers.push(g); return GAP_MARK; });
+  if (b.rich){
+    box.innerHTML = window.cleanRichText ? window.cleanRichText(text) : text;
+    fillImageIds(box);
+  } else {
+    box.classList.add("blanks-plain");
+    box.textContent = text;
+  }
+  const marked = [];
+  const walk = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  while (walk.nextNode()) if (walk.currentNode.nodeValue.indexOf(GAP_MARK) >= 0) marked.push(walk.currentNode);
+  let gap = 0;
+  marked.forEach(node => {
+    const frag = document.createDocumentFragment();
+    node.nodeValue.split(GAP_MARK).forEach((part, k) => {
+      if (k){ frag.appendChild(fill(gap, answers[gap])); gap++; }
+      if (part) frag.appendChild(document.createTextNode(part));
+    });
+    node.parentNode.replaceChild(frag, node);
+  });
+  return box;
+}
+
 /* Fill in the blanks, a dropdown per gap. The choices are every gap's
    answer plus any "distractors" from the lesson file, shuffled the same way
    on every load. */
 function rBlanks(b){
   const s = el("section");
-  const p = el("p","blanks");
   const gaps = [];
   String(b.text || "").replace(/\[\[(.*?)\]\]/g, (_, g) => { gaps.push(g.split("|")[0]); return ""; });
   let pool = [...new Set(gaps.concat(b.distractors || []))];
@@ -8361,19 +8511,14 @@ function rBlanks(b){
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   const selects = [];
-  String(b.text || "").split(/(\[\[.*?\]\])/).forEach(part => {
-    const m = /^\[\[(.*?)\]\]$/.exec(part);
-    if (m){
-      const sel = el("select","blank-select");
-      const ph = el("option","","Choose\u2026"); ph.value = ""; sel.appendChild(ph);
-      pool.forEach(w => { const o = el("option","", w); o.value = w; sel.appendChild(o); });
-      sel.addEventListener("change", markDirty);
-      selects.push(sel); p.appendChild(sel);
-    } else if (part){
-      p.appendChild(el("span","", part.replace(/</g,"&lt;")));
-    }
-  });
-  s.appendChild(p);
+  s.appendChild(blanksSentence(b, () => {
+    const sel = el("select","blank-select");
+    const ph = el("option","","Choose\u2026"); ph.value = ""; sel.appendChild(ph);
+    pool.forEach(w => { const o = tel("option","", w); o.value = w; sel.appendChild(o); });
+    sel.addEventListener("change", markDirty);
+    selects.push(sel);
+    return sel;
+  }));
   fields[b.id] = { get:() => selects.map(x => x.value),
                    set:(v) => { if (!Array.isArray(v)) return;
                      v.forEach((x, i) => {
@@ -8411,31 +8556,20 @@ function rShort(b){
   /* A short answer is a word or two, and a student who writes a sentence
      has usually not seen that. The first accepted answer is the one the
      question is written around, so its length is the limit, and going past
-     it puts a red line under the box. Never over an answer the teacher
-     accepts: a longer form they listed (central processing unit for CPU)
-     is right, and telling a student to cut it down would be wrong. */
-  const mainAnswer = (window.shortAnswer.accepted(b) || [])[0] || "";
-  const wordsIn = (t) => (String(t || "").trim().match(/\S+/g) || []).length;
-  const wordLimit = wordsIn(mainAnswer);
-  /* Where the answer is a number, the thing to say is "a number", not "one
-     word": "sixty" and "it is 60" are both the wrong shape for it. Anything
-     that is not a plain number gets the line, even a word the teacher also
-     accepts, because the question asked for the number; it is still marked
-     right if they leave it. */
-  const isNumber = (t) => /^[-+]?\d+(\.\d+)?$/.test(String(t || "").trim());
-  const wantsNumber = isNumber(mainAnswer);
+     it puts a red line under the box. shortmatch.js decides when, so the
+     same answer that gets the line here is the one that does not count as
+     done in the progress bar and the summary. Where the answer is a number
+     the thing to say is "a number", not "one word". */
+  const shape = window.shortAnswer.tooLong(b, "");
   const tooLong = el("p","short-toolong");
   tooLong.hidden = true;
   tooLong.setAttribute("role","status");
-  tooLong.textContent = wantsNumber
+  tooLong.textContent = shape.number
     ? "Make sure your answer is just a number"
-    : "Make sure your answer is only " + wordLimit + " word" + (wordLimit === 1 ? "" : "s") + " long";
+    : "Make sure your answer is only " + shape.words + " word" + (shape.words === 1 ? "" : "s") + " long";
   s.appendChild(tooLong);
   const paintLength = () => {
-    const over = wantsNumber
-      ? (ans.value.trim() !== "" && !isNumber(ans.value))
-      : wordLimit > 0 && wordsIn(ans.value) > wordLimit &&
-        !window.shortAnswer.mark(b, ans.value).ok;
+    const over = window.shortAnswer.tooLong(b, ans.value).over;
     tooLong.hidden = !over;
     ans.classList.toggle("too-long", over);
   };
@@ -8488,7 +8622,9 @@ function rShort(b){
 
   fields[b.id] = { get:() => ans.value, set:(v) => { ans.value = v || ""; paintLength(); } };
   return { section:s,
-           check:() => ans.value.trim() ? { ok:true } : { ok:false, message:"Write an answer" },
+           check:() => !ans.value.trim() ? { ok:false, message:"Write an answer" }
+                     : window.shortAnswer.tooLong(b, ans.value).over ? { ok:false, message:tooLong.textContent }
+                     : { ok:true },
            brief:{ eyebrow:"Short answer", text:b.note || "",
                    title:askHtml(asked.ask) || (asked.code ? "Look at the code below." : "") } };
 }
@@ -8958,18 +9094,11 @@ function renderAssessmentComplete(justFinished, res, st, sent){
     }
 
     if (q.type === "blanks"){
-      const sent2 = el("p","blanks");
-      let gi = 0;
-      String(b.text || "").split(/(\[\[.*?\]\])/).forEach(part => {
-        if (/^\[\[.*\]\]$/.test(part)){
-          const it = q.review.items[gi++] || { given:"", ok:false, expected:"" };
-          sent2.appendChild(el("span","blank-fill " + (it.ok ? "ok" : "no"),
-            it.ok ? it.given : ((it.given === "(blank)" ? "" : it.given) + " \u2192 " + it.expected)));
-        } else if (part){
-          sent2.appendChild(el("span","", part.replace(/</g,"&lt;")));
-        }
-      });
-      body.appendChild(sent2);
+      body.appendChild(blanksSentence(b, (gi) => {
+        const it = q.review.items[gi] || { given:"", ok:false, expected:"" };
+        return tel("span","blank-fill " + (it.ok ? "ok" : "no"),
+          it.ok ? it.given : ((it.given === "(blank)" ? "" : it.given) + " \u2192 " + it.expected));
+      }));
       body.appendChild(el("span","why", q.pts + " of " + q.max + " gaps correct, one mark per gap."));
     }
 
@@ -9824,7 +9953,7 @@ function lessonTaskAttempted(b, v){
   if (b.type === "quiz") return !!(v && Array.isArray(v.checked) && v.checked.some(Boolean));
   if (b.type === "mc") return v !== null && v !== undefined;
   if (b.type === "blanks") return Array.isArray(v) && v.some(x => x !== null && x !== undefined && x !== "");
-  if (b.type === "short") return typeof v === "string" && v.trim() !== "";
+  if (b.type === "short") return window.shortAnswer.complete(b, v);
   if (b.type === "ide" || b.type === "web") return !!(v && v.ran);
   if (b.type === "scratch") return !!(v && (v.changed || v.runs));
   if (b.type === "table") return Array.isArray(v) && v.some(x => String(x == null ? "" : x).trim() !== "");

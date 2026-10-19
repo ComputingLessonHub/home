@@ -858,6 +858,12 @@ textarea.code{background:var(--code-bg) !important; color:var(--code-fg) !import
   appearance:auto; vertical-align:baseline;
 }
 .blanks{line-height:2.5}
+/* A sentence from before the builder had a formatting box for it is plain
+   text, and the line breaks a teacher typed into it are meant. */
+.blanks-plain{white-space:pre-line}
+/* A rich one can have paragraphs in it; the gap between them is the line
+   height's business, which is already generous for the dropdowns. */
+.blanks > p{margin:0}
 
 /* review: mirror the real question UIs, read-only */
 .rev-opts{display:grid; gap:8px; margin:8px 0 2px}
@@ -4097,9 +4103,13 @@ body > .loadscreen{ animation:none }
    It was set flush against the words either side of it, so "your own print()
    function" ran together. A little room and a background of its own make it
    read as a thing being named rather than part of the sentence. The grey
-   matches what the lesson builder shows while it is being written. */
+   matches what the lesson builder shows while it is being written. A
+   multiple choice option and a put in order item are written in the same
+   formatting box, so their code is set the same way, and so is the review
+   of both after an assessment. */
 .prose code, .q-ask code, .pg-t code, .brief code, .kw-word code, .modal-text code,
-.check-text code, .check-hint code{
+.check-text code, .check-hint code,
+.opt code, .order-item .txt code, .rev-opt code, .rev-order code, .blanks code{
   font-family:var(--mono); font-size:12pt; background:var(--panel-2);
   border:1px solid var(--line); border-radius:var(--rad-xs);
   padding:1px 5px; margin:0 3px;
@@ -4110,6 +4120,9 @@ body > .loadscreen{ animation:none }
 html[data-bg=dark] .prose code, html[data-bg=dark] .q-ask code,
 html[data-bg=dark] .pg-t code, html[data-bg=dark] .brief code,
 html[data-bg=dark] .check-text code, html[data-bg=dark] .check-hint code,
+html[data-bg=dark] .opt code, html[data-bg=dark] .order-item .txt code,
+html[data-bg=dark] .rev-opt code, html[data-bg=dark] .rev-order code,
+html[data-bg=dark] .blanks code,
 html[data-bg=night] .check-hint code{
   background:#2A303B; border-color:#3D434F;
 }
@@ -6632,6 +6645,17 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
   padding:22px 24px 24px; margin:0 0 28px;
 }
 .assess-questions > .pg-item:first-child{margin-top:16px}
+/* One swipe on a touch screen is one question, landing with the card at the
+   top, the same place a turn of the wheel takes it (glideStage in
+   lesson.html does the wheel, because it has to work with reduced motion
+   on). A card taller than the screen can still be scrolled through: a snap
+   point only holds where the whole card fits. The words and Finish under
+   the last card are a stop of their own. */
+@media (pointer:coarse){
+  body.assess-on-questions #stage{scroll-snap-type:y mandatory; scroll-padding-top:12px}
+  .assess-questions > .pg-item{scroll-snap-align:start; scroll-snap-stop:always}
+  .assess-questions > .assess-end{scroll-snap-align:end}
+}
 .aq-num{margin:0 0 6px; font-size:12.5px; font-weight:800; letter-spacing:.06em;
   text-transform:uppercase; color:var(--amber)}
 .assess-questions > .pg-item > .pg-h{font-size:19px; line-height:1.45; margin:0 0 16px}

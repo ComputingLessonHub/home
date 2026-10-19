@@ -137,6 +137,36 @@ function mark(b, given){
   return { ok:false, mode:"none", accepted: [], matched: "", groups: [] };
 }
 
-window.shortAnswer = { mark, accepted, normalise, legacy };
+/* Whether an answer is the wrong shape for the question: longer than the
+   answer it is written around, or not a number when that answer is one.
+   The lesson page puts a red line under the box for it, and an answer
+   with that line under it does not count as done anywhere, so a student
+   who has typed a sentence is not shown a finished task. Never over an
+   answer the teacher accepts in words: a longer form they listed (central
+   processing unit for CPU) is right. A number question flags anything
+   that is not a number, even a word they also accept, because the
+   question asked for the number; that is still marked right.
+
+   Returns { over, words, number } so the page can say which it is. */
+function tooLong(b, given){
+  const main = accepted(b)[0] || "";
+  const wordsIn = (t) => (String(t || "").trim().match(/\S+/g) || []).length;
+  const isNumber = (t) => /^[-+]?\d+(\.\d+)?$/.test(String(t || "").trim());
+  const text = String(given === null || given === undefined ? "" : given);
+  const number = isNumber(main);
+  const words = wordsIn(main);
+  const over = number
+    ? (text.trim() !== "" && !isNumber(text))
+    : words > 0 && wordsIn(text) > words && !mark(b, text).ok;
+  return { over, words, number };
+}
+
+/* Typed, and not flagged as the wrong shape. What every "is it done" check
+   asks of a short answer. */
+function complete(b, given){
+  return typeof given === "string" && given.trim() !== "" && !tooLong(b, given).over;
+}
+
+window.shortAnswer = { mark, accepted, normalise, legacy, tooLong, complete };
 
 })();

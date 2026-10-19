@@ -1444,7 +1444,7 @@ function compileOne(b, id, target){
       push(keepArrays({ type:"mc", id, prompt: b.prompt || "", options: (b.options || []).map(optionHtml).filter(Boolean),
         answer: Number(b.answer) || 0, topic: lesson.assessment ? b.topic : "" }));
     else if (b.type === "blanks")
-      push(keepArrays({ type:"blanks", id, prompt: b.prompt || "", text: b.text || "",
+      push(keepArrays({ type:"blanks", id, prompt: b.prompt || "", text: b.text || "", rich: b.rich ? true : undefined,
         distractors: (b.distractors || "").split(/\s*,\s*/).filter(Boolean),
         topic: lesson.assessment ? b.topic : "" }));
     else if (b.type === "order")
@@ -7604,7 +7604,7 @@ function fromCompiled(data, meta){
       return { type:"short", prompt:b.prompt || "", answers: answers.length ? answers : [""],
                wasKeywords: converted, model:b.model || "", note:b.note || "", topic:b.topic || "" };
     }
-    if (b.type === "blanks") return { type:"blanks", prompt:b.prompt || "", text:b.text || "",
+    if (b.type === "blanks") return { type:"blanks", prompt:b.prompt || "", text:b.text || "", rich: !!b.rich,
       distractors:(b.distractors || []).join(", "), topic:b.topic || "" };
     /* A saved cipher holds only the coded text and a hash, never the message.
        Trying all 25 shifts and hashing each one finds the shift the teacher

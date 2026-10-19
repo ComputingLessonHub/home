@@ -1458,10 +1458,37 @@ EDITORS.mc = function(b, k){
 };
 
 EDITORS.blanks = function(b, k){
-  const { F, settings } = k;
+  const { F, add, settings } = k;
   F("Instruction (optional)", "prompt");
-  F("Sentence with gaps", "text", { area:true, rows:3,
-    help:"Put the answers in double brackets: The [[cat]] sat on the [[mat]]." });
+  /* The sentence of a fill in the gaps, in a formatting box so it can have
+     new lines, bold and code in it. What is saved keeps every answer inside
+     [[ ]] as plain words, never as HTML: the marking on the lesson page, in
+     the console and in progressmath all read the answers out of the brackets
+     and compare them as typed, so "[[<=]]" has to stay "<=" and not become
+     "&lt;=" or "<b>&lt;=</b>". Going into the box the answers are escaped
+     again, or "[[<p>]]" would turn into a paragraph. A lesson written before
+     this has plain text with no "rich" on it, and its new lines become line
+     breaks in the box; it is only saved as HTML once it has been edited. */
+  {
+    const w = el("div","bfield");
+    w.appendChild(el("label","", "Sentence with gaps"));
+    const raw = String(b.text || "");
+    const shown = b.rich
+      ? raw.replace(/[[(.*?)]]/g, (_, g) => "[[" + esc(g) + "]]")
+      : esc(raw).replace(/?
+/g, "<br>");
+    const ed = window.richText(shown, (html) => {
+      const box = document.createElement("div");
+      b.text = String(html || "").replace(/[[([sS]*?)]]/g, (_, g) => {
+        box.innerHTML = g.replace(/<brs*/?>/gi, " ");
+        return "[[" + box.textContent.replace(/s+/g, " ").trim() + "]]";
+      });
+      b.rich = true;
+      saveDraft(); schedulePreview();
+    }, { rows: 3, upload: pasteUpload, imageSrc: (id) => pictureSrc({ imgId: id }) });
+    w.appendChild(withHelp(ed, "Put the answers in double brackets: The [[cat]] sat on the [[mat]]."));
+    add(w);
+  }
   F("Extra wrong words for the dropdowns", "distractors");
   settings(() => {
     if (topicTags()) F("Topic tag", "topic");
