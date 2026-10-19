@@ -11,6 +11,7 @@
 <script src="autograder.js"></script>
 <script src="scratchhub.js"></script>
 <script src="shortmatch.js"></script>
+<script src="ordermarks.js"></script>
 <script src="voice.js"></script>
 <script src="richtext.js"></script>
 <script src="pyedit.js"></script>
@@ -8468,18 +8469,11 @@ function rMC(b){
                    title:askHtml(asked.ask) || (asked.code ? "Look at the code below." : "") } };
 }
 
-/* The order a "put in order" list is dealt in: shuffled, but the same
-   shuffle every time for the same task, so a reload shows the same start.
-   Also what "has not touched it yet" looks like, which is how holding back
-   the rest of a page tells an untouched list from a sorted one. */
-function orderStart(b){
-  const out = (b.items || []).map((_, i) => i);
-  for (let i = out.length - 1; i > 0; i--){
-    const j = (strHash(b.id + ":" + i) % (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
+/* The order a "put in order" list is dealt in. Also what "has not touched
+   it yet" looks like, which is how holding back the rest of a page tells an
+   untouched list from a sorted one. ordermarks.js holds the shuffle, because
+   marking has to know it too: a list left as dealt scores nothing. */
+function orderStart(b){ return window.orderMarks.deal(b); }
 
 /* Ordering (drag and drop, with arrow buttons as the keyboard fallback). */
 function rOrder(b){
@@ -8789,9 +8783,9 @@ function computeAssessment(){
       review = { yours: chosen === null ? "(not answered)" : stripTags(b.options[chosen]),
                  correct: stripTags(b.options[b.answer]) };
     } else if (b.type === "order"){
-      max = 1;
-      const ok = Array.isArray(v) && v.length === b.items.length && v.every((x,i) => x === i);
-      pts = ok ? 1 : 0;
+      /* a mark for every line in its right place, decided in ordermarks.js */
+      const m = window.orderMarks.marks(b, v);
+      max = m.max; pts = m.got;
       review = { yours: (Array.isArray(v) ? v.map(i => b.items[i]) : b.items).join("  \u2192  "),
                  correct: b.items.join("  \u2192  ") };
     } else if (b.type === "blanks"){
@@ -9161,9 +9155,12 @@ function buildReview(res, marking){
 
     if (q.type === "order"){
       const arr = Array.isArray(v) ? v : (b.items || []).map((_, i) => i);
+      /* ticked as it was marked, so a line the shuffle happened to leave in
+         place on a list nobody touched is not shown as earning anything */
+      const right = window.orderMarks.marks(b, v).right;
       const list = el("div","rev-order");
       arr.forEach((itemIdx, pos) => {
-        const good = itemIdx === pos;
+        const good = !!right[pos];
         const r = el("div","row " + (good ? "good" : "bad"));
         r.appendChild(el("span","pos", (pos+1) + "."));
         r.appendChild(el("span","", b.items ? b.items[itemIdx] : ""));
@@ -10546,8 +10543,8 @@ function lessonTaskScore(b, v){
   if (b.type === "mc") return { got: (v !== null && v !== undefined && v === b.answer) ? 1 : 0, max: 1 };
   if (b.type === "order"){
     if (!Array.isArray(b.items)) return null;
-    const ok = Array.isArray(v) && v.length === b.items.length && v.every((x, i) => x === i);
-    return { got: ok ? 1 : 0, max: 1 };
+    const m = window.orderMarks.marks(b, v);
+    return { got: m.got, max: m.max };
   }
   if (b.type === "blanks"){
     const accepted = [];
@@ -11324,7 +11321,11 @@ function buildPdf(){
       out.push({ t: "ask", text: pdfText(b.prompt) || "Put in order" });
       const items = b.items || [];
       const arr = Array.isArray(v) ? v : items.map((_, i) => i);
-      arr.forEach((idx, i) => out.push({ t: "text", face: "p", text: (i + 1) + ".  " + pdfText(items[idx]) }));
+      const m = window.orderMarks.marks(b, v);
+      out.push({ t: "text", face: "small", text: m.got + " out of " + m.max + " lines in the right place",
+                 colour: m.got === m.max ? PDF.GREEN : PDF.AMBER });
+      arr.forEach((idx, i) => out.push({ t: "text", face: "p", text: (i + 1) + ".  " + pdfText(items[idx]) + (m.right[i] ? "   (right place)" : ""),
+                                         colour: m.right[i] ? PDF.GREEN : PDF.RED }));
       return out;
     }
     if (b.type === "blanks"){

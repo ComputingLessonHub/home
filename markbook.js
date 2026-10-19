@@ -80,9 +80,10 @@
   }
   function markQuestion(b, v){
     if (b.type === "mc") return { max:1, got: v === b.answer ? 1 : 0 };
+    /* a mark a line, the rule in ordermarks.js */
     if (b.type === "order"){
-      const ok = Array.isArray(v) && v.length === (b.items || []).length && v.every((x, i) => x === i);
-      return { max:1, got: ok ? 1 : 0 };
+      const m = window.orderMarks.marks(b, v);
+      return { max: m.max, got: m.got };
     }
     if (b.type === "blanks"){
       const accepted = [];

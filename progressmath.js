@@ -103,9 +103,8 @@
     }
     if (b.type === "mc") return { got: (v !== null && v !== undefined && v === b.answer) ? 1 : 0, max: 1 };
     if (b.type === "order"){
-      const ok = Array.isArray(v) && Array.isArray(b.items) && v.length === b.items.length &&
-                 v.every((x, i) => x === i);
-      return { got: ok ? 1 : 0, max: 1 };
+      const m = window.orderMarks.marks(b, v);
+      return { got: m.got, max: m.max };
     }
     if (b.type === "blanks"){
       const accepted = [];
