@@ -2,9 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Viewing student work</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="look.css">
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
 <script src="config.js"></script>
 <script src="worklink.js"></script>
 <script src="teacher.js"></script>
@@ -17,7 +20,7 @@
 <body class="workpage">
 
 <div class="homebar">
-  <div class="title" id="barTitle">Computing Teacher Console</div>
+  <div class="title" id="barTitle">Computing Lesson Hub</div>
   <span class="grow"></span>
   <div class="subtabs worktabs">
     <button class="on" id="tabWork">View work</button>
@@ -285,12 +288,12 @@ async function boot(){
     if (!PRACTICE) await loadMarks();
     if (!PRACTICE) lockedPages = await fetchLocks(lessonJson);
     if (PRACTICE){
-      $("barTitle").textContent = "Computing Teacher Console \u2022 Practice programs \u2022 " + cls;
+      $("barTitle").textContent = "Computing Lesson Hub \u2022 Practice programs \u2022 " + cls;
       document.title = "Practice programs \u00b7 " + cls;
       practiceBar();
     } else {
       const doing = (lessonJson && (lessonJson.practical || lessonJson.assessment)) ? "Marking" : "Viewing";
-      $("barTitle").textContent = "Computing Teacher Console \u2022 " + doing + " Student Work for " +
+      $("barTitle").textContent = "Computing Lesson Hub \u2022 " + doing + " Student Work for " +
         (lessonJson && lessonJson.title ? lessonJson.title : lessonId);
       document.title = "Student work \u00b7 " + (lessonJson && lessonJson.title ? lessonJson.title : lessonId);
     }

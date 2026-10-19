@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Computing Lesson Hub">
+  <title>Computing Lesson Hub</title>
+  <defs>
+    <linearGradient id="clh-tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4F95DE"/>
+      <stop offset="1" stop-color="#2A5F9E"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#clh-tile)"/>
+  <!-- the code brackets: computing -->
+  <path d="M18 20.5 L8.5 32 L18 43.5" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M46 20.5 L55.5 32 L46 43.5" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the hub: one centre, three lessons joined to it -->
+  <path d="M32 32 L32 21 M32 32 L26 40 M32 32 L38 40" stroke="#FFFFFF" stroke-opacity=".85" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="32" cy="20" r="3" fill="#FFFFFF"/>
+  <circle cx="25.5" cy="40.5" r="3" fill="#FFFFFF"/>
+  <circle cx="38.5" cy="40.5" r="3" fill="#FFFFFF"/>
+  <circle cx="32" cy="31.5" r="5.5" fill="#F2B705" stroke="#FFFFFF" stroke-width="2"/>
+</svg>

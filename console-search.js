@@ -34,7 +34,7 @@
      might type for them instead of their name. */
   const AREAS = [
     { name:"Home",              icon:"home",     words:"start dashboard", go: () => toHome(),        online:true },
-    { name:"Lesson hub",        icon:"lessons",  words:"lessons units year groups catalogue",
+    { name:"Lessons",        icon:"lessons",  words:"lessons units year groups catalogue",
       go: () => { const t = $("openHub"); if (t && !OFFLINE) t.click(); else toHub(); } },
     { name:"Classes",           icon:"classes",  words:"groups sets",          go: () => toClasses(),     online:true },
     { name:"Timetable",         icon:"calendar", words:"periods week a b holidays term", online:true,

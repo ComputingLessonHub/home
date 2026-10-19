@@ -9,6 +9,10 @@
    wants to know whether the thing they noticed is meant to be there, not a
    full account of the work. */
 window.CHANGES = [
+  { v:"13.8.2", text:"Ticks in the Feedback column, the Strengths and Targets ticked off while marking and a teacher's edits to a student's work are all kept when the work is saved." },
+  { v:"13.8.1", text:"The site has a logo, and its name, Computing Lesson Hub, now sits at the top of the console's side menu. Lesson hub is now called Lessons." },
+  { v:"13.8", text:"The New look: softer cards, a clearer side menu, rounded tabs and a top bar that stays put. Settings > Design turns all of it off at once for the design the site had before." },
+  { v:"13.7.9", text:"Lesson cards have their Preview button back. Give and Delete ask which version when a lesson has more than one, and Manage on a practical has Lock for marking." },
   { v:"13.7.8", text:"Mark work keeps this site's keyboard marking: Ctrl and the left or right arrow move between students, Ctrl + M steps through the feedback boxes, Ctrl + Enter is Save and next and ? lists the keys. Unmarked only is the switch in the bar, with how many are marked beside it. The Feedback column, the ticks and the marking itself are the ones described above." },
   { v:"13.7.7", text:"Assessments: a trackpad scrolls the questions page smoothly, the way it scrolls any other page. A mouse wheel still moves one question at a time." },
   { v:"13.7.6", text:"Put in order questions opened before 13.0.5 now start shuffled the new way too. Work saved earlier was putting the old order back, top line and all. A list a student has already moved keeps their order." },

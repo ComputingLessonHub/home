@@ -2,10 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Teacher console · Computing KS3</title>
+<title>Computing Lesson Hub</title>
 <link rel="stylesheet" href="style.css">
-<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<link rel="stylesheet" href="look.css">
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
 <script src="config.js"></script>
 <script src="lessonfile.js"></script>
 <script src="lessonorder.js"></script>
@@ -106,7 +108,7 @@ setTimeout(function(){
 </script>
 
 <div class="homebar" id="topbar" hidden>
-  <div class="title">Computing Teacher Console</div>
+  <div class="title brandtitle"><img class="brandlogo" src="images/logo.svg" alt="" width="28" height="28"> Computing Lesson Hub</div>
   <!-- Jump to: a class, a student, a lesson or a screen, from anywhere.
        console-search.js fills it and takes the hidden off. -->
   <div class="jump" id="jumpBox" role="search" hidden>
@@ -172,7 +174,7 @@ setTimeout(function(){
   <div id="homeView" hidden>
     <h2 style="margin:22px 0 4px">Teacher console</h2>
     <div class="bigcards">
-      <button class="classtile" id="openHub"><b><span data-icon="lessons" data-size="22"></span> Lesson hub</b><span id="hubCount">All units and lessons</span></button>
+      <button class="classtile" id="openHub"><b><span data-icon="lessons" data-size="22"></span> Lessons</b><span id="hubCount">All units and lessons</span></button>
       <button class="classtile" id="openClasses"><b><span data-icon="classes" data-size="22"></span> Classes</b><span id="clsCount">Publish, pace and mark</span></button>
       <button class="classtile" id="openPractice" hidden><b><span data-icon="practice" data-size="22"></span> Practice</b><span>Your own sandbox, and students' programs</span></button>
     </div>
@@ -213,7 +215,7 @@ setTimeout(function(){
   <div id="hubView" hidden>
     <button class="crumb" id="hubHome">&larr; Home</button>
     <button class="btn-ghost iconbtn refresh" id="refHub" title="Refresh">&#8635;</button>
-    <h2 style="margin:14px 0 4px">Lesson hub</h2>
+    <h2 style="margin:14px 0 4px">Lessons</h2>
     <div class="toolrow">
       <button class="btn-ghost" id="hubNewYear">+ New year group</button>
       <button class="btn-primary" id="hubNewLesson">+ Build a new lesson</button>
@@ -223,7 +225,7 @@ setTimeout(function(){
   </div>
 
   <div id="hubUnitsView" hidden>
-    <button class="crumb" id="backYears">&larr; Lesson hub</button>
+    <button class="crumb" id="backYears">&larr; Lessons</button>
     <div class="classhead">
       <h2 id="yearName"></h2>
       <button class="levelchip" id="yearLevel" title="What this year group is working towards"></button>
@@ -591,10 +593,10 @@ function paintCrumbs(){
   /* Every part of the console is a place of its own, the same as in the side
      menu, so a trail starts at the part it is in: Lesson hub, Classes,
      Practice. Home is one of those places, not the top of all of them. */
-  const hub = [{ name:"Lesson hub", go: toHub }];
+  const hub = [{ name:"Lessons", go: toHub }];
   const home = { name:"Classes", go: toClasses };
   if (v === "homeView" || v === "whoView") return crumbs([{ name:"Home" }]);
-  if (v === "hubView") return crumbs([{ name:"Lesson hub" }]);
+  if (v === "hubView") return crumbs([{ name:"Lessons" }]);
   if (v === "hubUnitsView") return crumbs(hub.concat([{ name: hubYear || "Not in a year group" }]));
   if (v === "hubCompView") return crumbs(hub.concat([{ name: hubYear }]));
   if (v === "hubPointView") return crumbs(hub.concat([
@@ -2476,7 +2478,7 @@ function paintHubUnits(){
 function openHubUnit(u){
   hubUnit = u;
   $("hubUnitName").textContent = u || "Not in a unit";
-  $("backUnitYear").textContent = hubYear || "Lesson hub";
+  $("backUnitYear").textContent = hubYear || "Lessons";
   showIf("renameHubUnitBtn", u);
   showIf("deleteHubUnitBtn", u);
   show("hubLessonsView");
@@ -2683,7 +2685,7 @@ function openComponents(){
   hubComp = 0; hubStrand = ""; hubPoint = "";
   const level = hubLevel();
   $("compName").textContent = hubYear;
-  $("backCompYearName").textContent = "Lesson hub";
+  $("backCompYearName").textContent = "Lessons";
   $("compNote").textContent = level === "GCSE"
     ? "OCR J277. Pick the paper, then the part of the specification."
     : "OCR H446. Pick the paper, then the part of the specification.";

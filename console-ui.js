@@ -13,7 +13,7 @@
      Side menu      Home, Lessons, Classes and the rest down the left
      Loading        grey shapes where the screen is about to be
      Messages       short notes in the corner, with Undo after a removal
-     Lesson hub     fuller lesson cards, search results grouped by year and
+     Lessons        fuller lesson cards, search results grouped by year and
                     unit, and lessons dragged into order within a unit
      A class        a dashboard of what is live and what needs marking
      Manage         pacing a lesson: opening and locking its tasks
@@ -62,7 +62,7 @@
   /* ================= side menu ================= */
   const RAIL = [
     ["home",     "home",     "Home",              () => toHome()],
-    ["hub",      "lessons",  "Lesson hub",        () => { const t = $("openHub"); if (t && !OFFLINE) t.click(); else toHub(); }],
+    ["hub",      "lessons",  "Lessons",           () => { const t = $("openHub"); if (t && !OFFLINE) t.click(); else toHub(); }],
     ["classes",  "classes",  "Classes",           () => toClasses()],
     ["practice", "practice", "Practice",          () => toPractice()],
     ["gap"],
@@ -85,6 +85,15 @@
     rail.id = "rail";
     rail.setAttribute("aria-label", "Console");
     rail.hidden = true;
+    /* The site's name and logo head the menu, level with the top bar beside
+       it, rather than sitting in that bar where the search box crowds it. */
+    const brand = el("div","rail-brand");
+    const logo = el("img","brandlogo");
+    logo.src = "images/logo.svg"; logo.alt = ""; logo.width = 30; logo.height = 30;
+    brand.appendChild(logo);
+    brand.appendChild(el("span","rail-brand-words","Computing Lesson Hub"));
+    brand.addEventListener("click", () => toHome());
+    rail.appendChild(brand);
     RAIL.forEach(r => {
       /* the space that pushes the rest to the bottom, and the thin rule
          between the admin screens and What's changed and Settings */
@@ -408,14 +417,28 @@
       }
 
       const acts = el("div","lp-acts");
+      /* With versions, giving out and deleting ask which one first; Edit asks
+         in admin.html's own editLesson, along with making a new version. */
       const give = el("button","btn-primary", OFFLINE ? "Get link" : "Give to classes");
-      give.addEventListener("click", (e) => { e.stopPropagation(); OFFLINE ? shareLink(id) : distribute(id); });
+      give.addEventListener("click", (e) => {
+        e.stopPropagation();
+        whichVersion(id, "Which one do you want to give out?", (v) => OFFLINE ? shareLink(v) : distribute(v));
+      });
       const edit = el("button","btn-ghost","Edit");
       edit.addEventListener("click", (e) => { e.stopPropagation(); editLesson(id); });
+      /* The lesson as a pretend student sees it, on their home page and in the
+         lesson, and in Mark work, without anything reaching a class. */
+      const pv = el("button","btn-ghost","Preview");
+      pv.title = "See it as a student does, and try marking it";
+      pv.addEventListener("click", (e) => {
+        e.stopPropagation();
+        window.open("lessonpreview.html?id=" + encodeURIComponent(id), "_blank");
+      });
       acts.appendChild(give);
       acts.appendChild(edit);
-      const more = overflowMenu([["Versions", () => versionsPopup(id)],
-                                 ["Delete lesson", () => deleteLesson(id)]]);
+      acts.appendChild(pv);
+      const more = overflowMenu([["Delete lesson", () => whichVersion(id, "Which one do you want to delete?",
+                                                                      (v) => deleteLesson(v))]]);
       more.classList.add("rc-more");
       more.addEventListener("click", (e) => e.stopPropagation());
       acts.appendChild(more);
@@ -539,13 +562,27 @@
     const live = mine ? !!mine.published : !!catOf(lessonId).published;
     sub.textContent = "Pacing for " + cls + (live ? "" : "  ·  not published yet, so " + cls + " cannot see it");
 
+    /* Lock for marking comes first, because it is what a teacher opens
+       Manage for once the class has handed an assessment in. */
     if (lessonJson.assessment){
-      list.appendChild(el("p","modal-text","An assessment has nothing to pace: every question is open to " + cls +
-        " while it is published."));
+      const mlb = el("div"); mlb.id = "markingLockBox";
+      paintMarkingBox(mlb);
+      head.appendChild(mlb);
+    }
+    /* Home learning and a marked assessment have no pages to pace: progressMath
+       decides, so the console and a lesson's own mark agree. A practical's
+       pages lock like a lesson's. */
+    if (!canLockPages()){
+      list.appendChild(el("p","modal-text", lessonJson.assessment
+        ? "An assessment has nothing to pace: every question is open to " + cls + " while it is published."
+        : "Home learning is never locked, so every page is open."));
       if (msg) msg.textContent = "";
       return;
     }
-    const total = blocks.length + 1;                     // the summary page is one past the last task
+    /* A lesson's summary page is one past the last task and can be locked
+       with the rest; an assessment's Finish hands it in and has none. */
+    const hasSummary = !lessonJson.assessment;
+    const total = blocks.length + (hasSummary ? 1 : 0);
     const openAt = (i) => !locks.has(i);
     const opened = Array.from({ length: total }, (_, i) => i).filter(openAt).length;
     const setLocks = (next) => postLocks(next);
@@ -638,8 +675,9 @@
         : (KIND[b && b.type] && KIND[b.type] !== title ? KIND[b.type] : "");
       line(i, String(i + 1), title, kind);
     });
-    line(blocks.length, "✓", "Summary page", openAt(blocks.length) ? "Students can finish the lesson" : "Students cannot finish yet",
-         foot || list);
+    if (hasSummary)
+      line(blocks.length, "✓", "Summary page", openAt(blocks.length) ? "Students can finish the lesson" : "Students cannot finish yet",
+           foot || list);
   };
 
   /* ================= students ================= */

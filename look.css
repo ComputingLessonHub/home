@@ -1,0 +1,165 @@
+/* =====================================================================
+   look.css, the New look.
+
+   Every rule in this file starts html[data-look="new"], which the first
+   script on every page sets unless Settings > New look has been turned off.
+   So the switch is one attribute, and with it off nothing here applies and
+   the site is exactly what style.css draws.
+
+   It changes depth, shape and spacing, and colour only through the theme's
+   own variables, so the Light and Dark themes, the fonts and the colour
+   overlays all carry on working underneath it. Loaded after style.css, so a
+   rule here wins a tie; it also out-ranks a lone class there, because of the
+   attribute on html in front of it.
+   ===================================================================== */
+
+html[data-look="new"]{
+  --look-shadow-1: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
+  --look-shadow-2: 0 2px 4px rgba(16, 24, 40, .05), 0 8px 24px rgba(16, 24, 40, .08);
+  --look-shadow-3: 0 12px 40px rgba(16, 24, 40, .18);
+  --look-tint: color-mix(in srgb, var(--brand) 9%, var(--panel));
+  --look-tint-2: color-mix(in srgb, var(--brand) 16%, var(--panel));
+}
+html[data-look="new"][data-bg=night]{
+  --look-shadow-1: 0 1px 2px rgba(0, 0, 0, .35);
+  --look-shadow-2: 0 2px 6px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+  --look-shadow-3: 0 12px 40px rgba(0, 0, 0, .5);
+}
+
+/* ---------- the page ---------- */
+html[data-look="new"] body{
+  background:
+    radial-gradient(1200px 500px at 0% -10%, color-mix(in srgb, var(--brand) 10%, transparent), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
+}
+html[data-look="new"] .page h1{letter-spacing:-.015em}
+
+/* the bar along the top: stays put, and the page shows faintly through it */
+html[data-look="new"] .homebar{
+  position:sticky; top:0; z-index:20;
+  background:color-mix(in srgb, var(--bar) 88%, transparent) !important;
+  backdrop-filter:saturate(1.4) blur(10px); -webkit-backdrop-filter:saturate(1.4) blur(10px);
+  box-shadow:var(--look-shadow-1)
+}
+html[data-look="new"] .brandtitle{font-weight:800; letter-spacing:-.01em}
+
+/* ---------- buttons ---------- */
+html[data-look="new"] .btn-primary{
+  background:linear-gradient(180deg, color-mix(in srgb, var(--amber) 88%, #fff), var(--amber));
+  box-shadow:0 1px 2px rgba(16, 24, 40, .12), inset 0 1px 0 rgba(255, 255, 255, .18);
+  transition:transform .12s ease, box-shadow .12s ease, filter .12s ease
+}
+html[data-look="new"] .btn-primary:hover:not(:disabled){transform:translateY(-1px); box-shadow:var(--look-shadow-2); filter:brightness(1.04)}
+html[data-look="new"] .btn-primary:active:not(:disabled){transform:none}
+html[data-look="new"] .btn-ghost{transition:background .12s ease, border-color .12s ease, color .12s ease}
+html[data-look="new"] .btn-ghost:hover:not(:disabled){background:var(--look-tint); border-color:color-mix(in srgb, var(--brand) 35%, var(--line-2))}
+
+/* typing boxes: a soft ring in the school's blue when they have the cursor */
+html[data-look="new"] input:not([type=checkbox]):not([type=radio]):not([type=range]):focus,
+html[data-look="new"] textarea:focus,
+html[data-look="new"] select:focus{
+  outline:none; border-color:var(--brand);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent)
+}
+
+/* ---------- cards and panels ---------- */
+html[data-look="new"] .station,
+html[data-look="new"] .dash-panel,
+html[data-look="new"] .classtile,
+html[data-look="new"] .lessonpill,
+html[data-look="new"] .bcard,
+html[data-look="new"] .workside{
+  border-color:color-mix(in srgb, var(--line) 70%, transparent);
+  box-shadow:var(--look-shadow-1);
+  border-radius:var(--rad-lg)
+}
+html[data-look="new"] .classtile,
+html[data-look="new"] .lessonpill,
+html[data-look="new"] .lessonCard{
+  transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease
+}
+html[data-look="new"] .classtile:hover,
+html[data-look="new"] .lessonpill:hover,
+html[data-look="new"] .lessonCard:hover{
+  transform:translateY(-2px); box-shadow:var(--look-shadow-2);
+  border-color:color-mix(in srgb, var(--brand) 40%, var(--line))
+}
+html[data-look="new"] .dash-head{letter-spacing:-.005em}
+
+/* ---------- the console's side menu ---------- */
+html[data-look="new"] .rail{
+  background:linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--brand) 4%, var(--panel)));
+  box-shadow:1px 0 0 var(--line)
+}
+html[data-look="new"] .rail-item{position:relative}
+html[data-look="new"] .rail-item:hover{background:var(--look-tint)}
+html[data-look="new"] .rail-item.on{background:var(--look-tint-2); color:var(--amber-dark)}
+/* a bar of the school's blue down the left of the screen that is open */
+html[data-look="new"] .rail-item.on::before{
+  content:""; position:absolute; left:-10px; top:8px; bottom:8px; width:4px;
+  border-radius:0 4px 4px 0; background:var(--brand)
+}
+html[data-look="new"] .rail-brand{border-bottom-color:color-mix(in srgb, var(--line) 70%, transparent)}
+/* more of a wide screen used, rather than a column down its middle */
+@media (min-width:1500px){
+  html[data-look="new"] body.has-rail .page{max-width:1320px}
+}
+
+/* ---------- tabs ---------- */
+html[data-look="new"] .tabs,
+html[data-look="new"] .subtabs{
+  background:color-mix(in srgb, var(--panel-2) 70%, transparent);
+  border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius:var(--rad-pill); padding:4px; gap:2px
+}
+/* Only the inner strip shrinks to its buttons. The main one keeps its width,
+   because a page can put something of its own at the far end of it, such as
+   the home page's refresh button. */
+html[data-look="new"] .subtabs{width:fit-content; max-width:100%}
+html[data-look="new"] .tabs > button,
+html[data-look="new"] .subtabs > button{border-radius:var(--rad-pill); transition:background .12s ease, color .12s ease}
+html[data-look="new"] .tabs > button.on,
+html[data-look="new"] .subtabs > button.on{background:var(--panel); color:var(--amber-dark); box-shadow:var(--look-shadow-1)}
+
+/* ---------- a student's home page ---------- */
+html[data-look="new"] .masthead .eyebrow{color:var(--brand); font-weight:800; letter-spacing:.12em}
+html[data-look="new"] .lessonCard{border-radius:var(--rad-lg); box-shadow:var(--look-shadow-1)}
+html[data-look="new"] .lessonCard .num{
+  background:var(--look-tint-2); color:var(--amber-dark); border-color:transparent; font-weight:800
+}
+html[data-look="new"] .lessonCard .go{transition:transform .15s ease}
+html[data-look="new"] .lessonCard:hover .go{transform:translateX(3px); color:var(--brand)}
+html[data-look="new"] .pastunit-head{
+  border-radius:var(--rad-lg); box-shadow:var(--look-shadow-1);
+  background:linear-gradient(90deg, var(--look-tint), var(--panel))
+}
+
+/* ---------- a lesson ---------- */
+html[data-look="new"] .brief{
+  border-radius:var(--rad-lg); box-shadow:var(--look-shadow-1);
+  border-left:4px solid var(--brand)
+}
+html[data-look="new"] .dock{
+  background:color-mix(in srgb, var(--bar) 86%, transparent);
+  backdrop-filter:saturate(1.4) blur(10px); -webkit-backdrop-filter:saturate(1.4) blur(10px);
+  box-shadow:0 -1px 0 var(--line), 0 -6px 20px rgba(16, 24, 40, .06)
+}
+html[data-look="new"] .checklist{box-shadow:var(--look-shadow-1)}
+
+/* ---------- pop-ups ---------- */
+html[data-look="new"] .modal-back{
+  background:rgba(16, 24, 40, .38);
+  backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px)
+}
+html[data-look="new"] .modal{border-radius:var(--rad-lg); box-shadow:var(--look-shadow-3); border-color:transparent}
+
+/* ---------- motion ---------- */
+@media (prefers-reduced-motion:reduce){
+  html[data-look="new"] .btn-primary,
+  html[data-look="new"] .classtile, html[data-look="new"] .lessonpill, html[data-look="new"] .lessonCard,
+  html[data-look="new"] .lessonCard .go{transition:none}
+  html[data-look="new"] .btn-primary:hover:not(:disabled),
+  html[data-look="new"] .classtile:hover, html[data-look="new"] .lessonpill:hover,
+  html[data-look="new"] .lessonCard:hover, html[data-look="new"] .lessonCard:hover .go{transform:none}
+}

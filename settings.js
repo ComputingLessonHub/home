@@ -81,6 +81,10 @@
     o.style.opacity = String((p.tintAmt === undefined ? 25 : p.tintAmt) / 100);
   }
   function apply(p){
+    /* The New look is on unless it has been turned off: look.css, every rule
+       of it behind this one attribute. */
+    if (p.look === "classic") delete document.documentElement.dataset.look;
+    else document.documentElement.dataset.look = "new";
     if (p.bg) document.documentElement.dataset.bg = p.bg; else delete document.documentElement.dataset.bg;
     if (p.font) document.documentElement.dataset.font = p.font; else delete document.documentElement.dataset.font;
     applyTint(p);
@@ -113,6 +117,11 @@
         ? '<div class="set-group"><span class="set-label">Your name</span>' +
           '<div class="field"><input type="text" id="setName" autocomplete="off" spellcheck="false"></div></div>'
         : "") +
+      /* One switch for the whole of the New look, rather than one per change:
+         it is the design as a whole that someone prefers or does not. */
+      '<div class="set-group"><span class="set-label">Design</span>' +
+      '<button class="btn-ghost set-look" type="button" id="setLook" role="switch" style="width:100%"></button>' +
+      '<p class="subnote" style="margin:8px 0 0">The New look gives the site its newer design. Turn it off for the design it had before.</p></div>' +
       '<div class="set-group"><span class="set-label">Theme</span><div class="swatches" id="setSw">' +
       THEMES.map(b => '<button class="swatch swatch-wide" data-bg="' + b[0] + '" style="background:' + b[2] + '">' + b[1] + '</button>').join("") +
       '</div></div>' +
@@ -156,6 +165,13 @@
       if (amt2){ amt2.value = String(p.tintAmt === undefined ? 25 : p.tintAmt); }
       if (out) out.textContent = (p.tintAmt === undefined ? 25 : p.tintAmt) + "%";
       back.querySelectorAll(".font-opt").forEach(b => b.classList.toggle("on", (p.font || "") === b.dataset.font));
+      const lk = back.querySelector("#setLook");
+      if (lk){
+        const onNow = p.look !== "classic";
+        lk.textContent = "New look: " + (onNow ? "on" : "off");
+        lk.setAttribute("aria-checked", onNow ? "true" : "false");
+        lk.classList.toggle("on", onNow);
+      }
       const ov = back.querySelector("#setOldView");
       if (ov) ov.textContent = window.hubUI.oldView() ? "Switch to new view" : "Switch to old view";
       /* the lesson page may have changed it since this was last opened */
@@ -173,6 +189,12 @@
       if (p.tintAmt === undefined) p.tintAmt = 25;
       save(p); paint();
     }));
+    const lookBtn = back.querySelector("#setLook");
+    if (lookBtn) lookBtn.addEventListener("click", () => {
+      const p = prefs();
+      p.look = p.look === "classic" ? "new" : "classic";
+      save(p); paint();
+    });
     const ovBtn = back.querySelector("#setOldView");
     if (ovBtn) ovBtn.addEventListener("click", () => {
       window.hubUI.setOldView(!window.hubUI.oldView());

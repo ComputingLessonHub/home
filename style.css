@@ -6028,6 +6028,22 @@ body.has-rail #pwBtn, body.has-rail #keepBtn, body.has-rail #logBtn{display:none
   body.has-rail #pwBtn, body.has-rail #keepBtn, body.has-rail #logBtn{display:inline-flex}
 }
 
+/* The site's name and logo. In the top bar on a phone, and wherever the side
+   menu is off; at the head of the side menu otherwise, where the menu runs
+   the full height and the top bar starts beside it. */
+.brandtitle{display:inline-flex; align-items:center; gap:10px; white-space:nowrap}
+.brandlogo{flex:none; width:28px; height:28px; display:block}
+.rail-brand{display:flex; align-items:center; gap:10px; margin:-4px 0 12px; padding:6px 8px 14px;
+  border-bottom:1px solid var(--line); cursor:pointer;
+  font-family:var(--display); font-weight:800; font-size:var(--text-md); line-height:1.2; color:var(--text)}
+.rail-brand .brandlogo{width:30px; height:30px}
+.rail-brand-words{white-space:normal}
+@media (min-width:901px){
+  body.has-rail .rail{top:0; z-index:40}
+  body.has-rail #topbar{padding-left:calc(228px + 24px)}
+  body.has-rail #topbar .brandtitle{display:none}
+}
+
 /* loading: the shapes or the dots, whichever Settings asks for */
 .loading.mid > .skel{display:none; width:100%}
 html[data-ui-skeletons=on] .loading.mid{display:block}
