@@ -272,7 +272,9 @@ async function boot(){
     lessonJson = lesson;
     /* A practical is handed in to be marked by hand, and the console's
        button into it says Mark work, so the tab it opens on does too. */
-    if (lessonJson && lessonJson.practical) $("tabWork").textContent = "Mark work";
+    if (lessonJson && (lessonJson.practical || lessonJson.assessment)) $("tabWork").textContent = "Mark work";
+    /* a test has no pages to lay out on one, only its marked answers */
+    if (markingTest()) $("viewMode").hidden = true;
     if (markbookMode()) $("tabProgress").textContent = "Markbook";
     roster = students.sort(byUsername);
     rows = work;
@@ -283,7 +285,8 @@ async function boot(){
       document.title = "Practice programs \u00b7 " + cls;
       practiceBar();
     } else {
-      $("barTitle").textContent = "Computing Teacher Console \u2022 Viewing Student Work for " +
+      const doing = (lessonJson && (lessonJson.practical || lessonJson.assessment)) ? "Marking" : "Viewing";
+      $("barTitle").textContent = "Computing Teacher Console \u2022 " + doing + " Student Work for " +
         (lessonJson && lessonJson.title ? lessonJson.title : lessonId);
       document.title = "Student work \u00b7 " + (lessonJson && lessonJson.title ? lessonJson.title : lessonId);
     }
@@ -345,6 +348,7 @@ async function bootFromLink(){
 
   try{ lessonJson = await fetchLesson(); }
   catch(e){ return shut(e.message); }
+  if (markingTest()) $("viewMode").hidden = true;
 
   /* One student, made to look like a class of one so the rest of the page
      does not have to know the difference. */
@@ -353,6 +357,8 @@ async function bootFromLink(){
   rows = [{ username: "link", display_name: name, data: handedIn.d || {},
             feedback: handedIn.fb ? JSON.stringify(handedIn.fb) : "" }];
   if (handedIn.mk) marks.link = { score: handedIn.mk.score, outOf: handedIn.mk.outOf, grade: handedIn.mk.grade || "" };
+  /* marked once already and sent back again: the marks changed then still stand */
+  if (handedIn.ov && handedIn.ov.overrides) overridesBy.link = Object.assign({}, handedIn.ov.overrides);
 
   /* No class, so nobody to page to and no marks to compare. */
   document.querySelector(".worktabs").hidden = true;
@@ -1120,8 +1126,22 @@ function frameFor(i, step, frame){
     lesson: lessonId, idx: 0, json: OFFLINE ? undefined : lessonJson,
     list: [{ name: st.display_name, username: st.username,
              data: Object.assign({}, row ? row.data : {}, draft ? draft.pendingEdits : {}),
-             feedback: frameFeedback }]
+             feedback: frameFeedback,
+             /* any question already re-marked, so the frame starts from the saved score */
+             overrides: overridesFor(st.username) || undefined }]
   };
+  /* A test is marked question by question in a page of its own, which has
+     no pages to step through and no summary to jump to. */
+  if (markingTest()){
+    const page = "lesson.html?id=" + encodeURIComponent(lessonId) + "&group=" + encodeURIComponent(cls) +
+      "&view=1&embed=1&marking=1";
+    return {
+      box: box,
+      key: JSON.stringify([page, box.list]),
+      url: page + (frame.dataset.inspect === "hub_inspect_next" ? "&box=next" : "") +
+        (lastScroll > 0 ? "&scroll=" + lastScroll : "")
+    };
+  }
   /* The progress bar in the frame counts the summary as one past the last
      page, the same as the teacher console does, and posts that number out
      when it opens. Asking for it again by number would clamp to the last
@@ -2901,7 +2921,8 @@ async function handBack(){
       marks[st.username] = box.mk;
     }
   }
-  if (markOverrides) box.ov = markOverrides;
+  const ov = overridesFor(st.username);
+  if (ov && Object.keys(ov).length) box.ov = { overrides: ov };
   if (Object.keys(manualTicks).length) box.mt = manualTicks;
   row.feedback = JSON.stringify(fb);
 
@@ -2958,8 +2979,26 @@ function showMarkedLink(){
   });
 }
 
-/* Marks the teacher changed question by question, sent up from the viewer. */
-let markOverrides = null;
+/* Marks the teacher changed question by question, by student: the frame
+   saves them itself, and says so here so this page's copy agrees. One copy
+   for the whole page used to go out in the next student's link as well. */
+const overridesBy = {};
+/* The changed marks for a student: what was changed on this page since it
+   opened, otherwise what the server sent. */
+function overridesFor(user){
+  if (overridesBy[user]) return overridesBy[user];
+  const row = resultRows.find(r => r.username === user);
+  try{
+    const ov = row && row.overrides ? JSON.parse(row.overrides) : null;
+    return ov && typeof ov === "object" ? ov : null;
+  }catch(e){ return null; }
+}
+/* Mark work on a standard assessment is the marked answers with a score to
+   change on each, rather than the test as it was sat (marking=1 in the
+   frame). A practical is still its work, marked down the right. */
+function markingTest(){
+  return !PRACTICE && !!(lessonJson && lessonJson.assessment && !lessonJson.practical);
+}
 /* code put right in the work while marking, by task, waiting for Save */
 let pendingEdits = {};
 /* and the checklist lines they ticked off by hand */
@@ -2969,7 +3008,17 @@ let manualTicks = {};
 let markingTicks = {};
 window.addEventListener("message", (e) => {
   if (!e || !e.data) return;
-  if (e.data.hubMarks) markOverrides = e.data.hubMarks;
+  if (e.data.hubMarks && e.source === $("workFrame").contentWindow){
+    const m = e.data.hubMarks;
+    const user = e.data.hubMarksFor || (roster[idx] && roster[idx].username) || "";
+    if (user){
+      overridesBy[user] = Object.assign({}, m.overrides || {});
+      /* the markbook tab and the picker read this, so they say the new total */
+      marks[user] = Object.assign({}, marks[user] || {}, { score: m.score, outOf: m.outOf });
+      const row = resultRows.find(r => r.username === user);
+      if (row){ row.overrides = JSON.stringify(overridesBy[user]); row.score = m.score; row.out_of = m.outOf; }
+    }
+  }
   /* Code the teacher has changed in the work, every task of it that no
      longer reads as it arrived, saved with the feedback on Save. */
   if (e.data.hubEdits && typeof e.data.hubEdits === "object" && e.source === $("workFrame").contentWindow){

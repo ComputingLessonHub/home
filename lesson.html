@@ -8860,6 +8860,8 @@ function computeAssessment(){
     /* A teacher can disagree with the automatic marking, and their word is
        final. Their marks arrive with the work in the link that comes back. */
     const ov = markOverrides && markOverrides.overrides;
+    /* kept so a changed mark can say so, and changing it back can tell */
+    const auto = pts;
     if (ov && ov[b.id] !== undefined) pts = Math.max(0, Math.min(max, Number(ov[b.id]) || 0));
     score += pts; outOf += max;
     /* Numbered as the student saw it, so Question 4 in the review is the
@@ -8871,7 +8873,7 @@ function computeAssessment(){
     perQ.push({ id: b.id, n: questionNo[b.id] || n, type: b.type,
                 title: (stripTags(words) || /<img/i.test(asked.ask || "") ? askHtml(words) : "")
                        || (asked.code ? "Look at the code below." : "") || REVIEW_NAME[b.type] || b.id,
-                code: asked.code, pts, max, review });
+                code: asked.code, pts, max, auto, review });
     const topic = b.topic || "general";
     byTopic[topic] = byTopic[topic] || { right: 0, total: 0 };
     byTopic[topic].right += pts; byTopic[topic].total += max;
@@ -9115,11 +9117,27 @@ function buildReview(res, marking){
   res.perQ.forEach(q => {
     const b = lesson.blocks.find(x => x.id === q.id) || {};
     const v = fields[q.id] ? fields[q.id].get() : null;
-    const cls = q.pts === q.max ? "right" : q.pts > 0 ? "part" : "wrong";
-    const row = el("div","resq " + cls);
-    row.appendChild(el("div","mark", q.pts === q.max ? "\u2713" : q.pts > 0 ? (q.pts + "/" + q.max) : "\u2717"));
+    const row = el("div","resq");
+    row.dataset.q = q.id;
+    const mark = el("div","mark");
+    row.appendChild(mark);
     const body = el("div","body");
     body.appendChild(el("b","", q.n + ". " + q.title));
+    /* Said wherever the mark is not the one the computer gave: to a student,
+       so a score that moved is not a mystery, and to the teacher, so they
+       can see what they changed it from. */
+    const changed = el("span","rev-changed");
+    body.appendChild(changed);
+    const paintMark = () => {
+      row.className = "resq " + (q.pts === q.max ? "right" : q.pts > 0 ? "part" : "wrong");
+      mark.textContent = q.pts === q.max ? "\u2713" : q.pts > 0 ? (q.pts + "/" + q.max) : "\u2717";
+      const moved = q.auto !== undefined && q.pts !== q.auto;
+      changed.hidden = !moved;
+      changed.textContent = !moved ? ""
+        : marking ? "Changed from " + q.auto + (q.auto === 1 ? " mark" : " marks")
+        : "Your teacher changed this mark";
+    };
+    paintMark();
     /* computeResults left the program out of the title, so it is put back
        here as a box, the way the question showed it. */
     if (q.code) body.appendChild(el("div","ask-code", q.code));
@@ -9169,36 +9187,73 @@ function buildReview(res, marking){
     }
 
     if (q.type === "blanks"){
-      body.appendChild(blanksSentence(b, (gi) => {
-        const it = q.review.items[gi] || { given:"", ok:false, expected:"" };
-        return tel("span","blank-fill " + (it.ok ? "ok" : "no"),
-          it.ok ? it.given : ((it.given === "(blank)" ? "" : it.given) + " \u2192 " + it.expected));
-      }));
-      body.appendChild(el("span","why", q.pts + " of " + q.max + " gaps correct, one mark per gap."));
+      body.appendChild(blanksSentence(b, (gi) => answerChip(q.review.items[gi] || { given:"", ok:false, expected:"" })));
+      body.appendChild(el("span","why", q.auto + " of " + q.max + " gaps correct, one mark per gap."));
     }
 
     if (q.type === "table") body.appendChild(reviewTable(b, q));
     if (q.type === "label") body.appendChild(reviewLabels(b, q));
     if (q.type === "hotspot") body.appendChild(reviewHotspot(b, q, v));
 
-    if (q.type === "short"){
-      body.appendChild(el("div","rev-quote", q.review.yours));
+    /* A one line answer, from a Short answer or an exam question set to one
+       line: what they wrote, in the colour it was marked, and the right
+       answer under it in green where theirs was not it. */
+    const oneLine = q.type === "short" || (q.type === "exam" && !q.review.selfMarked);
+    if (oneLine){
+      const said = q.review.yours === "(not answered)" ? "" : q.review.yours;
+      const quote = el("div","rev-quote " + (q.auto ? "ok" : "no"), said || "Not answered");
+      if (!said) quote.classList.add("empty");
+      body.appendChild(el("p","rev-label", "Answer given"));
+      body.appendChild(quote);
       if (q.review.mode === "keywords"){
-        const found = q.review.groups.map(g => (g.ok ? "\u2713 " : "\u2717 ") + g.label).join("   ");
-        body.appendChild(el("span","why", "Checked for: " + found));
+        const found = el("div","rev-checks");
+        q.review.groups.forEach(g => found.appendChild(
+          el("span","rev-check " + (g.ok ? "ok" : "no"), (g.ok ? "\u2713 " : "\u2717 ") + g.label)));
+        body.appendChild(el("p","rev-label", "Checked for"));
+        body.appendChild(found);
       } else if (q.review.mode === "answers"){
         const list = q.review.accepted || [];
-        body.appendChild(el("span","why", q.pts
-          ? "That matches the answer."
-          : (list.length === 1 ? "The answer: " + list[0]
-                               : "Accepted answers: " + list.join(", "))));
+        if (!q.auto && list.length){
+          /* a line each: an answer can have a comma in it, and joined with
+             commas "Hello Sam" and "Hello, Sam" ran into one */
+          body.appendChild(el("p","rev-label", list.length === 1 ? "Correct answer" : "Any of these is right"));
+          body.appendChild(el("div","rev-quote right", list.join("\n")));
+        }
       } else {
-        body.appendChild(el("span","why", "This one has no answer set, so your teacher marks it."));
+        body.appendChild(el("span","why", marking ? "This one has no answer set, so it is yours to mark."
+                                                  : "This one has no answer set, so your teacher marks it."));
       }
-      if (q.pts < q.max && q.review.model) body.appendChild(el("span","", "A good answer mentions: " + q.review.model));
+      if (!q.auto && q.review.model){
+        body.appendChild(el("p","rev-label", "A good answer mentions"));
+        body.appendChild(el("div","rev-quote right", q.review.model));
+      }
+    }
+
+    /* A written exam answer, and the points of the scheme they ticked off
+       against it themselves. */
+    if (q.type === "exam" && q.review.selfMarked){
+      const said = q.review.yours === "(not answered)" ? "" : q.review.yours;
+      body.appendChild(el("p","rev-label", "Answer given"));
+      const quote = el("div","rev-quote rev-long", said || "Not answered");
+      if (!said) quote.classList.add("empty");
+      body.appendChild(quote);
+      if ((q.review.items || []).length){
+        body.appendChild(el("p","rev-label", "Mark scheme, as they ticked it"));
+        body.appendChild(reviewItems(q.review.items));
+      }
+    }
+
+    /* A coding question: the program as it was handed in, and each line of
+       its checklist with what it was worth. Nothing at all used to show
+       here, only the question's title and a cross. */
+    if (q.type === "ide" || q.type === "web"){
+      reviewCode(b, v).forEach(n => body.appendChild(n));
+      body.appendChild(el("p","rev-label", "Checklist"));
+      body.appendChild(reviewItems(q.review.items || []));
     }
 
     row.appendChild(body);
+    if (marking) row.appendChild(markStepper(q, paintMark));
     rev.appendChild(row);
   });
   return rev;
@@ -9551,11 +9606,8 @@ function reviewTable(b, q){
         const it = byBox[box];
         const typed = String((Array.isArray(v) && v[box]) || "").trim();
         box++;
-        if (it){
-          const chip = el("span","blank-fill " + (it.ok ? "ok" : "no"));
-          chip.textContent = it.ok ? it.given : ((it.given === "(blank)" ? "" : it.given) + " \u2192 " + it.expected);
-          td.appendChild(chip);
-        } else td.textContent = typed;
+        if (it) td.appendChild(answerChip(it));
+        else td.textContent = typed;
       } else {
         td.textContent = String(want.t == null ? "" : want.t);
       }
@@ -9566,7 +9618,7 @@ function reviewTable(b, q){
   table.appendChild(body);
   scroller.appendChild(table);
   wrap.appendChild(scroller);
-  wrap.appendChild(el("span","why", q.pts + " of " + q.max + " boxes correct, one mark per box."));
+  wrap.appendChild(el("span","why", q.auto + " of " + q.max + " boxes correct, one mark per box."));
   return wrap;
 }
 /* The picture with the right spot ringed and where they clicked marked on
@@ -9588,12 +9640,12 @@ function reviewHotspot(b, q, v){
   if (v && typeof v.x === "number"){
     const pin = el("div","hotspot-pin");
     pin.style.left = v.x + "%"; pin.style.top = v.y + "%";
-    holder.dataset.verdict = q.pts ? "yes" : "no";
+    holder.dataset.verdict = q.auto ? "yes" : "no";
     holder.appendChild(pin);
   }
   wrap.appendChild(holder);
   wrap.appendChild(el("span","why", !(v && typeof v.x === "number") ? "Not answered. The green outline shows the right spot."
-    : q.pts ? "You clicked the right spot." : "Your click is outside the green outline, which shows the right spot."));
+    : q.auto ? "You clicked the right spot." : "Your click is outside the green outline, which shows the right spot."));
   return wrap;
 }
 /* The picture with what they dropped on it, marked, and underneath it each
@@ -9622,14 +9674,289 @@ function reviewLabels(b, q){
   }
   const line = el("p","blanks");
   q.review.items.forEach(it => {
-    const chip = el("span","blank-fill " + (it.ok ? "ok" : "no"));
-    chip.textContent = it.ok ? it.given : ((it.given === "(blank)" ? "nothing" : it.given) + " \u2192 " + it.expected);
-    line.appendChild(chip);
+    line.appendChild(answerChip(it));
     line.appendChild(document.createTextNode(" "));
   });
   wrap.appendChild(line);
-  wrap.appendChild(el("span","why", q.pts + " of " + q.max + " labels in the right place, one mark per label."));
+  wrap.appendChild(el("span","why", q.auto + " of " + q.max + " labels in the right place, one mark per label."));
   return wrap;
+}
+
+/* One answer in a gap, a table box or a label, marked. Right is the answer
+   in green with a tick. Wrong is what they put, red and crossed through,
+   then the right answer in green beside it. It used to be one grey chip
+   reading "repeat → loop", or "→ if" for a gap left empty, which read as a
+   puzzle rather than a correction, and its colour never showed at all:
+   `.resq .body span` outranked it. */
+function answerChip(it){
+  const blank = !it.given || it.given === "(blank)";
+  if (it.ok) return tel("span","ans ans-ok", it.given);
+  const chip = tel("span","ans ans-no");
+  chip.appendChild(tel(blank ? "span" : "s", blank ? "ans-empty" : "ans-given", blank ? "blank" : it.given));
+  chip.appendChild(tel("span","ans-fix", it.expected));
+  chip.title = (blank ? "Left blank" : "Answer given: " + it.given) + ". Correct answer: " + it.expected;
+  return chip;
+}
+/* A checklist or a mark scheme, a line each, ticked or crossed. */
+function reviewItems(items){
+  const list = el("ul","rev-items");
+  items.forEach(it => {
+    const li = el("li", it.ok ? "ok" : "no");
+    li.appendChild(el("span","rev-item-mark", it.ok ? "✓" : "✗"));
+    li.appendChild(el("span","rev-item-text", it.given));
+    if (it.expected) li.appendChild(el("span","rev-item-worth", it.expected));
+    list.appendChild(li);
+  });
+  return list;
+}
+/* The program handed in, file by file, and what it printed the last time it
+   was run. Only to read: it is a copy, not the editor. */
+function reviewCode(b, v){
+  const out = [];
+  const add = (label, text) => {
+    if (!String(text || "").trim()) return;
+    out.push(el("p","rev-label", label));
+    out.push(el("pre","rev-code", String(text)));
+  };
+  if (!v || typeof v !== "object"){
+    out.push(el("div","rev-quote no empty","Nothing written"));
+    return out;
+  }
+  if (b.type === "web"){
+    add("index.html", v.html); add("style.css", v.css); add("script.js", v.js);
+  } else {
+    add("Code", v.code);
+    add("What it printed", v.out);
+  }
+  if (!out.length) out.push(el("div","rev-quote no empty","Nothing written"));
+  return out;
+}
+
+/* ---------- Mark work on a standard assessment ----------
+   What a teacher opens a student's test in, inside the marking screen:
+   every question marked the way the student sees it behind View my
+   assessment, with a score beside each to change, and the response tasks
+   they did after it on a tab of their own. Nothing here can change an
+   answer. The test is drawn as a review rather than as the questions, so
+   there is nothing to type into, and the response tasks are locked before
+   they are shown. */
+let markSaveTimer = 0;
+let markSaveChain = Promise.resolve();
+let markSaveSay = null;       // the line under the total that says whether it saved
+let markTotalSay = null;      // the total itself
+let markRes = null;           // the marks on screen, changed in place by the steppers
+const MARK_TAB_KEY = "hub_mark_tab";
+
+function markStepper(q, paintMark){
+  const box = el("div","mark-step");
+  const down = el("button","mark-btn","−");
+  const up = el("button","mark-btn","+");
+  down.type = up.type = "button";
+  down.setAttribute("aria-label", "One mark fewer for question " + q.n);
+  up.setAttribute("aria-label", "One mark more for question " + q.n);
+  const val = el("span","mark-val");
+  val.setAttribute("aria-live","polite");
+  const paint = () => {
+    val.textContent = q.pts + " / " + q.max;
+    down.disabled = q.pts <= 0;
+    up.disabled = q.pts >= q.max;
+    paintMark();
+  };
+  const move = (by) => {
+    const n = Math.max(0, Math.min(q.max, q.pts + by));
+    if (n === q.pts) return;
+    q.pts = n;
+    const ov = (markOverrides && markOverrides.overrides) ? markOverrides.overrides : {};
+    /* Only a mark that differs from the computer's is kept as changed, so
+       putting one back where it was leaves nothing behind saying otherwise. */
+    if (n === q.auto) delete ov[q.id]; else ov[q.id] = n;
+    markOverrides = { overrides: ov };
+    paint();
+    paintMarkTotal();
+    queueMarkSave();
+  };
+  down.addEventListener("click", () => move(-1));
+  up.addEventListener("click", () => move(1));
+  box.appendChild(down); box.appendChild(val); box.appendChild(up);
+  paint();
+  return box;
+}
+function markTotals(){
+  const list = (markRes && markRes.perQ) || [];
+  return { score: list.reduce((n, q) => n + q.pts, 0), outOf: list.reduce((n, q) => n + q.max, 0) };
+}
+function paintMarkTotal(){
+  if (!markTotalSay) return;
+  const t = markTotals();
+  markTotalSay.textContent = t.score + " / " + t.outOf;
+}
+/* A moment after the last press, so going from 0 to 3 is one save, and one
+   after another, so the last change made is the last one written. */
+function queueMarkSave(){
+  clearTimeout(markSaveTimer);
+  if (markSaveSay){ markSaveSay.dataset.state = "waiting"; markSaveSay.textContent = "Saving…"; }
+  markSaveTimer = setTimeout(() => { markSaveChain = markSaveChain.then(sendMarks); }, 600);
+}
+async function sendMarks(){
+  const t = markTotals();
+  const box = { overrides: Object.assign({}, (markOverrides && markOverrides.overrides) || {}),
+                score: t.score, outOf: t.outOf };
+  const who = inspectWho();
+  const say = (state, text) => {
+    if (!markSaveSay) return;
+    markSaveSay.dataset.state = state;
+    markSaveSay.textContent = text;
+  };
+  /* The marking screen around this keeps its own copy of every student's
+     marks, for the markbook and for whoever is opened next, and offline it
+     is the only thing that can send them back in the student's link. */
+  const tell = () => {
+    try{ window.parent.postMessage({ hubMarks: box, hubMarksFor: who ? who.username : "" }, "*"); }catch(e){}
+  };
+  if (OFFLINE){ tell(); say("done", "Kept. Press Save to send it back."); return; }
+  if (!who){ say("failed", "Could not tell which student this is."); return; }
+  try{
+    const reply = await teacherPost("set-mark", { username: who.username, lesson: lessonId,
+      overrides: box.overrides, score: box.score, outOf: box.outOf });
+    if (!reply.ok) throw new Error((await reply.json().catch(() => ({}))).error || "Could not save.");
+    tell();
+    say("done", "✓ Saved");
+  }catch(e){
+    say("failed", (e.message === "Failed to fetch" ? "Could not reach the server." : e.message) +
+                  " Change a mark again to have another go.");
+  }
+}
+
+/* Which topic's response tasks this student was given. They are chosen
+   from the target when the test is finished, or at random for full marks,
+   so the answer is wherever they have written something; failing that, the
+   topic their marks point to now. */
+function responseTopicDone(res){
+  const bank = (lesson && lesson.responses) || {};
+  const has = (b, topic, i) => {
+    const id = b.id || ("resp_" + topic + "_" + i);
+    const v = restoredData ? restoredData[id] : undefined;
+    if (v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length)) return true;
+    return (b.blocks || []).some((x, k) => has(x, topic, k));
+  };
+  const done = Object.keys(bank).find(topic => (bank[topic] || []).some((b, i) => has(b, topic, i)));
+  if (done) return { topic: done, any: true };
+  return { topic: starOn() ? computeST(res.byTopic).targetTopic : null, any: false };
+}
+
+/* Read only, all the way down. Typing boxes and code boxes keep their words
+   and can still be scrolled and copied from; everything that would change
+   an answer is switched off, and keys and drags that editors handle for
+   themselves (a code box's Tab, a list dragged into order) are stopped
+   before they arrive. */
+function lockAnswers(root){
+  root.classList.add("answers-locked");
+  root.querySelectorAll("input, textarea").forEach(x => {
+    x.readOnly = true;
+    if (x.type === "checkbox" || x.type === "radio" || x.type === "file" || x.type === "range") x.disabled = true;
+  });
+  root.querySelectorAll("select, button").forEach(x => { x.disabled = true; });
+  root.querySelectorAll("[contenteditable]").forEach(x => { x.contentEditable = "false"; });
+  root.querySelectorAll("[draggable=true]").forEach(x => { x.draggable = false; });
+  const reading = (e) => e.target && e.target.closest && e.target.closest("textarea, input, pre");
+  ["pointerdown","mousedown","touchstart","dragstart","drop","click"].forEach(type =>
+    root.addEventListener(type, (e) => {
+      if (reading(e) && type !== "dragstart" && type !== "drop") return;
+      e.preventDefault(); e.stopPropagation();
+    }, true));
+  root.addEventListener("keydown", (e) => {
+    const nav = /^(Arrow|Page|Home|End|Shift|Control|Alt|Meta|Escape)/.test(e.key) ||
+                ((e.ctrlKey || e.metaKey) && /^[ac]$/i.test(e.key));
+    if (!nav){ e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  ["paste","cut","beforeinput"].forEach(type =>
+    root.addEventListener(type, (e) => { e.preventDefault(); e.stopPropagation(); }, true));
+}
+
+function showMarkingView(){
+  hideLoader();
+  $("dock").classList.add("gone");
+  document.body.classList.add("allmode", "markmode");
+  ["homeLink","setBtn","backBtn"].forEach(id => { const n = $(id); if (n) n.hidden = true; });
+  const rail = $("taskRail");
+  if (rail) rail.hidden = true;
+  const brief = $("brief");
+  if (brief) brief.hidden = true;
+
+  markRes = computeAssessment();
+  const view = el("div","markview");
+
+  /* ---- the test ---- */
+  const testPane = el("div","mv-pane");
+  const head = el("div","mv-head");
+  const total = el("div","mv-total");
+  markTotalSay = el("span","mv-score");
+  total.appendChild(markTotalSay);
+  head.appendChild(total);
+  const words = el("div","mv-words");
+  words.appendChild(el("p","mv-note", restoredData && restoredData.__done
+    ? "Change any question’s mark with − and +. It saves as you go."
+    : "Not finished yet. These are the answers so far. Change any question’s mark with − and +."));
+  markSaveSay = el("p","mv-saved", "");
+  markSaveSay.setAttribute("role","status");
+  words.appendChild(markSaveSay);
+  head.appendChild(words);
+  testPane.appendChild(head);
+  if (markRes.perQ.length) testPane.appendChild(buildReview(markRes, true));
+  else testPane.appendChild(el("p","mv-note","This test has no questions that are marked."));
+  paintMarkTotal();
+
+  /* ---- what they did after it ---- */
+  const respPane = el("div","mv-pane");
+  const holder = el("div","mv-resp");
+  let seen = { any: false };
+  if (starOn()){
+    seen = responseTopicDone(markRes);
+    renderResponses(holder, seen.topic, null);
+  } else assessmentExtension(holder);
+  const hasTasks = !!holder.querySelector(".resp-task, .assess-ext");
+  if (hasTasks){
+    /* the summary's own headings say "Chosen from your target" and so on,
+       which is written to the student */
+    holder.querySelectorAll(".resp-sub").forEach(n => n.remove());
+    lockAnswers(holder);
+    if (starOn() && !seen.any) respPane.appendChild(el("p","mv-note","Nothing written in these yet."));
+    respPane.appendChild(holder);
+  }
+
+  /* ---- the tabs, only when there is a second thing to see ---- */
+  const panes = { test: testPane, resp: respPane };
+  if (hasTasks){
+    const tabs = el("div","mv-tabs");
+    tabs.setAttribute("role","tablist");
+    const tabBtn = {};
+    const pick = (which) => {
+      Object.keys(panes).forEach(k => {
+        panes[k].hidden = k !== which;
+        tabBtn[k].classList.toggle("on", k === which);
+        tabBtn[k].setAttribute("aria-selected", k === which ? "true" : "false");
+      });
+      /* the next student opens on the same tab, the way the page is kept */
+      try{ localStorage.setItem(MARK_TAB_KEY, which); }catch(e){}
+    };
+    [["test","Assessment"], ["resp", starOn() ? "Response" : "Extension"]].forEach(([k, label]) => {
+      const b = el("button","mv-tab", label);
+      b.type = "button";
+      b.setAttribute("role","tab");
+      b.addEventListener("click", () => pick(k));
+      tabBtn[k] = b;
+      tabs.appendChild(b);
+    });
+    view.appendChild(tabs);
+    let first = "test";
+    try{ if (localStorage.getItem(MARK_TAB_KEY) === "resp") first = "resp"; }catch(e){}
+    view.appendChild(testPane); view.appendChild(respPane);
+    pick(first);
+  } else view.appendChild(testPane);
+
+  const blocks = $("blocks");
+  Array.from(blocks.children).forEach(n => { n.hidden = true; });
+  blocks.appendChild(view);
 }
 
 /* An assessment works out its own strength and target the moment it is

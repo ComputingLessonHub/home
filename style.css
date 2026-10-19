@@ -887,13 +887,80 @@ textarea.code{background:var(--code-bg) !important; color:var(--code-fg) !import
 .rev-order .row.good .ok{color:var(--mint)} .rev-order .row.bad .ok{color:var(--red)}
 .rev-order-label{font-size:var(--text-base); color:var(--muted); margin:10px 0 4px; font-weight:700}
 
-.blank-fill{display:inline-block; padding:4px 12px; margin:0 3px; border-radius:var(--rad-sm); font-weight:700;
-  border:1.5px solid; font-size:var(--text-lg)}
-.blank-fill.ok{color:var(--mint); border-color:var(--mint-dim); background:var(--panel)}
-.blank-fill.no{color:var(--red); border-color:var(--red-dim); background:var(--panel)}
 
 .rev-quote{background:var(--panel); border:1.5px solid var(--line); border-radius:var(--rad-md);
   padding:12px 16px; font-size:var(--text-lg); margin:8px 0 6px; color:var(--text)}
+
+/* A marked answer in the review: what was given, then what was right.
+   Each rule names .resq .body because `.resq .body span` above makes every
+   span in a review grey, and that is what kept these colourless before. */
+.resq .body .rev-label{font-size:13px; font-weight:700; color:var(--muted); margin:12px 0 0;
+  text-transform:uppercase; letter-spacing:.04em}
+.resq .body .rev-quote{white-space:pre-wrap; overflow-wrap:anywhere}
+.resq .body .rev-quote.ok{border-color:var(--mint); background:var(--mint-dim)}
+.resq .body .rev-quote.no{border-color:var(--red); background:var(--red-dim)}
+.resq .body .rev-quote.right{border-color:var(--mint); color:var(--mint); font-weight:700}
+.resq .body .rev-quote.empty{color:var(--muted); font-style:italic}
+.resq .body .rev-changed{display:inline-block; margin:4px 0 2px; padding:2px 10px; border-radius:999px;
+  background:var(--panel-2); border:1px solid var(--line-2); color:var(--text); font-size:13px; font-weight:700}
+.resq .body .rev-changed[hidden]{display:none}
+.resq .body .ans{display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; margin:2px 3px;
+  padding:3px 10px; border-radius:8px; border:1.5px solid; font-size:16px; font-weight:700;
+  line-height:1.5; vertical-align:baseline}
+.resq .body .ans-ok{color:var(--mint); border-color:var(--mint); background:var(--mint-dim)}
+.resq .body .ans-ok::before{content:"\2713"}
+.resq .body .ans-no{color:var(--text); border-color:var(--red); background:var(--panel)}
+.resq .body .ans-given{color:var(--red); text-decoration:line-through; text-decoration-thickness:2px; font-weight:600}
+.resq .body .ans-empty{color:var(--red); font-style:italic; font-weight:600}
+.resq .body .ans-empty::before{content:"\2717  "}
+.resq .body .ans-fix{color:var(--mint); padding-left:8px; border-left:1.5px solid var(--line-2)}
+.resq .body .ans-fix::before{content:"\2713  "}
+.resq .body .rev-checks{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
+.resq .body .rev-check{padding:3px 10px; border-radius:8px; border:1.5px solid; font-weight:700; font-size:14.5px}
+.resq .body .rev-check.ok{color:var(--mint); border-color:var(--mint)}
+.resq .body .rev-check.no{color:var(--red); border-color:var(--red)}
+.resq .body .rev-code{background:var(--code-bg); color:var(--code-fg); font-family:var(--mono); font-size:14px;
+  border-radius:10px; padding:12px 14px; margin:6px 0; white-space:pre; overflow-x:auto; max-height:420px}
+.rev-items{list-style:none; margin:6px 0 4px; padding:0}
+.rev-items li{display:flex; gap:10px; align-items:baseline; padding:6px 0; border-bottom:1px solid var(--line)}
+.rev-items li:last-child{border-bottom:0}
+.resq .body .rev-item-mark{font-weight:800; min-width:16px}
+.rev-items li.ok .rev-item-mark{color:var(--mint)}
+.rev-items li.no .rev-item-mark{color:var(--red)}
+.resq .body .rev-item-text{color:var(--text); flex:1}
+.resq .body .rev-item-worth{font-size:13.5px; white-space:nowrap}
+
+/* ---- Mark work on a standard assessment (lesson.html?marking=1) ---- */
+.markview{max-width:880px; margin:0 auto; padding:14px 16px 60px}
+.mv-tabs{display:flex; justify-content:center; gap:4px; margin:0 auto 16px; padding:4px;
+  width:max-content; max-width:100%; background:var(--panel); border:1.5px solid var(--line); border-radius:999px}
+.mv-tab{border:0; background:none; font:inherit; font-weight:700; font-size:15px; color:var(--muted);
+  padding:8px 22px; border-radius:999px; cursor:pointer; min-height:40px}
+.mv-tab.on{background:var(--amber); color:var(--amber-ink)}
+.mv-pane[hidden]{display:none}
+.mv-head{display:flex; align-items:center; gap:18px; background:var(--panel); border:1.5px solid var(--line);
+  border-radius:var(--r); padding:14px 18px; margin-bottom:10px}
+.mv-score{font-family:var(--display); font-size:30px; font-weight:800; white-space:nowrap}
+.mv-words{flex:1; min-width:0}
+.mv-note{margin:0; color:var(--muted); font-size:15px}
+.mv-saved{margin:4px 0 0; font-size:14px; font-weight:700; min-height:1.4em; color:var(--muted)}
+.mv-saved[data-state=done]{color:var(--mint)}
+.mv-saved[data-state=failed]{color:var(--red)}
+.markview .review{background:var(--panel); border:1.5px solid var(--line); border-radius:var(--r); padding:4px 16px}
+.markview .review .resq:first-child{border-top:0}
+.markview .resq{flex-wrap:wrap}
+/* room for the question before the score drops underneath it, on a phone */
+.markview .resq .body{flex:1 1 min(240px, 100%)}
+.mark-step{flex:none; display:flex; align-items:center; gap:4px; margin-left:auto;
+  border:1.5px solid var(--line-2); border-radius:999px; padding:3px; background:var(--panel-2)}
+.mark-btn{width:40px; height:40px; min-height:40px; border-radius:50%; border:0; background:var(--panel);
+  color:var(--text); font-size:20px; font-weight:800; line-height:1; cursor:pointer; padding:0}
+.mark-btn:hover:not(:disabled){background:var(--amber); color:var(--amber-ink)}
+.mark-btn:disabled{opacity:.35; cursor:default}
+.mark-val{min-width:58px; text-align:center; font-family:var(--mono); font-weight:700; font-size:15px}
+.mv-resp .responses{margin-top:0}
+.answers-locked textarea, .answers-locked input{cursor:text}
+.answers-locked button:disabled{opacity:.55}
 
 /* settings */
 .settings-btn{white-space:nowrap}

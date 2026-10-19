@@ -4157,9 +4157,9 @@ async function fetchCatalogue(){
   assigns = cat.assignments || [];
 }
 const catOf = (id) => (cat.lessons || []).find(l => l.lesson_id === id) || { unit: "", published: 0, position: 0, version_of: "" };
-/* A practical is handed in to be marked by hand, so the way into its work
-   says so. Everything else is looked at, not marked, there. */
-const workLabel = (id) => catOf(id).practical ? "Mark work" : "View work";
+/* An assessment is marked there: a practical by hand, a test a question at
+   a time, so the way into its work says so. A lesson is looked at. */
+const workLabel = (id) => (catOf(id).practical || catOf(id).assessment) ? "Mark work" : "View work";
 const titleOf = (id) => { const l = fileLessons.find(x => x.id === id); return l ? l.title : id; };
 async function catPost(payload){
   catLoaded = false;                 // whatever this changes, the copy we hold is stale
