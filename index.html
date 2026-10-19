@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<link rel="icon" href="images/logo-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="images/logo-180.png">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Computing Lesson Hub</title>
 <link rel="stylesheet" href="style.css">
@@ -30,17 +32,33 @@
     <h1 id="headline">Sign in</h1>
   </div>
 
-  <section class="station" id="loginCard">
-    <div class="grid3">
-      <div><label for="u">Username</label><input type="text" id="u" autocomplete="username"></div>
-      <div><label for="p">Password</label><input type="password" id="p" autocomplete="current-password"></div>
-    </div>
-    <div class="row" style="margin-top:16px">
-      <button class="btn-primary" id="loginBtn">Sign in</button>
-      <button class="crumb" id="forgotBtn" style="margin-left:14px">Forgot password?</button>
-      <span class="err" id="loginErr" role="alert"></span>
-    </div>
-    <p class="hint" id="loginNote" style="margin:12px 0 0">First time? Leave the password box empty and press Sign in.</p>
+  <!-- Username first, then Continue, then the password underneath it.
+       Both boxes are in the one form from the start, the password folded
+       away rather than missing, so a password manager still sees a username
+       and a password together and fills them as it always has. A student
+       with no password yet never sees the password box at all: Continue
+       signs them in and asks them to pick one. -->
+  <section class="station signin" id="loginCard">
+    <form id="loginForm" class="signin-form" autocomplete="on" novalidate>
+      <div class="signin-field">
+        <label for="u">Username</label>
+        <input type="text" id="u" name="username" autocomplete="username" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="signin-pass" id="passWrap">
+        <div class="signin-pass-inner">
+          <div class="signin-field">
+            <label for="p">Password</label>
+            <input type="password" id="p" name="password" autocomplete="current-password" tabindex="-1">
+          </div>
+        </div>
+      </div>
+      <div class="signin-acts">
+        <button class="btn-primary" id="loginBtn" type="submit">Continue</button>
+        <button class="crumb" id="forgotUserBtn" type="button">Forgot username?</button>
+        <button class="crumb" id="forgotBtn" type="button" hidden>Forgot password?</button>
+      </div>
+      <p class="err" id="loginErr" role="alert"></p>
+    </form>
   </section>
 
   <div class="tabs" id="tabs" hidden>
@@ -80,9 +98,9 @@
            heading instead of centred the way a one line pop-up message is. -->
       <div class="set-group" style="text-align:left">
         <span class="set-label">How to sign in</span>
-        <p class="modal-text">Type in your computer username, and then a password you have set.</p>
-        <p class="modal-text">If this is your first time, leave the password box empty and press Sign in.
-          You will be asked to pick a password of your own.</p>
+        <p class="modal-text">Type in your computer username and press Continue, then type your password underneath.</p>
+        <p class="modal-text">If this is your first time, you will be asked to pick a password of your own
+          straight after pressing Continue.</p>
         <p class="modal-text">If you have forgotten your password, press Forgot password and put your
           hand up, so your teacher can let you back in.</p>
       </div>
@@ -103,6 +121,22 @@
     <h2 id="sayTitle" style="margin-top:0"></h2>
     <p class="modal-text" id="sayText"></p>
     <button class="btn-primary modal-cta" id="sayOk">OK</button>
+  </div>
+</div>
+
+<!-- How a username is made, with the example taken apart so each piece can
+     be matched to the rule it comes from. -->
+<div class="modal-back no-print" id="userModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="userTitle">
+    <h2 id="userTitle" style="margin-top:0">Your username</h2>
+    <p class="modal-text">Your username is the same as your computer username. It is made of three parts:</p>
+    <div class="uname-parts" aria-hidden="true">
+      <span class="uname-part"><b>Smith</b><span>your surname</span></span>
+      <span class="uname-part"><b>J</b><span>first letter of your first name</span></span>
+      <span class="uname-part"><b>26</b><span>the year you started here</span></span>
+    </div>
+    <p class="modal-text">So John Smith, who started at the school in 2026, is <b>SmithJ26</b>.</p>
+    <button class="btn-primary modal-cta" id="userOk">OK</button>
   </div>
 </div>
 
@@ -295,6 +329,7 @@ function renderAuth(){
     $("auth").innerHTML = "";
     if (help) help.hidden = false;
     $("loginCard").hidden = false;
+    resetSignIn();
     $("headline").textContent = "Sign in";
     signedInView(false);
   }
@@ -320,15 +355,73 @@ on("helpFix", "click", () => {
 });
 renderAuth();
 
-on("loginBtn", "click", async () => {
+/* ---- signing in, a box at a time ----
+   Continue first tries the username on its own. The server signs in a
+   student who has no password yet (and tells us they must pick one), and
+   answers everyone else, real username or not, with the same "enter your
+   password", so this shows nothing about which usernames exist. That answer
+   is what opens the password box. */
+var passOpen = false;      // var: renderAuth runs above this line and resets it
+function openPassword(focus){
+  if (!passOpen){
+    passOpen = true;
+    $("passWrap").classList.add("open");
+    $("p").tabIndex = 0;
+    $("forgotBtn").hidden = false;
+    $("loginBtn").textContent = "Sign in";
+  }
+  if (focus) setTimeout(() => { try{ $("p").focus(); }catch(e){} }, 120);
+}
+function closePassword(){
+  passOpen = false;
+  $("passWrap").classList.remove("open");
+  $("p").tabIndex = -1;
+  $("forgotBtn").hidden = true;
+  $("loginBtn").textContent = "Continue";
+}
+/* Back to the start, for the next student on a shared computer. */
+function resetSignIn(){
+  closePassword();
+  try{ $("p").value = ""; }catch(e){}
+  $("loginErr").textContent = "";
+}
+/* A password manager that fills both boxes, as the page loads or when a
+   name is picked from its list, has answered the question Continue asks:
+   the box opens to show what it put there. */
+function noticeFilled(){ if ($("p").value) openPassword(false); }
+[300, 1000, 2500].forEach(ms => setTimeout(noticeFilled, ms));
+on("p", "input", noticeFilled);
+on("p", "change", noticeFilled);
+/* A different username while the box is still empty starts again; one the
+   password manager changed together with the password keeps both. */
+on("u", "input", () => { if (passOpen && !$("p").value){ closePassword(); $("loginErr").textContent = ""; } });
+
+on("loginForm", "submit", (e) => { e.preventDefault(); signIn(); });
+let signingIn = false;
+async function signIn(){
+  if (signingIn) return;
   $("loginErr").textContent = "";
   if (!ready){ $("loginErr").textContent = "Site not connected to its server yet (config.js)."; return; }
+  const username = $("u").value.trim();
+  if (!username){ $("loginErr").textContent = "Type your username first."; $("u").focus(); return; }
+  if (passOpen && !$("p").value){ $("loginErr").textContent = "Type your password."; $("p").focus(); return; }
+  const btn = $("loginBtn");
+  const label = btn.textContent;
+  signingIn = true;
+  btn.disabled = true;
+  btn.textContent = passOpen ? "Signing in…" : "Checking…";
   try{
     const r = await fetch(API + "/api/login", {
       method:"POST", headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ username: $("u").value, password: $("p").value })
+      body: JSON.stringify({ username: username, password: passOpen ? $("p").value : "" })
     });
     const d = await r.json();
+    /* Turned away without a password: they have one, so ask for it. */
+    if (!r.ok && !passOpen && r.status !== 503 && r.status < 500){
+      btn.disabled = false; signingIn = false;
+      openPassword(true);
+      return;
+    }
     if (!r.ok) throw new Error(d.error || "Sign-in failed.");
     /* Shared computers: if this is a DIFFERENT student from the last one to
        sign in here, drop the cached work so nobody sees someone else's answers.
@@ -344,9 +437,14 @@ on("loginBtn", "click", async () => {
     renderAuth();
     if (d.mustSet) forcePassword(d.name);
     else loadLessons();
-  }catch(e){ $("loginErr").textContent = e.message; }
-});
-on("p", "keydown", (e) => { if (e.key === "Enter") $("loginBtn").click(); });
+  }catch(e){
+    $("loginErr").textContent = e.message === "Failed to fetch" ? "Could not reach the server. Try again in a moment." : e.message;
+  }finally{
+    signingIn = false;
+    btn.disabled = false;
+    if (btn.textContent === "Checking…" || btn.textContent === "Signing in…") btn.textContent = passOpen ? "Sign in" : label;
+  }
+}
 
 /* housekeeping: clear stored work for retired or stale lessons */
 const MAX_AGE_DAYS = 60;
@@ -769,6 +867,16 @@ function say(title, text, then){
   $("sayOk").focus();
 }
 on("sayModal", "mousedown", (e) => { if (e.target === $("sayModal")) $("sayModal").hidden = true; });
+
+/* ---- forgot username ----
+   Nothing to look up: every username is made the same way, so the pop-up
+   says how, and they work their own out. */
+on("forgotUserBtn", "click", () => { $("userModal").hidden = false; $("userOk").focus(); });
+on("userOk", "click", () => { $("userModal").hidden = true; $("u").focus(); });
+on("userModal", "mousedown", (e) => { if (e.target === $("userModal")) $("userModal").hidden = true; });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("userModal").hidden){ $("userModal").hidden = true; $("u").focus(); }
+});
 
 /* ---- forgot password ----
    Check the username, let them choose the new password there and then, and

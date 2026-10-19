@@ -9,6 +9,9 @@
    wants to know whether the thing they noticed is meant to be there, not a
    full account of the work. */
 window.CHANGES = [
+  { v:"14.0", text:"Forgot username? on the sign-in page shows how a username is made: surname, first initial and the year they started, such as SmithJ26." },
+  { v:"13.9.9", text:"Students sign in a step at a time: their username, then Continue, then their password slides open underneath. Anyone without a password yet is asked to make one straight after Continue." },
+  { v:"13.9.8", text:"A new logo and browser tab icon: a computer screen like a blackboard, with </> written on it." },
   { v:"13.9.7", text:"The New look reaches the sign-in page, the lesson builder, the sandbox and the marking pages." },
   { v:"13.9.6", text:"A new logo: an open book with code brackets across its pages." },
   { v:"13.9.5", text:"Lock for marking and Student Voice use the site's own drawn icons instead of emoji." },

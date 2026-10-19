@@ -190,7 +190,7 @@ html[data-look="new"] body:has(#loginCard:not([hidden])) .masthead::before{
   background:url(images/logo.svg) center / contain no-repeat
 }
 html[data-look="new"] #loginCard:not([hidden]){max-width:560px; margin-left:auto; margin-right:auto; padding:26px 28px; box-shadow:var(--look-shadow-2)}
-html[data-look="new"] #loginCard .grid3{grid-template-columns:1fr}
+html[data-look="new"] #loginCard .signin-acts .btn-primary{min-width:130px}
 
 /* ---------- the sandbox ---------- */
 html[data-look="new"] .sb-open{
