@@ -71,6 +71,15 @@
     return given === deal(b).join(",") || given === oldDeal(b).join(",");
   }
 
+  /* Every save keeps a list's order, touched or not, so anyone who opened
+     a lesson before the new shuffle has the old deal saved, and opening it
+     again put that straight back: Q6 of the Scratch assessment still showed
+     its top line already in place. A saved list that is still exactly the
+     old deal was never moved, so it is dealt again instead. */
+  function reopen(b, v){
+    return (Array.isArray(v) && v.join(",") === oldDeal(b).join(",")) ? deal(b) : v;
+  }
+
   /* { got, max, right: [true/false for each place] } */
   function marks(b, v){
     const items = (b && Array.isArray(b.items)) ? b.items : [];
@@ -84,5 +93,5 @@
     return { got: right.filter(Boolean).length, max, right };
   }
 
-  window.orderMarks = { marks, deal, untouched };
+  window.orderMarks = { marks, deal, untouched, reopen };
 })();

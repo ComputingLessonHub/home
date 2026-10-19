@@ -8486,7 +8486,8 @@ function rOrder(b){
   redraw();
 
   fields[b.id] = { get:() => arrangement.slice(),
-                   set:(v) => { if (Array.isArray(v) && v.length === items.length){ arrangement = v.slice(); redraw(); } } };
+                   set:(v) => { v = window.orderMarks.reopen(b, v);
+                                if (Array.isArray(v) && v.length === items.length){ arrangement = v.slice(); redraw(); } } };
   return { section:s,
            check:() => ({ ok:true }),   // any order can be submitted, like a Form
            brief:{ eyebrow:"Put in order", title:askHtml(b.prompt) || "", text:b.note || "" } };
