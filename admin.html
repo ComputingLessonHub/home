@@ -5263,7 +5263,9 @@ function assessmentQuestions(){
      does not, so Q5 here is the question that was 5 on their page. */
   const reading = ["text","picture","embed","link","frame"];
   ((lessonJson && lessonJson.blocks) || []).forEach(b => {
-    if (reading.includes(b.type)) return;
+    /* A page is one of the pages in front of the questions, and the lesson
+       page gives it no number either. */
+    if (reading.includes(b.type) || b.type === "page") return;
     n++;
     if (["mc","order","blanks","short","exam"].includes(b.type) ||
         ((b.type === "table" || b.type === "label" || b.type === "hotspot" ||

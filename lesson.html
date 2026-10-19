@@ -1049,7 +1049,7 @@ async function fetchRelease(){
 
 /* Which kinds of lesson have pages a teacher can hold shut. A practical
    assessment is sat a page at a time like a lesson, so its pages lock. A
-   marked assessment has no pages, only questions, and they stay open. Home
+   marked assessment's pages and questions all stay open. Home
    learning is done at home with no teacher in the room to open anything, so
    a lock there would leave a child stuck until the next lesson. */
 function pagesLock(l){
@@ -1673,16 +1673,24 @@ function rubricOnSummary(){
 /* =====================================================================
    A MARKED ASSESSMENT, AS A STUDENT SITS IT
    =====================================================================
-   Two pages and then the summary. The first is a welcome: whatever the
-   builder put before the first question (a paragraph of instructions, a
-   picture), then the reminders every assessment gives. The second is every
-   question, one under another, so a student can scroll back to anything
-   they skipped rather than hunting through pages for it.
+   A few screens one after another, and then the summary. First the pages
+   the builder put in front of the questions page, each its own screen, with
+   the reminders every assessment gives at the foot of the last one. Then
+   every question on one screen, one under another, so a student can scroll
+   back to anything they skipped rather than hunting through pages for it.
+   Then any page a teacher put after the questions page, and Finish on the
+   last screen of all.
+
+   The questions are saved loose at the top of the file, where they have
+   always been, and lesson.questionsPage says what the page round them was
+   called. A file saved before an assessment had pages has no questionsPage:
+   the reading at its top makes a welcome screen of its own, which is what
+   it always did.
 
    Underneath, every question is still its own step, exactly as before.
    Saving, the marked work, the review and a teacher reading the work all go
-   a question at a time, and none of them had to learn about this. The two
-   pages are only two boxes the questions are moved into, and `step` is the
+   a question at a time, and none of them had to learn about this. The
+   screens are only boxes the steps are moved into, and `step` is the
    question in view, so a student who comes back lands where they were.
 
    A teacher reading the work, printing it or marking it sees it a question
@@ -1694,28 +1702,60 @@ function assessLayout(){
   return !!(lesson && lesson.assessment && !lesson.practical) &&
     viewParam === null && pdfParam === null && allParam === null && embedParam === null;
 }
+function briefOf(st, plain){
+  const was = (plain && st.plainBrief) ? st.plainBrief : st.brief;
+  return (typeof was === "function") ? was() : (was || {});
+}
 function arrangeAssessment(){
-  const welcome = el("section","assess-page assess-welcome");
-  const questions = el("section","assess-page assess-questions");
+  const screens = [];
   const items = [];
-  let leading = true;
+  const said = lesson.questionsPage || null;
+  const questions = el("section","assess-page assess-questions");
+  const qScreen = { el: questions, kind: "questions",
+    title: (said && said.title) || "Questions",
+    text: (said && said.task) ? stripTags(said.task)
+                              : "Answer every question, then press Finish at the bottom.",
+    step: -1 };
+  let started = false;
+  let welcome = null;                  // reading at the top of an older file
   steps.forEach((st, i) => {
     const b = (lesson.blocks || []).find(x => x.id === st.qid);
     if (!b) return;
-    const reading = ASSESS_READING.includes(b.type);
-    if (!reading) leading = false;
-    const bb = (typeof st.brief === "function") ? st.brief() : (st.brief || {});
-    const item = el("div","pg-item");
-    item.dataset.blockId = b.id;
-    if (b.type !== "picture"){
-      if (bb.title) item.appendChild(el("h3","pg-h", bb.title));
-      if (bb.text) item.appendChild(el("p","pg-t", bb.text));
+    if (b.type === "page"){
+      const box = el("section","assess-page");
+      st.section.hidden = false;
+      box.appendChild(st.section);
+      const bb = briefOf(st);
+      screens.push({ el: box, kind: started ? "after" : "start",
+                     title: bb.title || "", text: bb.text || "", step: i });
+      welcome = null;
+      return;
     }
-    st.section.hidden = false;
-    item.appendChild(st.section);
-    (leading ? welcome : questions).appendChild(item);
-    if (!reading) items.push({ step: i, block: b, num: questionNo[b.id], item: item, built: st });
+    const reading = ASSESS_READING.includes(b.type);
+    if (!started && reading && !said){
+      if (!welcome){
+        welcome = { el: el("section","assess-page assess-welcome"), kind: "start",
+                    title: "Welcome to your assessment", text: "Read this page before you start.", step: i };
+        screens.push(welcome);
+      }
+      welcome.el.appendChild(assessItem(st, b, null));
+      return;
+    }
+    if (!started){ started = true; qScreen.step = i; screens.push(qScreen); }
+    const num = reading ? null : questionNo[b.id];
+    const item = assessItem(st, b, num);
+    questions.appendChild(item);
+    if (!reading) items.push({ step: i, block: b, num: num, item: item, built: st });
   });
+  /* A questions page with nothing on it yet still has its place, so a
+     teacher previewing an unfinished assessment sees the pages either side
+     of it in the right order. */
+  if (!started){
+    const at = said && Number.isInteger(said.at) ? Math.min(Math.max(said.at, 0), screens.length) : screens.length;
+    screens.splice(at, 0, qScreen);
+    screens.slice(at + 1).forEach(s => { s.kind = "after"; });
+    qScreen.step = 0;
+  }
 
   const n = items.length;
   const rules = el("div","pg-item assess-rules");
@@ -1724,18 +1764,28 @@ function arrangeAssessment(){
   [ n === 1 ? "There is 1 question, on the next page."
             : "There are " + n + " questions, all on the next page, one after another.",
     "Answer every question. You can scroll back up and change an answer at any time until you hand it in.",
-    "The bar along the top shows which questions you have answered. Press it to jump to a question.",
+    "The numbered boxes show which questions you have answered. Press a number to go straight to that question.",
     "Your answers are saved as you go.",
     "When you have finished, press Finish at the bottom. Once you have handed it in, you cannot go back and change anything."
   ].forEach(t => list.appendChild(el("li","", t)));
   rules.appendChild(list);
-  welcome.appendChild(rules);
-  questions.appendChild(el("p","assess-end","That was the last question. Check your answers, then press Finish."));
+  /* The reminders go on the last screen before the questions, so "the next
+     page" is the questions whatever came before. With nothing in front of
+     the questions there is a welcome screen for them alone. */
+  let qAt = screens.indexOf(qScreen);
+  if (qAt === 0){
+    screens.unshift({ el: el("section","assess-page assess-welcome"), kind: "start",
+                      title: "Welcome to your assessment", text: "Read this page before you start.", step: 0 });
+    qAt = 1;
+  }
+  screens[qAt - 1].el.appendChild(rules);
+  questions.appendChild(el("p","assess-end", screens.length - 1 > qAt
+    ? "That was the last question. Check your answers, then press Continue."
+    : "That was the last question. Check your answers, then press Finish."));
 
-  welcome.hidden = true; questions.hidden = true;
-  $("blocks").appendChild(welcome);
-  $("blocks").appendChild(questions);
-  assessPages = { welcome, questions, items, onQuestions: false, shown: false, meta: null, pinnedUntil: 0 };
+  screens.forEach(s => { s.el.hidden = true; $("blocks").appendChild(s.el); });
+  assessPages = { screens, qAt, at: 0, items, onQuestions: false, shown: false,
+                  nav: null, navBtn: null, pinnedUntil: 0 };
 
   /* Which question is in view, worked out as they scroll, once a frame. */
   let queued = false;
@@ -1744,6 +1794,26 @@ function arrangeAssessment(){
     queued = true;
     requestAnimationFrame(() => { queued = false; noteQuestionInView(); });
   }, { passive: true });
+}
+/* One question, or one piece of reading, as it sits on its screen. A
+   question says which number it is on a line of its own above its words,
+   rather than in front of them, so the words a student has to read start
+   where their eye does. */
+function assessItem(st, b, num){
+  const bb = briefOf(st, num !== null);
+  const item = el("div","pg-item");
+  item.dataset.blockId = b.id;
+  if (num !== null && num !== undefined){
+    item.classList.add("aq-card");
+    item.appendChild(tel("p","aq-num","Question " + num));
+  }
+  if (b.type !== "picture"){
+    if (bb.title) item.appendChild(el("h3","pg-h", bb.title));
+    if (bb.text) item.appendChild(el("p","pg-t", bb.text));
+  }
+  st.section.hidden = false;
+  item.appendChild(st.section);
+  return item;
 }
 
 /* Whether a question has something in it yet. Not whether it is right:
@@ -1772,17 +1842,25 @@ function questionAnswered(it){
   try{ return it.built.check().ok; }catch(e){ return true; }
 }
 
-function showAssessPage(onQuestions, i){
+/* The screen a step is on. */
+function screenOfStep(i){
   const A = assessPages;
-  A.onQuestions = !!onQuestions;
+  const st = steps[i];
+  const k = st ? A.screens.findIndex(s => s.el.contains(st.section)) : -1;
+  return k < 0 ? A.qAt : k;
+}
+function showAssessScreen(k, i){
+  const A = assessPages;
+  k = Math.min(Math.max(k, 0), A.screens.length - 1);
+  const sc = A.screens[k];
+  A.at = k;
+  A.onQuestions = sc.kind === "questions";
   A.shown = true;
   /* returnSection hides whatever a pop-up borrowed, and the summary hides
      the lot, so every question is put back on show here. */
   steps.forEach(st => { st.section.hidden = false; });
-  A.welcome.hidden = A.onQuestions;
-  A.questions.hidden = !A.onQuestions;
-  const page = A.onQuestions ? A.questions : A.welcome;
-  steps.forEach(st => { if (page.contains(st.section)){ try{ if (st.onShow) st.onShow(); }catch(e){} } });
+  A.screens.forEach((s, n) => { s.el.hidden = n !== k; });
+  steps.forEach(st => { if (sc.el.contains(st.section)){ try{ if (st.onShow) st.onShow(); }catch(e){} } });
   try{ tuneColours(); }catch(e){}
 
   const note = $("resumeNote");
@@ -1796,26 +1874,28 @@ function showAssessPage(onQuestions, i){
     }, 5000);
   }
 
-  $("briefTitle").textContent = A.onQuestions ? "Questions" : "Welcome to your assessment";
-  $("briefText").textContent = A.onQuestions
-    ? "Answer every question, then press Finish at the bottom."
-    : "Read this page before you start.";
-  $("briefTitle").hidden = false;
-  $("briefText").hidden = false;
-  $("brief").hidden = false;
+  $("briefTitle").textContent = sc.title;
+  $("briefText").textContent = sc.text;
+  $("briefTitle").hidden = !sc.title;
+  $("briefText").hidden = !sc.text;
+  $("brief").hidden = !sc.title && !sc.text;
 
-  $("backBtn").disabled = !A.onQuestions;
-  $("nextBtn").textContent = !A.onQuestions ? "Start \u2192"
+  const last = k === A.screens.length - 1;
+  $("backBtn").disabled = k === 0;
+  $("nextBtn").textContent = !last
+    ? (A.screens[k + 1].kind === "questions" ? "Start →" : "Continue →")
     : workFrozen ? "STAR Feedback" : "Finish";
 
   const stage = $("stage");
   stage.scrollTop = 0;
   if (A.onQuestions){
     const it = A.items.find(x => x.step === i) || A.items[0];
-    step = it ? it.step : 0;
+    step = it ? it.step : sc.step;
     if (it && it !== A.items[0]) stage.scrollTop = questionTop(it);
   } else {
-    step = 0;
+    /* The page's own step, so the task bar down its side is the one for
+       this page. */
+    step = sc.step;
   }
   paintTracker();
   paintRubricButton();
@@ -1830,7 +1910,7 @@ function questionTop(it){
   return Math.max(0, it.item.getBoundingClientRect().top - stage.getBoundingClientRect().top + stage.scrollTop - 12);
 }
 function goToQuestion(it, flash){
-  if (!assessPages.onQuestions) showAssessPage(true, it.step);
+  if (!assessPages.onQuestions) showAssessScreen(assessPages.qAt, it.step);
   /* Scrolling to it passes other questions on the way, and the last few can
      never reach the top of the page, so the one pressed is held as the
      current one until the scroll has finished. */
@@ -1856,54 +1936,134 @@ function noteQuestionInView(){
   if (cur.step !== step){ step = cur.step; paintTracker(); }
 }
 
-/* The bar along the top: one piece for each question rather than each
-   page, green once it has an answer, amber for the one in view. */
+/* The question numbers. Not a bar along the top: that ran the width of the
+   screen on every screen of the assessment, the welcome included, and thirty
+   slivers of a line say very little about thirty questions.
+
+   On a wide screen they are a panel beside the questions, a box for each
+   one, filled in once it has an answer and ringed for the one in view, with
+   how many are answered above them. On a phone there is no column to spare,
+   so the bar along the bottom carries how many are answered, and pressing it
+   opens the same boxes. Both are there only while the questions are. */
 function buildAssessTracker(){
   const t = $("tracker"); t.innerHTML = "";
-  t.classList.add("assess-track");
+  t.hidden = true;
   const A = assessPages;
-  const bar = el("div","aq-segs");
-  A.items.forEach(it => {
-    const seg = el("button","seg");
-    seg.type = "button";
-    seg.appendChild(el("span","seg-n", String(it.num)));
-    seg.addEventListener("click", () => {
-      if (finished && !spectate) return;
-      goToQuestion(it, true);
-    });
-    bar.appendChild(seg);
-    it.seg = seg;
+  const nav = el("nav","qnav no-print");
+  nav.setAttribute("aria-label","Questions");
+  nav.hidden = true;
+  const head = el("div","qnav-head");
+  head.appendChild(tel("span","qnav-title","Questions"));
+  A.navCount = tel("span","qnav-count","");
+  head.appendChild(A.navCount);
+  nav.appendChild(head);
+  const meter = el("div","qnav-meter");
+  A.navFill = el("span");
+  meter.appendChild(A.navFill);
+  nav.appendChild(meter);
+  const grid = el("div","qnav-grid");
+  A.items.forEach(it => { it.seg = questionBox(it, null); grid.appendChild(it.seg); });
+  nav.appendChild(grid);
+  nav.appendChild(questionKey());
+  const row = $("blocks").parentNode;          // the row the task bar sits in
+  row.insertBefore(nav, $("blocks"));
+  A.nav = nav;
+
+  const open = tel("button","btn-ghost qnav-open no-print","");
+  open.type = "button";
+  open.hidden = true;
+  open.setAttribute("aria-haspopup","dialog");
+  open.addEventListener("click", openQuestionSheet);
+  $("dock").querySelector(".mid").appendChild(open);
+  A.navBtn = open;
+}
+/* One numbered box. Pressing it goes to that question; from the pop-up on a
+   phone it closes the pop-up first, so the question is not underneath it. */
+function questionBox(it, closeFirst){
+  const box = tel("button","qnum", String(it.num));
+  box.type = "button";
+  box.addEventListener("click", () => {
+    if (finished && !spectate) return;
+    if (closeFirst) closeFirst();
+    goToQuestion(it, true);
   });
-  t.appendChild(bar);
-  A.meta = el("span","aq-meta");
-  t.appendChild(A.meta);
+  return box;
+}
+function questionKey(){
+  const key = el("div","qnav-key");
+  [["done","Answered"],["","Not answered yet"]].forEach(pair => {
+    const k = el("span","qnav-keyitem");
+    k.appendChild(el("span","qnum-swatch" + (pair[0] ? " " + pair[0] : "")));
+    k.appendChild(tel("span","", pair[1]));
+    key.appendChild(k);
+  });
+  return key;
+}
+function paintQuestionBox(box, it, has, now){
+  box.className = "qnum" + (has ? " done" : "") + (now ? " now" : "");
+  const words = "Question " + it.num + (has ? ", answered" : ", not answered yet");
+  box.title = words;
+  box.setAttribute("aria-label", words);
+  if (now) box.setAttribute("aria-current", "step"); else box.removeAttribute("aria-current");
 }
 function paintAssessTracker(){
   const A = assessPages;
+  if (!A.nav) return;
   const ds = $("doneScreen");
   const onSummaryNow = !!(ds && !ds.hidden);
-  /* The summary has a score to show, not questions to get to. */
-  $("tracker").hidden = onSummaryNow;
-  let answered = 0, here = null;
+  /* Only while the questions are on screen: the pages before them have no
+     questions to count, and the summary has a score to show instead. */
+  const showing = A.onQuestions && !onSummaryNow;
+  A.nav.hidden = !showing;
+  A.navBtn.hidden = !showing;
+  document.body.classList.toggle("assess-on-questions", showing);
+  let answered = 0;
   A.items.forEach(it => {
     const has = questionAnswered(it);
     if (has) answered++;
-    const now = A.onQuestions && !onSummaryNow && it.step === step;
-    if (now) here = it;
-    it.seg.className = "seg" + (now ? " now" : has ? " done" : "");
-    const words = "Question " + it.num + (has ? ", answered" : ", not answered yet");
-    it.seg.title = words;
-    it.seg.setAttribute("aria-label", words);
-    if (now) it.seg.setAttribute("aria-current", "step"); else it.seg.removeAttribute("aria-current");
+    paintQuestionBox(it.seg, it, has, showing && it.step === step);
   });
   const total = A.items.length;
-  /* Where they are, and how many are done. A phone has room for only the
-     second, so they are two pieces it can drop one of. */
-  A.meta.innerHTML = "";
-  if (here) A.meta.appendChild(tel("span","aq-where", "Question " + here.num + " of " + total + " \u00b7 "));
-  A.meta.appendChild(tel("span","aq-count", answered + " of " + total + " answered"));
+  A.navCount.textContent = answered + " of " + total + " answered";
+  A.navFill.style.width = (total ? Math.round(answered / total * 100) : 0) + "%";
+  A.navBtn.textContent = answered + " of " + total + " answered";
+  A.navBtn.setAttribute("aria-label", answered + " of " + total + " questions answered. Show the question numbers.");
 }
-/* Typing calls markDirty on every key, and the bar only needs to keep up
+/* The boxes again, in a pop-up, for a phone. Built fresh each time it
+   opens, so it always says what is answered now. */
+function openQuestionSheet(){
+  const A = assessPages;
+  const back = el("div","modal-back no-print");
+  const box = el("div","modal narrow qsheet");
+  box.setAttribute("role","dialog");
+  box.setAttribute("aria-modal","true");
+  box.setAttribute("aria-label","Questions");
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  const close = () => { back.remove(); document.removeEventListener("keydown", onKey); };
+  box.appendChild(tel("h2","","Questions"));
+  let answered = 0;
+  const grid = el("div","qnav-grid");
+  A.items.forEach(it => {
+    const has = questionAnswered(it);
+    if (has) answered++;
+    const b = questionBox(it, close);
+    paintQuestionBox(b, it, has, it.step === step);
+    grid.appendChild(b);
+  });
+  box.appendChild(tel("p","modal-text", answered + " of " + A.items.length + " answered. Press a number to go to that question."));
+  box.appendChild(grid);
+  box.appendChild(questionKey());
+  const done = tel("button","btn-ghost modal-stay","Close");
+  done.type = "button";
+  done.addEventListener("click", close);
+  box.appendChild(done);
+  back.appendChild(box);
+  back.addEventListener("mousedown", (e) => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(back);
+  setTimeout(() => { const now = grid.querySelector(".now") || grid.firstChild; if (now) now.focus(); }, 30);
+}
+/* Typing calls markDirty on every key, and the numbers only need to keep up
    with what is on screen, so it is painted once a frame at most. */
 let assessPaintQueued = false;
 function assessRepaintSoon(){
@@ -1985,7 +2145,7 @@ function reopenAssessment(){
   save();
   submitWork();
   const first = assessPages.items[0];
-  showAssessPage(true, first ? first.step : 0);
+  showAssessScreen(assessPages.qAt, first ? first.step : 0);
 }
 
 function buildTracker(){
@@ -2117,7 +2277,7 @@ function showStep(i){
     /* Anyone coming back with answers already saved goes straight to the
        questions rather than through the welcome again. */
     const resuming = !assessPages.shown && restoredWork && !wasDone;
-    showAssessPage(i > 0 || resuming, i);
+    showAssessScreen(resuming ? assessPages.qAt : i > 0 ? screenOfStep(i) : 0, i);
     return;
   }
   step = Math.min(Math.max(i, 0), steps.length - 1);
@@ -2194,7 +2354,7 @@ function refreshGate(){
   $("nextBtn").disabled = false;
 }
 $("backBtn").addEventListener("click", () => {
-  if (assessPages){ showAssessPage(false, 0); return; }
+  if (assessPages){ showAssessScreen(assessPages.at - 1); return; }
   const b = nextOpen(step - 1, -1);
   if (b !== null) showStep(b);
 });
@@ -2214,9 +2374,13 @@ let askingToMoveOn = false;
 async function tryContinue(){
   if (coolingDown()) return;                       // still in the waiting period
   if (assessPages){
-    if (!assessPages.onQuestions){
-      const first = assessPages.items[0];
-      showAssessPage(true, first ? first.step : 0);
+    const A = assessPages;
+    /* Every screen but the last moves on. The last one is where Finish is,
+       which is the questions themselves unless a teacher put a page after. */
+    if (A.at < A.screens.length - 1){
+      const next = A.at + 1;
+      const first = A.items[0];
+      showAssessScreen(next, next === A.qAt && first ? first.step : undefined);
       lingerFlush();
       return;
     }
@@ -4568,10 +4732,14 @@ function renderBlock(b, i){
      kinds that used to be: a table or a label carries marks like any other,
      and a student told they have not answered 5 has to be able to find 5.
      A practical is sat in pages and numbers nothing. */
-  if (lesson && lesson.assessment && !lesson.practical && !ASSESS_READING.includes(b.type)){
+  /* A page in front of the questions is something to read or do before
+     starting, not a question, so it takes no number. */
+  if (lesson && lesson.assessment && !lesson.practical && !ASSESS_READING.includes(b.type)
+      && b.type !== "page"){
     const n = ++qCounter;
     questionNo[b.id] = n;
     const was = final.brief;
+    final.plainBrief = was;           // the questions screen says the number on its own line
     const numbered = (x) => ({ ...(x || {}), title: n + ". " + ((x && x.title) || "") });
     final.brief = (typeof was === "function") ? () => numbered(was()) : numbered(was);
   }
@@ -9327,7 +9495,10 @@ function confetti(){
 
 function doneShell(title){
   steps.forEach(st => { st.section.hidden = true; });
-  if (assessPages){ assessPages.welcome.hidden = true; assessPages.questions.hidden = true; }
+  if (assessPages){
+    assessPages.screens.forEach(s => { s.el.hidden = true; });
+    assessPages.onQuestions = false;        // so the question numbers go too
+  }
   /* The summary is not one of the pages, so the bar down the left has nothing
      to point at while it is up. leaveSummary goes back through showStep,
      which paints it again. */

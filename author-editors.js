@@ -356,8 +356,10 @@ function insertHere(arr, at, inside){
    extension tasks is fine and useful, a choice inside a choice is a maze.
    Extension tasks are a page's own "finished early?" flap, so they go on a
    page and nowhere else. */
-function pickableGroups(inside){
-  return taskGroups().map(g => ({
+function pickableGroups(inside, target){
+  /* The list being added to decides the palette: an assessment's questions
+     page offers question types, every other list the lesson's tasks. */
+  return taskGroups(target).map(g => ({
     name: g.name,
     kinds: g.kinds.filter(k => {
       if (inside === "choice") return k.kind !== "choice" && k.kind !== "extension";
@@ -423,7 +425,7 @@ function taskIcon(kind){
    end; with no arr at all (a lesson with no pages yet) it goes where
    addBlock would put it, which makes the first page. */
 function openTaskPicker(arr, inside, at){
-  const groups = pickableGroups(inside);
+  const groups = pickableGroups(inside, arr);
   const bankOK = !!specLevel() && !OFFLINE && !bankOpen && !respEditing;
   let mode = bankOK ? "bank" : "types";
   let everything = false;          // the rest of the bank has been asked for
@@ -669,27 +671,42 @@ function pageView(p){
   menu.hidden = true;
   const taskbarOn = p.taskbar !== false;
   const extOn = p.extension === true;
+  /* An assessment is built in pages too, one of which holds its questions.
+     That page has question numbers instead of a task bar, and an extension
+     page means nothing where nothing on it is counted. */
+  const isQs = !!lesson.assessment && p === questionsPage();
   const items = [
-    [taskbarOn ? "Turn the task bar off" : "Turn the task bar on",
+    !isQs && [taskbarOn ? "Turn the task bar off" : "Turn the task bar on",
       () => { p.taskbar = !taskbarOn; render(); schedulePreview(); }],
-    [extOn ? "Make it an ordinary page" : "Make it an extension page",
+    !lesson.assessment && [extOn ? "Make it an ordinary page" : "Make it an extension page",
       () => { p.extension = !extOn; render(); schedulePreview(); }],
+    lesson.assessment && !isQs && ["Make this the questions page", () => makeQuestionsPage(p)],
     at > 0 && ["Move page earlier", () => { move(lesson.blocks, lesson.blocks.indexOf(p), -1); firstPageOpen(); }],
     at < lesson.blocks.length - 1 &&
       ["Move page later", () => { move(lesson.blocks, lesson.blocks.indexOf(p), 1); firstPageOpen(); }],
     ["Duplicate page", () => {
       const copy = JSON.parse(JSON.stringify(p));
+      /* there is only ever one questions page */
+      delete copy.questions; delete copy.qBase;
       lesson.blocks.splice(lesson.blocks.indexOf(p) + 1, 0, copy);
       tellPreview(copy); render();
     }],
     ["Copy page to paste into another lesson", () => clipCopy(p)],
     (clipGet() || {}).what === "page" &&
       ["Paste copied page after this one", () => clipPastePage(p)],
-    ["Delete page", () => askDelete("Page", () => {
-      const i = lesson.blocks.indexOf(p);
-      if (i >= 0) lesson.blocks.splice(i, 1);
-      render(); schedulePreview();
-    })]
+    ["Delete page", () => {
+      if (isQs){
+        say("Keep the questions page",
+            "Every assessment needs a questions page. To use a different page for "
+            + "the questions, open it and choose Make this the questions page first.");
+        return;
+      }
+      askDelete("Page", () => {
+        const i = lesson.blocks.indexOf(p);
+        if (i >= 0) lesson.blocks.splice(i, 1);
+        render(); schedulePreview();
+      });
+    }]
   ].filter(Boolean);
   items.forEach(it => {
     const b = el("button","", it[0]);
@@ -698,9 +715,11 @@ function pageView(p){
     b.addEventListener("click", () => { menu.hidden = true; it[1](); });
     menu.appendChild(b);
   });
-  menu.appendChild(el("p","pv-menu-note",
-    "The task bar is the row of icons a student uses to jump between tasks. "
-    + "An extension page is for finishing early, and is counted separately."));
+  menu.appendChild(el("p","pv-menu-note", lesson.assessment
+    ? "Students answer everything on the questions page, and it is the only page that is marked. "
+      + "Pages in front of it are gone through first, one at a time, and nothing on them is marked."
+    : "The task bar is the row of icons a student uses to jump between tasks. "
+      + "An extension page is for finishing early, and is counted separately."));
   more.addEventListener("click", (e) => {
     e.stopPropagation();
     if (!menu.hidden){ menu.hidden = true; return; }
@@ -716,7 +735,8 @@ function pageView(p){
   /* A switch that is not at its usual setting says so under the title, so
      it is not only known about by opening the menu. */
   const flags = [];
-  if (!taskbarOn) flags.push("No task bar");
+  if (isQs) flags.push("Questions page");
+  else if (!taskbarOn) flags.push("No task bar");
   if (extOn) flags.push("Extension page");
   if (flags.length){
     const tags = el("div","pv-flags");

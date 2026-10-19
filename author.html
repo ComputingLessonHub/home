@@ -775,7 +775,7 @@ try{ localStorage.removeItem("hub_builder"); }catch(e){}
 /* Older drafts kept tasks loose at the top level, and quizzes had a single
    answer. Bring both up to date so nothing is lost. */
 function tidyIntoPages(){
-  if (lesson.assessment) return;
+  if (lesson.assessment){ tidyAssessment(); return; }
   if (!lesson.blocks.some(b => b.type !== "page")) return;
   const out = [];
   let current = null;
@@ -788,6 +788,123 @@ function tidyIntoPages(){
     current.blocks.push(b);
   });
   lesson.blocks = out;
+}
+
+/* An assessment is built in pages like everything else, and one of them is
+   the questions page: the only page that is marked, and the only one that
+   offers the question palette. The pages in front of it are what a student
+   reads, watches or does before they start.
+
+   It is saved flat all the same. The questions go into the file loose at
+   the top level, where the lesson page, the marking and the markbook have
+   always looked for them, and questionsPage says what the page around them
+   was called. So this puts the page back round them as the lesson opens. */
+const LEAD_READING = ["text","picture","embed","link","frame"];
+function tidyAssessment(){
+  const info = lesson.questionsPage || null;
+  delete lesson.questionsPage;
+  const marked = lesson.blocks.filter(b => b.type === "page" && b.questions);
+  if (marked.length){
+    marked.slice(1).forEach(p => { delete p.questions; delete p.qBase; });
+  } else {
+    const out = [];
+    let qp = null, lead = null;
+    const makeQ = (base) => Object.assign(BLANK.page(), {
+      title: (info && info.title) || "Questions", task: (info && info.task) || "",
+      questions: true, qBase: base });
+    lesson.blocks.forEach((b, i) => {
+      if (b.type === "page"){ out.push(b); return; }
+      /* Saved before an assessment had pages: the reading at the top was
+         shown on a welcome page of its own, so it becomes a page of its own
+         here and a student sees the same thing either way. */
+      if (!info && !qp && LEAD_READING.includes(b.type)){
+        if (!lead){ lead = Object.assign(BLANK.page(), { title:"Before you start" }); out.push(lead); }
+        lead.blocks.push(b);
+        return;
+      }
+      /* Where the first question sat is what its id was made from, so it is
+         kept as the start of the count. A page added in front of the
+         questions later then moves no question's id, and nothing a student
+         has already answered is cut loose from its question. */
+      if (!qp){ qp = makeQ(info && Number.isInteger(info.base) ? info.base : i); out.push(qp); }
+      qp.blocks.push(b);
+    });
+    if (!qp){
+      qp = makeQ(info && Number.isInteger(info.base) ? info.base : 0);
+      const at = info && Number.isInteger(info.at) ? Math.min(Math.max(info.at, 0), out.length) : out.length;
+      out.splice(at, 0, qp);
+    }
+    lesson.blocks = out;
+  }
+  /* Nothing in a marked assessment is ever locked (lesson.html's pagesLock
+     says so), and a page left locked here would stop an offline save while
+     it waited for a passcode that does nothing. */
+  lesson.blocks.forEach(b => { if (b.type === "page") b.startLocked = false; });
+}
+/* Every assessment has a questions page. A new one starts with only that,
+   and a lesson turned into an assessment keeps its pages in front of a new
+   one rather than having one of them picked for it. */
+function ensureQuestionsPage(){
+  if (!lesson.assessment || questionsPage()) return;
+  const made = Object.assign(BLANK.page(), { title:"Questions", questions:true, qBase:0, startLocked:false });
+  lesson.blocks.forEach(b => { if (b.type === "page") b.startLocked = false; });
+  lesson.blocks.push(made);
+}
+/* Moving the questions to another page. What was on the old one stays where
+   it is, so a teacher who picked the wrong page can move the mark straight
+   back. The count the ids start from moves with the mark, so swapping back
+   gives every question the id it had. */
+function makeQuestionsPage(page){
+  const was = questionsPage();
+  if (!was || was === page) return;
+  const go = () => {
+    page.questions = true;
+    page.qBase = Number.isInteger(was.qBase) ? was.qBase : 0;
+    delete was.questions; delete was.qBase;
+    render(); schedulePreview();
+  };
+  const leaving = (was.blocks || []).filter(x => !LEAD_READING.includes(x.type)).length;
+  const odd = (page.blocks || []).filter(x => !fitsQuestions(x)).length;
+  if (!leaving && !odd){ go(); return; }
+  openModal(box => {
+    box.appendChild(el("h2","","Use this page for the questions?"));
+    const name = String(was.title || "").trim() || "the questions page";
+    if (leaving) box.appendChild(el("p","modal-text",
+      (leaving === 1 ? "The question" : "The " + leaving + " questions") + " on “" + esc(name)
+      + "” stay where " + (leaving === 1 ? "it is" : "they are") + ", but will not be marked any more."));
+    if (odd) box.appendChild(el("p","modal-text",
+      (odd === 1 ? "One task" : odd + " tasks") + " on this page " + (odd === 1 ? "is not a question" : "are not questions")
+      + ", so " + (odd === 1 ? "it" : "they") + " will not be marked. Move "
+      + (odd === 1 ? "it" : "them") + " to another page if you can."));
+    const yes = el("button","btn-primary modal-cta","Use this page");
+    yes.addEventListener("click", () => { closeModal(); go(); });
+    const no = el("button","btn-ghost modal-stay","Cancel");
+    no.addEventListener("click", closeModal);
+    box.appendChild(yes); box.appendChild(no);
+  });
+}
+function questionsPage(){
+  return lesson.assessment ? lesson.blocks.find(b => b.type === "page" && b.questions) || null : null;
+}
+/* The questions page's own list, or one inside it, such as a group's. */
+function isQuestionsList(arr){
+  const q = questionsPage();
+  return !!q && !!arr && holdsList(q, arr);
+}
+/* What can go on the questions page: whatever the question palette offers,
+   read from the palette itself so the two cannot disagree. A coding task is
+   "code" until a language is picked and ide or web after; a group is
+   allowed when everything in it is. */
+function questionKinds(){
+  const box = $("palAssess");
+  const out = new Set(box ? Array.from(box.querySelectorAll(".pal[data-add]")).map(x => x.dataset.add) : []);
+  if (out.has("code")){ out.add("ide"); out.add("web"); }
+  return out;
+}
+function fitsQuestions(b){
+  if (!b) return false;
+  if (b.type === "group") return (b.blocks || []).every(fitsQuestions);
+  return questionKinds().has(b.type);
 }
 
 /* Drafts written by the older builder had one question per quiz. */
@@ -947,7 +1064,20 @@ function compile(){
   }
   firstPageOpen();
   resetCompiledIds();                  // so the preview and the builder can find each other's tasks
-  lesson.blocks.forEach((b, i) => compileOne(b, b.type + (i + 1), out.blocks));
+  lesson.blocks.forEach((b, i) => {
+    /* The questions page is saved as its questions, loose at the top level,
+       numbered on from where the first one has always been (see
+       tidyAssessment). Its title, subtitle and place among the pages go
+       alongside, so the builder can put the page back round them. */
+    if (lesson.assessment && b.type === "page" && b.questions){
+      const base = Number.isInteger(b.qBase) ? b.qBase : 0;
+      out.questionsPage = { title: b.title || "Questions", task: b.task || "",
+                            base: base, at: out.blocks.length };
+      (b.blocks || []).forEach((child, k) => compileOne(child, child.type + (base + k + 1), out.blocks));
+      return;
+    }
+    compileOne(b, b.type + (i + 1), out.blocks);
+  });
   idsUsed = null;
   return out;
 }
@@ -1017,7 +1147,8 @@ function compileOne(b, id, target){
     const kids = [];
     (b.blocks || []).forEach((child, k) => compileOne(child, id + "_" + (k + 1), kids));
     push({ type:"page", id, title: b.title || "Tasks", task: b.task || "",
-           startLocked: b.startLocked !== false,
+           /* nothing in a marked assessment locks, see tidyAssessment */
+           startLocked: lesson.assessment ? false : b.startLocked !== false,
            extension: b.extension === true ? true : undefined,
            /* On unless it was turned off, so only the off ones are written
               down and every lesson made before this setting existed keeps it. */
@@ -1406,12 +1537,24 @@ function tellPreview(page){
   const at = pageIndex();
   if (at >= 0){
     lastPageAt = at;
+    const step = previewStepOf(at);
     try{
-      sessionStorage.setItem("hub_preview_step", String(at));
-      localStorage.setItem("hub_preview_go", JSON.stringify({ step:at, at:Date.now() }));
+      sessionStorage.setItem("hub_preview_step", String(step));
+      localStorage.setItem("hub_preview_go", JSON.stringify({ step:step, at:Date.now() }));
     }catch(e){}
   }
   schedulePreview();
+}
+/* Where a page lands in the lesson file, which is the step the preview
+   counts. The same as its place here, except after an assessment's
+   questions page, which is saved as one step per question. */
+function previewStepOf(at){
+  let n = 0;
+  for (let i = 0; i < at; i++){
+    const b = lesson.blocks[i];
+    n += (lesson.assessment && b && b.type === "page" && b.questions) ? (b.blocks || []).length : 1;
+  }
+  return n;
 }
 /* Pages carry `collapsed`, tasks carry `folded`. Neither is ever compiled into
    the lesson file: they are only about getting around the builder.
@@ -1600,6 +1743,18 @@ function render(){
   if (window.scrollY !== keepPage) window.scrollTo(0, keepPage);
 }
 
+/* Which palette is down the left. The questions page of an assessment offers
+   the questions it can be marked from; every other page of an assessment
+   offers everything a lesson can have, new page included, because what a
+   student reads or does before the questions is not marked. Practice for a
+   weak topic can be any kind of task too, so writing response tasks offers
+   the full lesson palette. */
+function paintPaletteChoice(){
+  const questions = !!lesson.assessment && !respEditing
+    && !!openPageRef && openPageRef === questionsPage();
+  $("palLesson").hidden = questions;
+  $("palAssess").hidden = !questions;
+}
 function renderNow(){
   /* the dot a note was hanging off is about to be thrown away */
   closeHelp();
@@ -1607,14 +1762,7 @@ function renderNow(){
   firstPageOpen();
   /* the palette is hidden only while writing feedback sentences */
   const writingTargets = (lesson.assessment || lesson.practical) && assessTab === "targets" && !respEditing;
-  if (!writingTargets){
-    /* Practice for a weak topic can be any kind of task, so writing response
-       tasks offers the full lesson palette rather than the short list of
-       question types an assessment is marked from. */
-    const anyTask = !!respEditing;
-    $("palLesson").hidden = !!lesson.assessment && !anyTask;
-    $("palAssess").hidden = !lesson.assessment || anyTask;
-  }
+  if (!writingTargets) paintPaletteChoice();
   const list = $("list"); list.innerHTML = "";
   /* With STAR feedback off the follow-up is one list for everyone, so the
      tab opens straight onto it. Set here rather than only when the tab is
@@ -1668,21 +1816,7 @@ function renderNow(){
     saveDraft();
     return;
   }
-  /* An assessment is a flat list of questions with no pages in it, so it is
-     drawn the way it always was. */
-  if (lesson.assessment && !lesson.practical){
-    if (!lesson.blocks.length)
-      list.appendChild(el("p","hint","No questions yet. Press + Add task."));
-    lesson.blocks.forEach((b, i) => list.appendChild(card(b, i, lesson.blocks)));
-    /* On a narrow screen the palette is gone, so the list needs its own way to
-       add to it. A lesson adds pages from the strip and tasks from inside the
-       page; an assessment has neither, so the containers go straight
-       underneath its questions. */
-    list.appendChild(addTaskRow(lesson.blocks));
-    saveDraft();
-    return;
-  }
-  /* Everything else is made of pages, and one of them is shown at a time. A
+  /* Everything is made of pages, and one of them is shown at a time. A
      whole lesson laid out at once ran to forty-odd screens of scrolling and
      held every editor in it live, which is what made the column unreadable and
      every button on it slow. */
@@ -1729,6 +1863,8 @@ function renderNow(){
     openPageRef = at >= 0 ? lesson.blocks[at] : pages[0];
     lastPageAt = Math.max(0, lesson.blocks.indexOf(openPageRef));
   }
+    /* again, now the open page is settled: an assessment's palette follows it */
+    paintPaletteChoice();
   /* One page is not a card of its own: its title is the heading over its
      tasks and they are the list. All pages keeps a card for each page, which
      is what folds there. */
@@ -1762,6 +1898,10 @@ function pageStrip(){
     chip.appendChild(el("span","t", name));
     chip.appendChild(el("span","c", String(count)));
     chip.title = name + " • " + count + " task" + (count === 1 ? "" : "s");
+    if (p === questionsPage()){
+      chip.classList.add("qpage");
+      chip.title = name + " • the questions page • " + count + " question" + (count === 1 ? "" : "s");
+    }
     /* Filled in when this is the page being edited; only outlined when every
        page is on screen, where it is saying which one the preview follows
        rather than which one you are in. */
@@ -1807,7 +1947,8 @@ function pageStrip(){
   });
   const add = el("button","pagechip add","+ Page");
   add.type = "button";
-  add.title = "Add a page to the end";
+  add.title = questionsPage() ? "Add a page for students to read before the questions"
+                              : "Add a page to the end";
   add.addEventListener("click", addPage);
   bar.appendChild(add);
 
@@ -1824,9 +1965,22 @@ function pageStrip(){
   return wrap;
 }
 
+/* Where a new page goes. A lesson adds to the end. An assessment adds in
+   front of its questions page, because the pages before it are the ones a
+   student goes through first, and that is what a new page is nearly always
+   for. A page can still be dragged anywhere along the strip. */
+function placeNewPage(made){
+  const q = questionsPage();
+  if (q){
+    made.startLocked = false;
+    lesson.blocks.splice(lesson.blocks.indexOf(q), 0, made);
+  } else {
+    lesson.blocks.push(made);
+  }
+}
 function addPage(){
   const made = BLANK.page();
-  lesson.blocks.push(made);
+  placeNewPage(made);
   viewAll = false;
   tellPreview(made);
   scrollToBlock = made;
@@ -1856,9 +2010,12 @@ function movePagePicker(b, arr){
     pageList().forEach((p, n) => {
       const here = p.blocks === arr;
       const name = String(p.title || "").trim() || "Untitled";
+      /* the questions page only holds what can be marked */
+      const wrongKind = !here && p === questionsPage() && !fitsQuestions(b);
       const row = el("button","modepick-item",
-                     (n + 1) + ". " + name + (here ? "   it is on this one now" : ""));
-      if (here) row.disabled = true;
+                     (n + 1) + ". " + name + (here ? "   it is on this one now"
+                                             : wrongKind ? "   only questions go here" : ""));
+      if (here || wrongKind) row.disabled = true;
       row.addEventListener("click", () => {
         const at = arr.indexOf(b);
         closeModal();
@@ -1919,7 +2076,17 @@ function canDropOn(arr){
   /* While a response set is open it is the only place a task can go —
      otherwise the page behind it takes the drop instead. */
   if (respEditing) return arr === openArray();
-  return lesson.assessment ? true : arr !== lesson.blocks;
+  if (arr === lesson.blocks) return false;
+  /* The questions page is marked, so it takes what the question palette
+     offers and nothing else. With every page on screen a written answer
+     could otherwise be dragged off a start page onto it, or a lesson task
+     off the palette, and sit there counting for nothing. A bank task is
+     let through: bankInsert already turns away the one kind it must. */
+  if (isQuestionsList(arr)){
+    if (newTask) return questionKinds().has(newTask);
+    if (dragFrom) return fitsQuestions(dragFrom.arr[dragFrom.i]);
+  }
+  return true;
 }
 /* put whatever is being dragged at position `at` in `arr` */
 function dropInto(arr, at){
@@ -1979,6 +2146,8 @@ function headLabel(b, i){
   const t = String(b.title || "").trim();
   /* "1. Page: Introduction", or just "1. Page" while it has no title, rather
      than leaving a colon hanging with nothing after it. */
+  if (b === questionsPage())
+    return pageNumber(b) + ". Questions page" + (t && t !== "Questions" ? ": " + t : "");
   return pageNumber(b) + ". Page" + (t ? ": " + t : "");
 }
 
@@ -2142,8 +2311,9 @@ function passMarkEditor(b){
    on a page's card in All pages and at the top of the page being edited. */
 function pageLockTools(b, tools){
   /* Home learning has none: it is done at home, where there is no teacher
-     to open a page, so lesson.html never locks one. */
-  if (lesson.homework) return;
+     to open a page, so lesson.html never locks one. An assessment's pages
+     are gone through one after another in the one sitting, so none either. */
+  if (lesson.homework || lesson.assessment) return;
   const isFirst = lesson.blocks.indexOf(b) === 0;
   if (isFirst) b.startLocked = false;     // students must be able to begin
   const locked = b.startLocked !== false;
@@ -2202,6 +2372,7 @@ function card(b, i, arr){
       holder.querySelectorAll(".bcard.open").forEach(x => x.classList.remove("open"));
       c.classList.add("open");
       paintStrip();
+      paintPaletteChoice();     // an assessment's palette follows the page picked
     });
   }
   if (b !== bankRoot){
@@ -2276,8 +2447,9 @@ function card(b, i, arr){
     tools.appendChild(mv);
   }
   /* Holding back the rest of the page until this task is done. Only a task
-     sitting straight on a page has a "rest of the page" to hold back, and an
-     assessment has no pages at all. A practical has pages, and its levels
+     sitting straight on a page has a "rest of the page" to hold back, and a
+     marked assessment holds nothing back: its pages are gone through in
+     order and its questions all sit on one. A practical has pages, and its levels
      open one after another by exactly this, so it gets the button too. Lit
      up while a level is set, so a teacher can see which tasks are holding
      their page from the outline. */
@@ -2299,9 +2471,21 @@ function card(b, i, arr){
   const acts = (b === bankRoot) ? [] :
                [["\u2191","Move up", () => move(arr, i, -1)],
                 ["\u2193","Move down", () => move(arr, i, 1)],
-                ["duplicate","Duplicate: add a copy just below", () => { arr.splice(i + 1, 0, JSON.parse(JSON.stringify(b))); render(); schedulePreview(); saveDraft(); }],
-                ["copy","Copy to paste into another lesson", () => clipCopy(b)],
-                ["\u2715","Delete", () => askDelete(LABEL[b.type], () => { arr.splice(i, 1); render(); schedulePreview(); })]];
+                  ["duplicate","Duplicate: add a copy just below", () => {
+                    const copy = JSON.parse(JSON.stringify(b));
+                    /* there is only ever one questions page */
+                    delete copy.questions; delete copy.qBase;
+                    arr.splice(i + 1, 0, copy); render(); schedulePreview(); saveDraft(); }],
+                  ["copy","Copy to paste into another lesson", () => clipCopy(b)],
+                  ["✕","Delete", () => {
+                    if (b === questionsPage()){
+                      say("Keep the questions page",
+                          "Every assessment needs a questions page. To use a different page for "
+                          + "the questions, open it and choose Make this the questions page first.");
+                      return;
+                    }
+                    askDelete(LABEL[b.type], () => { arr.splice(i, 1); render(); schedulePreview(); });
+                  }]];
   acts.forEach(a => {
     /* Duplicate and Copy used to be two sets of overlapping squares. Duplicate
        is a square with a plus now (another one, here), and Copy the clipboard
@@ -2505,6 +2689,7 @@ function setMode(assess, practical){
   lesson.assessment = !!assess;
   lesson.practical = !!practical;
   if (practical) lesson.assessment = false;
+  ensureQuestionsPage();
   /* The practical button is taken off the page when there is no server, so
      it may not be there to mark. */
   const prBtn = $("modePractical");
@@ -3806,10 +3991,10 @@ function addBlock(made){
     render(); schedulePreview();
     return;
   }
-  if (made.type === "page" || lesson.assessment){
-    lesson.blocks.push(made);
-    lastAddedAt = lesson.blocks.length - 1;
-    if (made.type === "page"){ viewAll = false; tellPreview(made); }
+  if (made.type === "page"){
+    placeNewPage(made);
+    lastAddedAt = lesson.blocks.indexOf(made);
+    viewAll = false; tellPreview(made);
   } else {
     /* Lessons are made of pages, so a task always goes on one. It joins the
        page on screen, or a new page if the lesson has none yet. */
@@ -4287,6 +4472,7 @@ function askPasscode(b){
 function pagesMissingPasscode(){
   const out = [];
   if (lesson.homework) return out;        // nothing locks in home learning
+  if (lesson.assessment) return out;      // nor in a marked assessment
   lesson.blocks.forEach((b, i) => {
     if (b.type !== "page" || i === 0) return;
     if (b.startLocked !== false && !b.passHash) out.push(i + 1);
@@ -4299,8 +4485,10 @@ function pagesMissingPasscode(){
    same order, folded away so the row does not become a wall of buttons. Read
    from the palette itself rather than written out again, because two lists of
    the same thing drift apart and nobody notices for a term. */
-function taskGroups(){
-  const from = (lesson.assessment && !openArray()) ? "palAssess" : "palLesson";
+function taskGroups(target){
+  /* The question palette for the questions page of an assessment and
+     anything inside it, the lesson palette for everything else. */
+  const from = (lesson.assessment && !openArray() && isQuestionsList(target)) ? "palAssess" : "palLesson";
   const box = $(from);
   if (!box) return [];
   /* A whole group hidden from the palette is hidden from this row too. The
@@ -4927,7 +5115,6 @@ function runHeading(run){
 function runList(arr){
   if (arr) return arr;
   if (respEditing) return respEditing === "__ext" ? lesson.extensions : lesson.responses[respEditing];
-  if (lesson.assessment) return lesson.blocks;
   let page = targetPage();
   if (!page){
     page = BLANK.page();
@@ -6759,14 +6946,12 @@ function importPageFile(){
       const onlyPage = got.blocks.length === 1 && got.blocks[0].type === "page";
       const page = onlyPage ? got.blocks[0]
                             : Object.assign(BLANK.page(), { title:"Imported page", blocks: got.blocks });
-      if (lesson.assessment && !lesson.practical){
-        /* An assessment has no pages, so what comes in is its questions. */
-        (onlyPage ? page.blocks : got.blocks).forEach(b => lesson.blocks.push(b));
-      } else {
-        lesson.blocks.push(page);
-        openPageRef = page; viewAll = false;
-        tellPreview(page);
-      }
+      /* Into an assessment it arrives as a page in front of the questions,
+         the same place + Page puts one, and its tasks can be moved onto the
+         questions page from there if they are questions. */
+      placeNewPage(page);
+      openPageRef = page; viewAll = false;
+      tellPreview(page);
       dirty = true;
       render(); schedulePreview();
       closeModal();
@@ -7319,7 +7504,10 @@ function fromCompiled(data, meta){
                    saved the new way round. */
                 rubric: data.rubricOrder === "lowest-first" ? (data.rubric || []) : (data.rubric || []).slice().reverse(),
                 rubricNote: data.rubricNote || "",
-                topics: data.topics || {}, responses: {}, extensions: [], blocks: [] };
+                topics: data.topics || {}, responses: {}, extensions: [], blocks: [],
+                /* Only carried as far as tidyAssessment, which puts the
+                   questions page back together from it and then drops it. */
+                questionsPage: data.questionsPage || null };
   /* Two things belong to every task whatever kind it is, and every branch
      below that builds a fresh object was dropping both.
 
@@ -7513,7 +7701,7 @@ function applyBuildLayout(){
 }
 
 /* What belongs on the one row of controls, which depends on the kind of
-   work: an assessment has no pages to add, a practical has both. */
+   work: an assessment and a practical have their tabs, a lesson has none. */
 function paintBuildBar(){
   if (!isCompact()) return;
   const scroll = $("buildBarScroll");

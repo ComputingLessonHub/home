@@ -4539,6 +4539,10 @@ html[data-bg=dark] kbd{background:#2A303B; border-color:#4A515F}
 .pagechip.dragging{opacity:.45}
 .pagechip.over{border-color:var(--amber); box-shadow:0 0 0 3px rgba(220,138,62,.16)}
 .pagechip.add{border-style:dashed}
+/* An assessment's questions page: its count says questions. Kept on the
+   count rather than the title, because a phone hides the title and the
+   count is the part still there. */
+.pagechip.qpage .c::before{content:"Q "; font-weight:800}
 .pagechip.all{flex:none}
 
 html[data-build=compact] .pagestrip{top:var(--buildbar-h); margin:-14px -14px 12px; padding:10px 14px}
@@ -6509,17 +6513,90 @@ body.lpvpage{height:100vh; height:100dvh; overflow:hidden; display:flex; flex-di
 .edit-newversion{display:block; margin:0 auto 10px; font-size:14.5px}
 
 /* ---------- a marked assessment, as a student sits it ----------
-   The bar along the top has a piece for each question rather than each
-   page, with how far they have got written beside it. New classes only, so
-   being at the end of the file beats nothing the mobile rules above set. */
-.tracker.assess-track{gap:12px; padding-bottom:4px}
-.tracker.assess-track[hidden]{display:none}
-.aq-segs{display:flex; flex:1; min-width:0; gap:4px; align-items:center; align-self:stretch}
-.aq-meta{flex:none; font-size:12.5px; font-weight:600; color:var(--muted); white-space:nowrap;
-  font-variant-numeric:tabular-nums}
-@media (max-width:640px){
-  .aq-where{display:none}
+   New classes only, so being at the end of the file beats nothing the
+   mobile rules above set. Where one has to beat an older rule it matches
+   that rule's selector and adds to it, rather than relying on coming last. */
+
+/* The question numbers, in a panel beside the questions. Sticky inside the
+   stage, the same way the task bar is, so it stays put while the questions
+   scroll past it. */
+.qnav{
+  position:sticky; top:16px; z-index:5; flex:0 0 212px; align-self:flex-start;
+  margin:16px 0 0; padding:16px;
+  background:var(--panel); border:1px solid var(--line); border-radius:16px;
 }
+.qnav[hidden]{display:none}
+.qnav-head{display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin:0 0 8px}
+.qnav-title{font-family:var(--display); font-weight:800; font-size:15px}
+.qnav-count{font-size:12.5px; font-weight:600; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap}
+.qnav-meter{height:6px; border-radius:999px; background:var(--line); overflow:hidden; margin:0 0 14px}
+.qnav-meter > span{display:block; height:100%; width:0; background:var(--mint); border-radius:inherit; transition:width .25s ease}
+.qnav-grid{display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:6px}
+/* A box for each question: outlined while it is empty, filled once it has
+   an answer, and ringed in the site's blue for the one on screen. A ring
+   rather than a colour, so the one on screen still says whether it is
+   answered. */
+.qnum{
+  height:34px; min-height:0; min-width:0; padding:0;
+  border:1.5px solid var(--line-2); border-radius:9px;
+  background:var(--panel); color:var(--text);
+  font:inherit; font-size:13.5px; font-weight:700; font-variant-numeric:tabular-nums;
+  cursor:pointer;
+}
+.qnum:hover{border-color:var(--muted)}
+.qnum:focus-visible{outline:2px solid var(--amber); outline-offset:2px}
+.qnum.done{background:var(--mint); border-color:var(--mint); color:var(--amber-ink)}
+.qnum.now{box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--amber)}
+.qnav-key{display:flex; flex-wrap:wrap; gap:6px 14px; margin:14px 0 0; font-size:12.5px; color:var(--muted)}
+.qnav-keyitem{display:inline-flex; align-items:center; gap:6px}
+.qnum-swatch{width:14px; height:14px; border-radius:4px; border:1.5px solid var(--line-2); background:var(--panel)}
+.qnum-swatch.done{background:var(--mint); border-color:var(--mint)}
+
+/* While the questions are up, they sit in a column a line of reading can
+   follow, with the numbers beside it, and the pair in the middle of the
+   screen. Full width, an answer on the left of a laptop screen was a long
+   way from the question it belonged to. */
+body.assess-on-questions .stagerow{justify-content:center; gap:28px}
+body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
+
+/* Each question is a card of its own with room round it, its number on a
+   line above its words. Run together with a thin line between them, thirty
+   questions read as one wall of text. */
+.assess-questions > .pg-item{
+  background:var(--panel); border:1px solid var(--line); border-radius:16px;
+  padding:22px 24px 24px; margin:0 0 28px;
+}
+.assess-questions > .pg-item:first-child{margin-top:16px}
+.aq-num{margin:0 0 6px; font-size:12.5px; font-weight:800; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--amber)}
+.assess-questions > .pg-item > .pg-h{font-size:19px; line-height:1.45; margin:0 0 16px}
+.assess-questions > .pg-item > .pg-t{margin:-8px 0 16px}
+/* Being taken to a question: a ring that fades, because the card has a
+   background of its own that the usual flash would wipe out. */
+.assess-questions > .pg-item.justopened{animation:qcardflash 1.6s ease-out}
+@keyframes qcardflash{
+  from{box-shadow:0 0 0 3px var(--amber)}
+  to{box-shadow:0 0 0 3px transparent}
+}
+
+/* On a phone there is no column to spare for the numbers, so the bar along
+   the bottom says how many are answered and opens them in a pop-up. */
+.qnav-open{display:none}
+@media (max-width:720px){
+  .qnav{display:none}
+  .qnav-open:not([hidden]){display:inline-flex; align-items:center; justify-content:center;
+    max-width:100%; padding:8px 14px; font-size:14px; font-weight:700; white-space:nowrap}
+  .assess-questions > .pg-item{padding:16px 16px 18px; margin-bottom:20px; border-radius:14px}
+  .assess-questions > .pg-item > .pg-h{font-size:17.5px}
+}
+.qsheet .qnav-grid{margin:14px 0 0; grid-template-columns:repeat(auto-fill, minmax(48px, 1fr))}
+.qsheet .qnum{height:44px; font-size:15px}
+.qsheet .modal-stay{margin-top:16px}
+
+/* On a page a teacher made, the reminders come after the page's own tasks
+   rather than after another item, so they need the line above them that an
+   item would have given them. */
+.assess-page > .pagegroup + .assess-rules{margin-top:18px; padding-top:16px; border-top:1px solid var(--line)}
 .assess-rules ul{margin:6px 0 0; padding-left:20px}
 .assess-rules li{margin:5px 0; line-height:1.45}
 .assess-end{color:var(--muted); font-size:14px; text-align:center; margin:22px 0 8px}
