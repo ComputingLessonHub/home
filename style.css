@@ -6733,18 +6733,6 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
   from{box-shadow:0 0 0 3px var(--amber)}
   to{box-shadow:0 0 0 3px transparent}
 }
-/* Focus on one question, a choice in Settings. The question in view stays
-   as it is and the rest fade back, not away: they are still there to read
-   and to press, and pointing at one or clicking into it brings it straight
-   back. Screen only, so a printed page is never half grey. */
-@media screen{
-  .assess-questions > .pg-item{transition:opacity .25s ease, filter .25s ease, border-color .25s ease}
-  body.qfocus .assess-questions > .pg-item:not(.q-current):not(:hover):not(:focus-within){
-    opacity:.45; filter:saturate(.6);
-  }
-  body.qfocus .assess-questions > .pg-item.q-current{border-color:color-mix(in srgb, var(--amber) 55%, var(--line))}
-}
-
 /* On a phone there is no column to spare for the numbers, so the bar along
    the bottom says how many are answered and opens them in a pop-up. */
 .qnav-open{display:none}
