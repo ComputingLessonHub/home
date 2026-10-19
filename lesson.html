@@ -1808,7 +1808,8 @@ function arrangeAssessment(){
   /* Not passive: the page's own scroll is what is being replaced. */
   $("stage").addEventListener("wheel", questionWheel, { passive: false });
   assessPages.wheelLast = 0;
-  assessPages.wheelDir = 0;
+  assessPages.wheelSum = 0;
+  assessPages.wheelMoved = false;
 }
 /* One question, or one piece of reading, as it sits on its screen. A
    question says which number it is on a line of its own above its words,
@@ -1956,7 +1957,11 @@ function glideStage(top){
   const from = stage.scrollTop;
   if (glide){ cancelAnimationFrame(glide.frame); clearTimeout(glide.timer); }
   if (Math.abs(to - from) < 1){ glide = null; stage.style.scrollSnapType = ""; return; }
-  const start = performance.now();
+  /* Timed from the first frame, not from now. A frame's time is when the
+     frame began, which can be a moment before this ran, and a slide timed
+     from now started a little below nought: the curve read that as behind
+     the start, so every slide first kicked back the wrong way. */
+  let start = -1;
   const g = glide = { to: to, frame: 0, timer: 0 };
   /* On a touch screen the stage snaps to the cards by itself (style.css),
      and a snapping box pulls every step of a glide back to the card it
@@ -1971,7 +1976,8 @@ function glideStage(top){
   };
   const tick = (now) => {
     if (glide !== g) return;
-    const t = Math.min(1, (now - start) / GLIDE_MS);
+    if (start < 0) start = now;
+    const t = Math.min(1, Math.max(0, (now - start) / GLIDE_MS));
     const ease = 1 - Math.pow(1 - t, 3);
     stage.scrollTop = from + (to - from) * ease;
     if (t < 1) g.frame = requestAnimationFrame(tick); else finish();
@@ -1987,9 +1993,14 @@ function glideStage(top){
 function wheelTarget(dir){
   const A = assessPages;
   const stage = $("stage");
-  const box = stage.getBoundingClientRect();
-  const at = stage.scrollTop;
+  /* From where the page is going, not where it has got to. A turn of the
+     wheel during a slide was worked out from halfway between two cards: down
+     skipped a whole question, and up then down a bit came back somewhere new. */
+  const at = glide ? glide.to : stage.scrollTop;
   const view = stage.clientHeight;
+  const shift = at - stage.scrollTop;
+  const box = stage.getBoundingClientRect();
+  const fromTop = (r) => ({ bottom: r.bottom - shift });
   const pageStep = Math.max(120, Math.round(view * 0.8));
   /* Every card on the page, a piece of reading between questions as well,
      or the wheel would carry a student straight past it. */
@@ -2001,7 +2012,7 @@ function wheelTarget(dir){
   tops.forEach((t, i) => { if (t <= at + 4) cur = i; });
   if (dir > 0){
     if (cur >= 0){
-      const r = cards[cur].getBoundingClientRect();
+      const r = fromTop(cards[cur].getBoundingClientRect());
       if (r.bottom > box.bottom + 4) return Math.min(at + pageStep, at + (r.bottom - box.bottom) + 24, tops[cur + 1] !== undefined ? tops[cur + 1] : Infinity);
     }
     /* past the gap above the first card too, or the first turn of the
@@ -2032,14 +2043,23 @@ function questionWheel(e){
   }
   e.preventDefault();
   /* A trackpad sends a long run of small steps for one push, and keeps
-     sending them as it coasts to a stop. Only the first one of a run moves a
-     question; the run is over once the steps stop for a moment. */
+     sending them as it coasts to a stop. One run moves one question; the run
+     is over once the steps stop for a moment.
+     A run is a run whichever way its steps point. Starting a new one on every
+     change of direction meant the tail of one push, still coasting, and the
+     start of the next pulled the page both ways in turn.
+     It moves once enough of it has added up, so a finger resting on a
+     trackpad, or a nudge meant to read a line, does not throw a whole
+     question past. One notch of a mouse wheel is more than enough on its own. */
   const now = Date.now();
-  const sameRun = now - A.wheelLast < 140 && dir === A.wheelDir;
+  if (now - A.wheelLast >= 140){ A.wheelSum = 0; A.wheelMoved = false; }
   A.wheelLast = now;
-  if (sameRun) return;
-  A.wheelDir = dir;
-  glideStage(wheelTarget(dir));
+  if (A.wheelMoved) return;
+  const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * stage.clientHeight : e.deltaY;
+  A.wheelSum += px;
+  if (Math.abs(A.wheelSum) < 24) return;
+  A.wheelMoved = true;
+  glideStage(wheelTarget(A.wheelSum > 0 ? 1 : -1));
 }
 function noteQuestionInView(){
   const A = assessPages;
