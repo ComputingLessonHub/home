@@ -33,6 +33,9 @@
   let title = "", group = "";
   let say = function(){};
   let markbookRows = [], markbookTasks = [], markbookQs = [], voiceQs = [];
+  /* What the Student voice tab is narrowed to: one question or all of
+     them, and within a question one answer, picked by pressing its bar. */
+  let voiceFilter = { q: "", a: null };
   let mbSort = { key:"username", dir:1 };
   /* Which table is up: the marks, who has done the response tasks, or what
      the class said in Your say. They used to be stacked, and the second was
@@ -152,14 +155,14 @@
     });
     return out;
   }
-  /* The Your say questions worth a column: the ones the lesson asks, and
-     any it has stopped asking that somebody answered before it stopped. */
+  /* The Your say questions worth a filter: the ones the lesson asks, and
+     any it has stopped asking that somebody was given before it stopped. */
   function voiceQuestions(work){
     const sv = window.studentVoice;
     if (!sv) return [];
     const asked = sv.asked(lessonJson).map(q => q.id);
-    return sv.QUESTIONS.filter(q => asked.indexOf(q.id) >= 0 ||
-      work.some(w => sv.answerOf(w.data, q) !== null));
+    const given = work.map(w => sv.givenOf(w.raw !== undefined ? w.raw : w.data)).filter(Boolean).map(q => q.id);
+    return sv.QUESTIONS.filter(q => asked.indexOf(q.id) >= 0 || given.indexOf(q.id) >= 0);
   }
 
   /* ctx: { lesson, roster, work, results, title, group, say }
@@ -185,6 +188,7 @@
     markbookQs = assessmentQuestions();
     voiceQs = practical ? [] : voiceQuestions(work);
     if (mbView === "voice" && !voiceQs.length) mbView = "marks";
+    if (voiceFilter.q && !voiceQs.some(q => q.id === voiceFilter.q)) voiceFilter = { q: "", a: null };
     markbookRows = roster.map(st => {
       /* By username, so two students with the same name do not share a
          result. The name is only for a server too old to send it. */
@@ -245,8 +249,10 @@
       const said = r && (r.strength || r.target);
       const away = !said && practical && !pm.hasWork(lessonJson, w && w.data);
       const awayWords = away ? pm.absentFeedback(lessonJson) : null;
-      const voice = {};
-      voiceQs.forEach(q => { voice[q.id] = window.studentVoice.answerOf(raw, q); });
+      /* Each student is given one question, so a row holds which one and
+         what they picked, or null where they were given it and moved on. */
+      const voiceQ = window.studentVoice && !practical ? window.studentVoice.givenOf(raw) : null;
+      const voiceA = voiceQ ? window.studentVoice.answerOf(raw, voiceQ) : null;
       return { name: st.display_name, username: st.username, grade: grade,
                score: r ? r.score : null, outOf: r ? r.out_of : null,
                /* nor does one nobody has graded yet, or a practice one, which is
@@ -256,7 +262,7 @@
                strength: awayWords ? awayWords.strength : r ? (r.strength || "") : "",
                target: awayWords ? awayWords.target : r ? (r.target || "") : "",
                level: level, levelAt: levelAt, range: range, ticks: ticks,
-               marks: marks, voice: voice, data: seen };
+               marks: marks, voiceQ: voiceQ, voiceA: voiceA, data: seen };
     });
   }
 
@@ -272,8 +278,10 @@
       if (k === "ticks") return r.ticks ? r.ticks.got : -1;
       if (k.indexOf("q:") === 0){ const m = r.marks[k.slice(2)]; return m ? m.got : -1; }
       if (k.indexOf("t:") === 0) return attempted(r.data, k.slice(2)) ? 1 : 0;
-      /* By the option's place in the list, so a scale sorts low to high. */
-      if (k.indexOf("v:") === 0){ const v = r.voice[k.slice(2)]; return v === null || v === undefined ? -1 : v; }
+      /* The question by where it is in the list; the answer by the
+         option's place, so a scale sorts low to high. */
+      if (k === "vq") return r.voiceQ ? voiceQs.indexOf(r.voiceQ) : -1;
+      if (k === "va") return r.voiceA === null || r.voiceA === undefined ? -1 : r.voiceA;
       return r[k] === null || r[k] === undefined ? -1 : r[k];
     };
     markbookRows.sort((a, b) => {
@@ -317,32 +325,126 @@
   }
   function mbTicks(r){ return r.ticks ? r.ticks.got + " / " + r.ticks.max : ""; }
 
-  /* How the class answered each Your say question, counted, above the
-     table of who said what. A bar each, so the shape is seen before any
-     number is read. */
-  function voiceTotals(){
-    const wrap = el("div","mbvoice");
-    voiceQs.forEach(q => {
-      const card = el("div","mbvoice-q");
-      card.appendChild(el("b","", q.ask));
-      const counts = q.options.map(() => 0);
-      let n = 0;
-      markbookRows.forEach(r => { const v = r.voice[q.id]; if (v !== null && v !== undefined){ counts[v]++; n++; } });
-      q.options.forEach((text, i) => {
-        const line = el("div","mbvoice-row");
-        line.appendChild(el("span","mbvoice-opt", text));
-        const bar = el("span","mbvoice-bar");
-        const fill = el("span","mbvoice-fill");
-        fill.style.width = (n ? Math.round(100 * counts[i] / n) : 0) + "%";
-        bar.appendChild(fill);
-        line.appendChild(bar);
-        line.appendChild(el("span","mbvoice-n", String(counts[i])));
-        card.appendChild(line);
+  /* ---------- Student voice ----------
+     Every student is given one of the questions, so the tab is read one
+     question at a time: a row of filters along the top, one per question
+     with how many answered it, then how that question was answered, a bar
+     per option, then who said what. Pressing a bar narrows the table to the
+     students who picked that option, which is what a teacher actually asks
+     of it: who said they did not feel supported? */
+  function voiceRows(){
+    return markbookRows.filter(r => r.voiceQ &&
+      (!voiceFilter.q || r.voiceQ.id === voiceFilter.q) &&
+      (voiceFilter.a === null || r.voiceA === voiceFilter.a));
+  }
+  function voiceAnswered(q){
+    return markbookRows.filter(r => r.voiceQ === q && r.voiceA !== null).length;
+  }
+  function voiceFilters(holder){
+    const row = el("div","mbvoice-filters");
+    row.setAttribute("role","group");
+    row.setAttribute("aria-label","Show the answers to");
+    const total = markbookRows.filter(r => r.voiceQ && r.voiceA !== null).length;
+    const pill = (id, label, n, tip) => {
+      const b = el("button","mbvoice-pill" + (voiceFilter.q === id ? " on" : ""));
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(voiceFilter.q === id));
+      b.appendChild(el("span","", label));
+      b.appendChild(el("b","", String(n)));
+      if (tip) b.title = tip;
+      b.addEventListener("click", () => {
+        voiceFilter = { q: id, a: null }; mbSel = null;
+        paint(holder);
       });
-      card.appendChild(el("span","mbvoice-of", n === 1 ? "1 answer" : n + " answers"));
-      wrap.appendChild(card);
+      row.appendChild(b);
+    };
+    pill("", "All questions", total, "Every answer, whichever question it was");
+    voiceQs.forEach(q => pill(q.id, q.short || q.id, voiceAnswered(q), q.ask));
+    return row;
+  }
+  /* One question's answers as bars. With a question picked, each bar is a
+     button: pressed, the table shows only the students who picked it, and
+     pressed again, everybody. Under All questions each card is instead the
+     way into its own question. */
+  function voiceTotals(q, holder, picked){
+    const card = el(picked ? "div" : "button", "mbvoice-q" + (picked ? " picked" : ""));
+    if (!picked){
+      card.type = "button";
+      card.title = "Show only this question";
+      card.addEventListener("click", () => { voiceFilter = { q: q.id, a: null }; mbSel = null; paint(holder); });
+    }
+    card.appendChild(el("b","mbvoice-ask", q.ask));
+    const counts = q.options.map(() => 0);
+    const given = markbookRows.filter(r => r.voiceQ === q);
+    given.forEach(r => { if (r.voiceA !== null) counts[r.voiceA]++; });
+    const n = counts.reduce((x, y) => x + y, 0);
+    q.options.forEach((text, i) => {
+      const line = el(picked ? "button" : "div", "mbvoice-row" + (picked && voiceFilter.a === i ? " on" : ""));
+      if (picked){
+        line.type = "button";
+        line.setAttribute("aria-pressed", String(voiceFilter.a === i));
+        line.title = voiceFilter.a === i ? "Show everyone again" : "Show only the students who picked this";
+        line.addEventListener("click", () => {
+          voiceFilter.a = voiceFilter.a === i ? null : i; mbSel = null;
+          paint(holder);
+        });
+      }
+      const icon = (q.icons && q.icons[i]) || "";
+      line.appendChild(el("span","mbvoice-opt", (icon ? icon + " " : "") + text));
+      const bar = el("span","mbvoice-bar");
+      const fill = el("span","mbvoice-fill");
+      fill.style.width = (n ? Math.round(100 * counts[i] / n) : 0) + "%";
+      bar.appendChild(fill);
+      line.appendChild(bar);
+      line.appendChild(el("span","mbvoice-n", String(counts[i])));
+      card.appendChild(line);
     });
-    return wrap;
+    const skipped = given.length - n;
+    card.appendChild(el("span","mbvoice-of",
+      (n === 1 ? "1 answer" : n + " answers") +
+      (skipped ? " · " + skipped + " moved on without answering" : "")));
+    return card;
+  }
+  /* The filters, the bars and then the table, which has a Question column
+     only while every question is showing. Says how many rows it drew. */
+  function paintVoice(holder, table, head){
+    holder.appendChild(voiceFilters(holder));
+    const q = voiceFilter.q ? window.studentVoice.byId[voiceFilter.q] : null;
+    if (q) holder.appendChild(voiceTotals(q, holder, true));
+    else {
+      const grid = el("div","mbvoice");
+      voiceQs.forEach(x => grid.appendChild(voiceTotals(x, holder, false)));
+      holder.appendChild(grid);
+    }
+    if (q && voiceFilter.a !== null){
+      const note = el("p","mbvoice-showing");
+      note.appendChild(document.createTextNode("Showing only the students who picked “" + q.options[voiceFilter.a] + "”. "));
+      const all = el("button","bank-link","Show everyone");
+      all.type = "button";
+      all.addEventListener("click", () => { voiceFilter.a = null; mbSel = null; paint(holder); });
+      note.appendChild(all);
+      holder.appendChild(note);
+    }
+    if (!q) head.appendChild(headCell("Question","vq"));
+    head.appendChild(headCell("Answer","va"));
+    table.appendChild(head);
+    const rows = voiceRows();
+    rows.forEach(r => {
+      const tr = el("tr");
+      mbNameCells(tr, r);
+      if (!q){
+        const td = mbCell(r.voiceQ.short || r.voiceQ.id);
+        td.title = r.voiceQ.ask;
+        tr.appendChild(td);
+      }
+      if (r.voiceA === null){
+        const none = el("td","mbvoice-none","No answer");
+        none.dataset.copy = "";
+        tr.appendChild(none);
+      } else tr.appendChild(mbCell(r.voiceQ.options[r.voiceA]));
+      table.appendChild(tr);
+    });
+    return rows.length;
   }
 
   function paint(holder){
@@ -413,19 +515,9 @@
     const table = el("table","mbtable");
     const head = el("tr");
     mbNameHeads(head);
+    let voiceShown = -1;
     if (mbView === "voice"){
-      holder.appendChild(voiceTotals());
-      voiceQs.forEach(q => head.appendChild(headCell(q.short || q.id, "v:" + q.id, q.ask)));
-      table.appendChild(head);
-      markbookRows.forEach(r => {
-        const tr = el("tr");
-        mbNameCells(tr, r);
-        voiceQs.forEach(q => {
-          const v = r.voice[q.id];
-          tr.appendChild(mbCell(v === null || v === undefined ? "" : q.options[v]));
-        });
-        table.appendChild(tr);
-      });
+      voiceShown = paintVoice(holder, table, head);
     } else if (mbView === "responses"){
       if (!markbookTasks.length){
         holder.appendChild(el("p","hint","This assessment has no response tasks yet."));
@@ -493,6 +585,8 @@
     mbSelectable(table);
     if (mbView === "marks" && mbShape.kind === "test" && !markbookQs.length)
       holder.appendChild(el("p","hint","No marked questions in this assessment."));
+    if (voiceShown === 0)
+      holder.appendChild(el("p","hint","Nobody here yet. A student is asked as they finish the assessment."));
 
     /* how to copy part of it, said once under the table */
     holder.appendChild(el("p","subnote mbhint","Click a cell, then drag or Shift-click to pick more. Ctrl+C copies them."));
@@ -658,7 +752,7 @@
     markbookQs.forEach(q => head.push(q.label + " " + q.title));
     head.push("Percent","Time taken","Strength","Target");
     markbookTasks.forEach(t => head.push(t.label));
-    voiceQs.forEach(q => head.push(q.ask));
+    if (voiceQs.length) head.push("Your say question","Your say answer");
     const rows = [head];
     markbookRows.forEach(r => {
       const row = [r.username || "", r.name,
@@ -666,7 +760,8 @@
       markbookQs.forEach(q => { const m = r.marks[q.id]; row.push(m ? m.got : ""); });
       row.push(r.pct === null ? "" : r.pct, r.seconds ? niceTime(r.seconds) : "", r.strength, r.target);
       markbookTasks.forEach(t => row.push(attempted(r.data, t.id) ? "Yes" : "No"));
-      voiceQs.forEach(q => { const v = r.voice[q.id]; row.push(v === null || v === undefined ? "" : q.options[v]); });
+      if (voiceQs.length) row.push(r.voiceQ ? r.voiceQ.ask : "",
+                                   r.voiceQ && r.voiceA !== null ? r.voiceQ.options[r.voiceA] : "");
       rows.push(row);
     });
     mbSave(rows);

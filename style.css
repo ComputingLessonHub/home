@@ -6679,13 +6679,6 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
 .qsheet .qnav-grid{margin:14px 0 0; grid-template-columns:repeat(auto-fill, minmax(48px, 1fr))}
 .qsheet .qnum{height:44px; font-size:15px}
 .qsheet .modal-stay{margin-top:16px}
-
-/* On a page a teacher made, the reminders come after the page's own tasks
-   rather than after another item, so they need the line above them that an
-   item would have given them. */
-.assess-page > .pagegroup + .assess-rules{margin-top:18px; padding-top:16px; border-top:1px solid var(--line)}
-.assess-rules ul{margin:6px 0 0; padding-left:20px}
-.assess-rules li{margin:5px 0; line-height:1.45}
 .assess-end{color:var(--muted); font-size:14px; text-align:center; margin:22px 0 8px}
 /* A handed-in assessment keeps the bottom bar for the teacher's dot alone,
    where the code to let a student back in is typed. */
@@ -6741,29 +6734,62 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
 .hotspot-said[data-verdict=no]{color:var(--red)}
 .rev-hotspot{max-width:520px; cursor:default}
 
-/* Your say, at the bottom of a standard assessment. A scale reads left to
-   right as one row of equal steps, so its options share the width evenly; a
-   choice is a list of different things and wraps as its words need. Classes
-   of their own, so nothing here reaches a quiz option. */
-.voice-card{display:flex; flex-direction:column; gap:18px}
-.voice-card .sect-head{margin:0}
-.st-card p.voice-sub{margin:-10px 0 0; color:var(--muted); font-size:15.5px}
-.voice-q{display:flex; flex-direction:column; gap:10px}
-.st-card p.voice-ask{margin:0; font-weight:700; font-size:17px}
-.voice-opts{display:flex; flex-wrap:wrap; gap:8px}
-.voice-q[data-kind=scale] .voice-opts{display:grid; grid-template-columns:repeat(5, minmax(0,1fr))}
-.voice-opt{min-height:44px; padding:9px 12px; border:1.5px solid var(--line-2); border-radius:12px;
-  background:var(--panel); color:var(--text); font:inherit; font-size:15.5px; line-height:1.3;
-  cursor:pointer; text-align:center; transition:border-color .12s, background .12s}
-.voice-opt:hover{border-color:var(--amber); background:var(--panel-2)}
-.voice-opt[aria-pressed=true]{border-color:var(--amber); background:var(--panel-2);
-  box-shadow:0 0 0 3px rgba(220,138,62,.15); font-weight:700}
-.st-card p.voice-thanks{margin:0; min-height:1.4em; font-weight:700; color:var(--mint); font-size:15.5px}
-.st-card p.voice-thanks.again{color:var(--red)}
-/* Five steps side by side do not fit a phone, so they stack like a choice. */
+/* Your say, at the bottom of a standard assessment. Made to look like
+   nothing else on the summary: a soft tinted panel with a speech bubble,
+   and answers that are pictures with a word under them rather than a list
+   of buttons, so it reads as being asked something, not as one more
+   question in the test. A scale is five faces side by side, worst to best;
+   a choice is a tile each. Picking swaps the whole panel for a thank you,
+   in the mint every "done" on the site is. */
+.voice-card{margin-top:28px; padding:22px 24px 24px; border-radius:18px;
+  background:color-mix(in srgb, var(--amber) 7%, var(--panel));
+  border:1.5px solid color-mix(in srgb, var(--amber) 28%, var(--line));
+  display:flex; flex-direction:column; gap:16px}
+.voice-head, .voice-thanks{display:flex; align-items:center; gap:14px}
+.voice-badge{flex:none; width:46px; height:46px; border-radius:50%; display:grid; place-items:center;
+  font-size:24px; line-height:1; background:var(--panel);
+  border:1.5px solid color-mix(in srgb, var(--amber) 28%, var(--line))}
+.voice-headwords{min-width:0}
+.voice-card p{margin:0}
+.voice-eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--amber-dark); font-weight:700}
+.voice-card p.voice-note{margin-top:2px; font-size:14.5px; color:var(--muted); line-height:1.45}
+.voice-ask{font-family:var(--display); font-size:21px; line-height:1.35; color:var(--text)}
+.voice-opts{display:grid; gap:10px}
+.voice-opts[data-kind=scale]{grid-template-columns:repeat(5, minmax(0,1fr))}
+.voice-opts[data-kind=choice]{grid-template-columns:repeat(auto-fit, minmax(150px,1fr))}
+.voice-opt{display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:8px;
+  min-height:44px; padding:14px 8px 12px; border-radius:16px; border:1.5px solid transparent;
+  background:var(--panel); color:var(--text); font:inherit; cursor:pointer;
+  box-shadow:0 1px 2px rgba(0,0,0,.05); transition:transform .12s, border-color .12s, box-shadow .12s}
+.voice-opt:hover, .voice-opt:focus-visible{border-color:var(--amber); transform:translateY(-2px);
+  box-shadow:0 6px 16px rgba(0,0,0,.08); outline:none}
+.voice-icon{font-size:34px; line-height:1}
+.voice-opts[data-kind=choice] .voice-icon{font-size:28px}
+.voice-word{font-size:14px; line-height:1.3; text-align:center; color:var(--muted); font-weight:600}
+.voice-opt:hover .voice-word, .voice-opt:focus-visible .voice-word{color:var(--text)}
+.voice-card p.voice-trouble{color:var(--red); font-weight:700; font-size:15px}
+.voice-card.voice-done{padding:18px 24px; background:color-mix(in srgb, var(--mint) 9%, var(--panel));
+  border-color:color-mix(in srgb, var(--mint) 40%, var(--line))}
+.voice-done .voice-badge{border-color:color-mix(in srgb, var(--mint) 40%, var(--line))}
+.voice-thanks-head{font-family:var(--display); font-size:21px; color:var(--text)}
+/* A small settle as the thank you arrives. Only a flourish: with motion
+   turned off, as it is on every school machine, it simply appears. */
+.voice-thanks{animation:voice-in .35s ease}
+@keyframes voice-in{from{opacity:0; transform:scale(.97)} to{opacity:1; transform:none}}
+/* On a phone the five faces still sit in one row, smaller, because a
+   scale read top to bottom stops looking like a scale. The tiles of a
+   choice become a list, picture beside the words. */
 @media (max-width:600px){
-  .voice-q[data-kind=scale] .voice-opts{display:flex; flex-direction:column}
-  .voice-opt{text-align:left}
+  .voice-card{padding:18px 16px 20px}
+  .voice-ask{font-size:18.5px}
+  .voice-opts[data-kind=scale]{gap:6px}
+  .voice-opts[data-kind=scale] .voice-opt{padding:10px 2px 8px; border-radius:12px; gap:6px}
+  .voice-opts[data-kind=scale] .voice-icon{font-size:28px}
+  .voice-opts[data-kind=scale] .voice-word{font-size:11.5px}
+  .voice-opts[data-kind=choice]{grid-template-columns:minmax(0,1fr)}
+  .voice-opts[data-kind=choice] .voice-opt{flex-direction:row; padding:10px 14px; gap:12px}
+  .voice-opts[data-kind=choice] .voice-word{text-align:left}
 }
 
 /* the builder: which Your say questions an assessment asks */
@@ -6790,15 +6816,41 @@ body.assess-on-questions .stagerow > #blocks{flex:0 1 800px}
 @media (max-width:1000px){
   .mbpane #mbHolder > .mbscroll{flex:none; height:72vh; height:72dvh; min-height:360px}
 }
-/* Student voice: how the class answered each question, before who said what */
+/* Student voice: a filter per question along the top, then how it was
+   answered, then who said what */
+.mbvoice-filters{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px}
+.mbvoice-pill{display:inline-flex; align-items:center; gap:8px; padding:6px 8px 6px 14px; border-radius:999px;
+  border:1.5px solid var(--line-2); background:var(--panel); color:var(--text); font:inherit; font-size:14px;
+  font-weight:600; cursor:pointer}
+.mbvoice-pill b{min-width:24px; padding:1px 7px; border-radius:999px; background:var(--panel-2);
+  font-size:12.5px; text-align:center}
+.mbvoice-pill:hover{border-color:var(--amber)}
+.mbvoice-pill.on{border-color:var(--amber); background:color-mix(in srgb, var(--amber) 10%, var(--panel))}
+.mbvoice-pill.on b{background:var(--amber); color:var(--amber-ink)}
 .mbvoice{display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; margin:0 0 14px}
-.mbvoice-q{display:flex; flex-direction:column; gap:6px; padding:12px 14px;
-  border:1px solid var(--line); border-radius:12px; background:var(--panel)}
-.mbvoice-q > b{font-size:14px; line-height:1.35; margin-bottom:2px}
-.mbvoice-row{display:grid; grid-template-columns:minmax(0,11em) minmax(0,1fr) 2.2em; align-items:center; gap:8px; font-size:13px}
+.mbvoice-q{display:flex; flex-direction:column; gap:6px; padding:12px 14px; text-align:left;
+  border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--text); font:inherit}
+button.mbvoice-q{cursor:pointer}
+button.mbvoice-q:hover{border-color:var(--amber)}
+.mbvoice-q.picked{max-width:640px; margin:0 0 14px; padding:14px 16px}
+.mbvoice-ask{font-size:14px; line-height:1.35; margin-bottom:2px}
+.mbvoice-q.picked .mbvoice-ask{font-size:15.5px; margin-bottom:6px}
+.mbvoice-row{display:grid; grid-template-columns:minmax(0,13em) minmax(0,1fr) 2.2em; align-items:center; gap:8px;
+  font-size:13px; padding:2px 0}
+/* a bar to press, under one question: the row is the button */
+button.mbvoice-row{width:100%; margin:0; padding:5px 8px; border:1.5px solid transparent; border-radius:8px;
+  background:transparent; color:var(--text); font:inherit; font-size:13.5px; text-align:left; cursor:pointer}
+button.mbvoice-row:hover{background:var(--panel-2)}
+button.mbvoice-row.on{border-color:var(--amber); background:color-mix(in srgb, var(--amber) 10%, var(--panel))}
 /* wrapped rather than cut short: "The lesson on th..." says nothing */
 .mbvoice-opt{color:var(--muted); line-height:1.3}
+button.mbvoice-row.on .mbvoice-opt{color:var(--text); font-weight:700}
 .mbvoice-bar{height:10px; border-radius:99px; background:var(--panel-2); overflow:hidden}
 .mbvoice-fill{display:block; height:100%; border-radius:99px; background:var(--amber)}
 .mbvoice-n{text-align:right; font-weight:700}
 .mbvoice-of{font-size:12px; color:var(--dim)}
+.mbvoice-showing{margin:-4px 0 12px; font-size:14px}
+.mbtable td.mbvoice-none{color:var(--dim); font-style:italic}
+@media (pointer:coarse){
+  .mbvoice-pill, button.mbvoice-row{min-height:44px}
+}

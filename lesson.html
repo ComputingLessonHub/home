@@ -1768,28 +1768,11 @@ function arrangeAssessment(){
     qScreen.step = 0;
   }
 
-  const n = items.length;
-  const rules = el("div","pg-item assess-rules");
-  rules.appendChild(el("h3","pg-h","Reminders"));
-  const list = el("ul");
-  [ n === 1 ? "There is 1 question, on the next page."
-            : "There are " + n + " questions, all on the next page, one after another.",
-    "Answer every question. You can scroll back up and change an answer at any time until you hand it in.",
-    "The bar beside the questions shows which ones you have answered. Press it to go straight to a question.",
-    "Your answers are saved as you go.",
-    "When you have finished, press Finish at the bottom. Once you have handed it in, you cannot go back and change anything."
-  ].forEach(t => list.appendChild(el("li","", t)));
-  rules.appendChild(list);
-  /* The reminders go on the last screen before the questions, so "the next
-     page" is the questions whatever came before. With nothing in front of
-     the questions there is a welcome screen for them alone. */
-  let qAt = screens.indexOf(qScreen);
-  if (qAt === 0){
-    screens.unshift({ el: el("section","assess-page assess-welcome"), kind: "start",
-                      title: "Welcome to your assessment", text: "Read this page before you start.", step: 0 });
-    qAt = 1;
-  }
-  screens[qAt - 1].el.appendChild(rules);
+  /* What a student reads before the questions is the teacher's to write, in
+     the pages in front of them. A list of reminders used to be added to the
+     last of those pages, with a welcome screen made up to hold it when there
+     were none, and it said things the teacher's own page already said. */
+  const qAt = screens.indexOf(qScreen);
   questions.appendChild(el("p","assess-end", screens.length - 1 > qAt
     ? "That was the last question. Check your answers, then press Continue."
     : "That was the last question. Check your answers, then press Finish."));
@@ -9378,68 +9361,99 @@ function assessmentExtension(holder){
 }
 
 /* ---------- Your say ----------
-   A few questions about how the half term went, at the bottom of a standard
-   assessment whose teacher turned them on (voice.js has the list). Every one
-   is optional, nothing waits on them, and each answer is saved the moment it
-   is picked: a child who answers one and closes the tab has still said it.
-   Picking a different option changes the answer, so a slip is not final.
+   One question about how the half term went, at the bottom of a standard
+   assessment whose teacher turned it on. Each student gets one of the
+   questions the lesson asks, picked at random the first time this is drawn
+   and kept in their work under __voice.__asked, so coming back to the page
+   asks the same thing rather than offering another go at a different one.
+
+   It is optional, nothing waits on it, and the answer is saved the moment
+   it is picked. Picking hides the question there and then and says thank
+   you: an answer that stays on screen, highlighted, reads like a test
+   answer waiting to be marked, and invites changing it to the "right" one.
 
    Not drawn where it would mean nothing: offline there is no markbook for an
    answer to reach, locked for marking nothing can be saved, and in the
    marking screen the answers are the student's, read in the markbook. The
    builder's preview draws it so a teacher can see it, and saves nothing. */
 function voiceCard(){
-  const asked = window.studentVoice ? window.studentVoice.asked(lesson) : [];
+  const sv = window.studentVoice;
+  const asked = sv ? sv.asked(lesson) : [];
   if (!asked.length || OFFLINE) return null;
   if (markingLocked && !spectate) return null;
   if (teacherTools || viewParam !== null || pdfParam !== null) return null;
-  const card = el("div","st-card voice-card fadelast");
-  card.appendChild(el("h2","sect-head","Your say"));
-  card.appendChild(el("p","voice-sub",
-    "Answer as many as you like. Your answer saves as soon as you pick it."));
-  const had = (restoredData && restoredData.__voice) || {};
-  asked.forEach(q => {
-    const box = el("div","voice-q");
-    box.dataset.kind = q.kind;
-    const ask = el("p","voice-ask", q.ask);
-    ask.id = "voice_" + q.id;
-    box.appendChild(ask);
-    const opts = el("div","voice-opts");
-    opts.setAttribute("role","group");
-    opts.setAttribute("aria-labelledby", ask.id);
-    const thanks = el("p","voice-thanks","");
-    thanks.setAttribute("aria-live","polite");
-    const now = window.studentVoice.answerOf({ __voice: voiceAnswers || had }, q);
-    const buttons = q.options.map((text, i) => {
-      const b = el("button","voice-opt", text);
-      b.type = "button";
-      b.setAttribute("aria-pressed", String(now === i));
-      b.addEventListener("click", () => pickVoice(q, i, buttons, thanks));
-      opts.appendChild(b);
-      return b;
-    });
-    if (now !== null) thanks.textContent = "Thanks!";
-    box.appendChild(opts);
-    box.appendChild(thanks);
-    card.appendChild(box);
-  });
+  const box = voiceAnswers || (restoredData && restoredData.__voice) || {};
+  let q = sv.givenOf({ __voice: box });
+  if (!q){
+    q = asked[Math.floor(Math.random() * asked.length)];
+    voiceAnswers = Object.assign({}, box, { __asked: q.id });
+    /* Kept in this browser now, so a reload asks the same question; the
+       server has it with the next save, which the answer itself makes. */
+    save();
+  }
+  const card = el("section","voice-card fadelast");
+  if (sv.answerOf({ __voice: voiceAnswers || box }, q) !== null) voiceThanks(card);
+  else voiceAsk(card, q, "");
   return card;
 }
-async function pickVoice(q, i, buttons, thanks){
-  voiceAnswers = Object.assign({}, (restoredData && restoredData.__voice) || {}, voiceAnswers || {});
-  voiceAnswers[q.id] = i;
-  buttons.forEach((b, k) => b.setAttribute("aria-pressed", String(k === i)));
+function voiceAsk(card, q, trouble){
+  card.innerHTML = "";
+  card.classList.remove("voice-done");
+  const head = el("div","voice-head");
+  head.appendChild(el("span","voice-badge","\u{1F4AC}")).setAttribute("aria-hidden","true");
+  const words = el("div","voice-headwords");
+  words.appendChild(el("p","voice-eyebrow","Your say"));
+  words.appendChild(el("p","voice-note","One quick question. There is no right or wrong answer, and you can skip it."));
+  head.appendChild(words);
+  card.appendChild(head);
+  const ask = el("p","voice-ask", q.ask);
+  ask.id = "voiceAsk";
+  card.appendChild(ask);
+  const opts = el("div","voice-opts");
+  opts.dataset.kind = q.kind;
+  opts.dataset.count = String(q.options.length);
+  opts.setAttribute("role","group");
+  opts.setAttribute("aria-labelledby", ask.id);
+  q.options.forEach((text, i) => {
+    const b = el("button","voice-opt");
+    b.type = "button";
+    const icon = (q.icons && q.icons[i]) || "";
+    if (icon) b.appendChild(el("span","voice-icon", icon)).setAttribute("aria-hidden","true");
+    b.appendChild(el("span","voice-word", text));
+    b.addEventListener("click", () => pickVoice(card, q, i));
+    opts.appendChild(b);
+  });
+  card.appendChild(opts);
+  if (trouble) card.appendChild(el("p","voice-trouble", trouble)).setAttribute("role","alert");
+}
+function voiceThanks(card){
+  card.innerHTML = "";
+  card.classList.add("voice-done");
+  const done = el("div","voice-thanks");
+  done.setAttribute("role","status");
+  done.appendChild(el("span","voice-badge","\u{1F49B}")).setAttribute("aria-hidden","true");
+  const words = el("div","voice-headwords");
+  words.appendChild(el("p","voice-thanks-head","Thank you!"));
+  words.appendChild(el("p","voice-note","Your teacher reads what the class says, and it helps them plan your lessons."));
+  done.appendChild(words);
+  card.appendChild(done);
+}
+async function pickVoice(card, q, i){
+  const box = Object.assign({}, (restoredData && restoredData.__voice) || {}, voiceAnswers || {});
+  box.__asked = q.id;
+  box[q.id] = i;
+  voiceAnswers = box;
   /* Thanked straight away: the answer is already kept in this browser by
-     the save below, and the server copy follows it. Only a refusal changes
-     what the line says. */
-  thanks.textContent = "Thanks!";
-  thanks.classList.remove("again");
+     the save below, and the server copy follows it. Only a refusal brings
+     the question back, with a line saying why. */
+  voiceThanks(card);
   if (spectate) return;              // the builder's preview: nothing is saved
   save();
   const st = await submitWork();
   if (st === "failed" && voiceAnswers[q.id] === i){
-    thanks.textContent = "That did not save. Pick your answer again to have another go.";
-    thanks.classList.add("again");
+    delete voiceAnswers[q.id];
+    save();
+    voiceAsk(card, q, "That did not save. Pick your answer again to have another go.");
   }
 }
 

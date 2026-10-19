@@ -4176,10 +4176,11 @@ async function loadTeacherCodes(){
 function lastTeacher(){
   try{ return localStorage.getItem("hub_me") || ""; }catch(e){ return ""; }
 }
-/* Your say: the short questions about the half term at the bottom of a
-   standard assessment. Off until it is turned on, because a class asked
-   the same five things at the end of every test soon stops answering
-   honestly. Turned on it asks all of them, and any can be left out. Only
+/* Your say: the short question about the half term at the bottom of a
+   standard assessment, one per student, drawn at random from the ones
+   ticked here. Off until it is turned on, because a class asked at the end
+   of every test soon stops answering honestly. Turned on, any of the
+   questions can be in the draw and any can be left out. Only
    the ids are kept, in lesson.voice: the questions themselves live in
    voice.js, so improving the wording there reaches every lesson. */
 function voiceField(){
@@ -4203,9 +4204,10 @@ function voiceField(){
   });
   row.appendChild(tog);
   row.appendChild(helpDot(
-    ["On: after the summary of their marks, students are asked a few quick questions about how "
-     + "the half term went. Every one is optional, and an answer is saved the moment it is picked.",
-     "Their answers are in the Student voice tab of the markbook."]));
+    ["On: under the summary of their marks, each student is asked one of the ticked questions "
+     + "about how the half term went, picked at random. It is optional, and their answer is saved "
+     + "the moment they pick it.",
+     "Their answers are in the Student voice tab of the markbook, one question at a time."]));
   w.appendChild(row);
   all.forEach(q => {
     const line = el("label","voice-pick");
