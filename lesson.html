@@ -1228,17 +1228,9 @@ function startDocs(l){
     docForPage: (i) => { const b = l.blocks && l.blocks[i]; return b && b.doc ? b.doc : null; }
   });
 }
-/* The experiments are offered on every lesson now, slides or not: the
-   Photoshop helper among them belongs to no deck. */
 window.settingsSection = (holder) => {
-  if (window.hubSlides) window.hubSlides.settingsGroup(holder);
+  if (window.hubSlides && lesson && window.hubSlides.has(lesson)) window.hubSlides.settingsGroup(holder);
 };
-/* The Photoshop helper's corner button, while that experiment is on.
-   helper.js is small; the answers are fetched the first time it opens. */
-function startHelper(){
-  if (!window.hubHelper || embedParam !== null || pdfParam !== null || allParam !== null) return;
-  window.hubHelper.corner({ when: () => window.hubSlides && window.hubSlides.lab("helper"), pack: "help-photoshop.js" });
-}
 
 function handedLesson(){
   if (OFFLINE || !spectate || viewParam === null) return null;
@@ -1275,7 +1267,6 @@ const handedOver = handedLesson();
     buildTracker();
     startSlides(l);
     startDocs(l);
-    startHelper();
     /* Asked before anything is restored: a name change means a different
        child, and the work waiting on this machine is cleared, so restoring
        first would put the last one's answers on screen. */
@@ -3022,6 +3013,9 @@ const TASK_ICON = {
   /* a target */
   hotspot:   { name:"Click the right spot",
                d:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><path d="M12 12h.01"/>' },
+  /* a speech bubble with a question in it */
+  helper:    { name:"Photoshop help",
+               d:'<path d="M4 5h16v11H9l-5 4z"/><path d="M10 9.2a2 2 0 1 1 2.8 1.8c-.5.2-.8.6-.8 1.1"/><path d="M12 14h.01"/>' },
   notes:     { name:"Notes",
                d:'<path d="M6.5 3.5h7l4.5 4.5v12.5h-11.5z"/><path d="M13.5 3.5V8H18"/>' +
                  '<path d="M9 13h6M9 16.5h4"/>' },
@@ -4158,7 +4152,7 @@ function buildBlock(b, i){
               picture:rPicture, pastelink:rPasteLink, frame:rFrame, web:rWeb,
               scratch:rScratch, binary:rBinary, binadd:rBinAdd,
               board:rBoardTask, label:rLabelTask, notes:rNotesTask, mindmap:rMindmapTask, web:rWeb,
-              keywords:rKeywordsTask,
+              keywords:rKeywordsTask, helper:rHelperTask,
               mc:rMC, order:rOrder, blanks:rBlanks, short:rShort, ide:rIDE, page:rPage,
               exam:rExamTask, table:rTableTask, hotspot:rHotspotTask,
               extension:rExtension, group:rGroup, choice:rChoice }[b.type];
@@ -7696,6 +7690,14 @@ function rExamTask(b){
   };
 }
 const rNotesTask   = (b) => wrapExtra(b, window.rNotes,   "Notes");
+/* The Photoshop help chat. It needs to know the lesson, so what it could
+   not answer reaches this lesson's teacher, which wrapExtra does not pass. */
+function rHelperTask(b){
+  const made = window.rHelper(b, { lessonId: lessonId === "__preview" ? "" : lessonId });
+  fields[b.id] = { get: made.get, set: made.set };
+  return { section: made.section, check: () => ({ ok:true }),
+           brief: { eyebrow: "Photoshop help", title: b.title || "", text: b.task || "" } };
+}
 const rMindmapTask = (b) => wrapExtra(b, window.rMindmap, "Mind map");
 
 function rQuiz(b){
@@ -11518,6 +11520,11 @@ function buildPdf(){
       });
       if (!said.filter(x => String(x || "").trim()).length)
         out.push({ t: "text", face: "small", text: "Nothing filled in", colour: PDF.AMBER });
+      return out;
+    }
+    /* Help to ask, not work to hand in: one line so the page reads in order. */
+    if (b.type === "helper"){
+      out.push({ t: "text", face: "small", text: (title || "Photoshop help") + ": nothing to hand in" });
       return out;
     }
     if (b.type === "notes"){

@@ -2,20 +2,20 @@
    docs.js — a lesson's Word documents, shown beside the work.
 
    lesson.docs = { list: [ { id, title, html, outline, font, pt } ],
-                   open: true,     // open as the lesson starts
-                   unlock: true }  // a student may unlock it and move it
+                   open: true }    // open as the lesson starts
 
-   The window opens pinned down the right with the lesson on the left, and
-   locked there: no dragging it off by accident while scrolling a worksheet
-   with a trackpad. The padlock unlocks it, and then it floats, pins left,
-   fills the screen or shrinks to a bubble the same way the slides do. A
-   teacher can take the padlock away, which keeps every document on the
-   right for the whole lesson.
+   A document is docked down the right with the lesson on the left, and
+   that is the only place it goes: it can fill the screen, shrink to a
+   bubble or be closed, but it cannot be floated off or moved to the
+   left. A worksheet is read alongside the work, and one that can come
+   loose ends up dragged over the very task it is for. (Lessons saved when
+   a document could be unlocked still say unlock; it is ignored.)
 
    It borrows the slides window's look (the sl- classes) so the two sit
-   together, and keeps its own place, so slides pinned right and a
-   document pinned right stand side by side rather than on top of each
-   other. Where a student leaves it is remembered for that lesson on that
+   together, and keeps its own width, so slides pinned right and a
+   document stand side by side rather than on top of each other: the
+   document against the edge, the slides inside it. How wide it is, which
+   document and how far down is remembered for that lesson on that
    computer only; nothing here is saved to the server.
    =================================================================== */
 (function(){
@@ -61,17 +61,17 @@ const NARROW = "(max-width: 760px)";
 function viewer(o){
   const docs = o.docs;
   const list = docs.list;
-  const canUnlock = docs.unlock !== false;
   const KEY = "hub_docs_view_" + (o.lessonId || "x");
-  /* The default for every lesson is the one asked for: on the right, with
-     the lesson on the left, locked. A student's own changes are kept for
-     this lesson only, so the next lesson starts from the default again. */
-  let view = Object.assign({ mode: "right", locked: true, side: 440, w: 460, x: null, y: null, zoom: 1, at: 0, tops: {} }, store(KEY) || {});
-  if (!canUnlock){ view.locked = true; if (view.mode !== "full" && view.mode !== "mini") view.mode = "right"; }
+  let view = Object.assign({ mode: "right", side: 440, zoom: 1, at: 0, tops: {} }, store(KEY) || {});
+  /* only the right, full screen or a bubble now; anything else saved from
+     before (left, floating) is the right */
+  if (!/^(right|full|mini)$/.test(view.mode)) view.mode = "right";
   let cur = Math.min(Math.max(0, view.at || 0), list.length - 1);
   let shown = false;
-  let lastMode = /^(left|right|float|sheet)$/.test(view.mode) ? view.mode : "right";
   const save = () => store(KEY, view);
+  const narrow = () => matchMedia(NARROW).matches;
+  /* where it goes back to from full screen or the bubble */
+  const docked = () => narrow() ? "sheet" : "right";
 
   /* ---- the button in the top bar ---- */
   const open = btn("btn-ghost sl-open dc-open no-print",
@@ -87,7 +87,7 @@ function viewer(o){
   win.setAttribute("role", "region");
   win.setAttribute("aria-label", "Document");
   win.tabIndex = -1;
-  const bar = div("sl-bar");
+  const bar = div("sl-bar dc-bar");
   const name = div("sl-grip dc-name");
   const picker = document.createElement("select");
   picker.className = "dc-picker";
@@ -100,20 +100,15 @@ function viewer(o){
   const bContents = btn("sl-tool", "&#9776;", "Contents: jump to a part of the document");
   const bSmaller = btn("sl-tool", "A&#8722;", "Smaller writing");
   const bBigger = btn("sl-tool", "A+", "Bigger writing");
-  const bLock = btn("sl-tool dc-lock", "", "");
-  const bLeft = btn("sl-tool", "&#9703;", "Pin to the left");
-  const bFloat = btn("sl-tool", "&#10697;", "Float over the page");
-  const bRight = btn("sl-tool", "&#9704;", "Pin to the right");
   const bFull = btn("sl-tool", "&#9974;", "Fill the screen");
   const bMini = btn("sl-tool", "&#8212;", "Shrink to a bubble");
   const bClose = btn("sl-tool", "&#10005;", "Close the document");
-  [bContents, bSmaller, bBigger, bLock, bLeft, bFloat, bRight, bFull, bMini, bClose].forEach(b => tools.appendChild(b));
+  [bContents, bSmaller, bBigger, bFull, bMini, bClose].forEach(b => tools.appendChild(b));
   bar.appendChild(name); bar.appendChild(tools);
   const menu = div("dc-menu"); menu.hidden = true;
   const stage = div("dc-stage");
-  const sizer = div("sl-sizer"); sizer.title = "Drag to resize";
   const split = div("sl-split"); split.title = "Drag to make the document wider or narrower";
-  [bar, menu, stage, sizer, split].forEach(x => win.appendChild(x));
+  [bar, menu, stage, split].forEach(x => win.appendChild(x));
   document.body.appendChild(win);
 
   /* ---- showing a document ---- */
@@ -124,6 +119,7 @@ function viewer(o){
     p.style.setProperty("--dc-z", String(view.zoom));
     stage.appendChild(p);
     nameText.textContent = d.title || "Document";
+    nameText.title = d.title || "";
     picker.value = String(cur);
     bContents.hidden = !(d.outline && d.outline.length > 1);
     menu.hidden = true;
@@ -159,6 +155,8 @@ function viewer(o){
       });
       menu.appendChild(b);
     });
+    /* under the bar, however many rows the bar has wrapped onto */
+    menu.style.top = (bar.offsetHeight + 4) + "px";
     menu.hidden = false;
   });
   const zoomTo = (z) => {
@@ -172,42 +170,20 @@ function viewer(o){
   bBigger.addEventListener("click", () => zoomTo(view.zoom + 0.1));
 
   /* ---- where the window is ---- */
-  const narrow = () => matchMedia(NARROW).matches;
   function setMode(m, keep){
-    if (narrow() && (m === "float" || m === "left" || m === "right")) m = "sheet";
-    if (view.locked && (m === "float" || m === "left")) m = "right";
-    if (m !== "full" && m !== "mini") lastMode = m;
-    view.mode = m;
+    if (m === "right" || m === "sheet") m = docked();
+    view.mode = m === "sheet" ? "right" : m;
     if (!keep) save();
-    place();
+    place(m);
   }
-  function place(){
-    const m = view.mode;
+  function place(m){
+    m = m || (view.mode === "right" ? docked() : view.mode);
     win.dataset.mode = m;
-    win.classList.toggle("dc-locked", !!view.locked);
     const b = document.body.classList;
-    b.toggle("dc-pin-left", shown && m === "left");
     b.toggle("dc-pin-right", shown && m === "right");
     b.toggle("dc-sheet", shown && m === "sheet");
     document.documentElement.style.setProperty("--dc-side", clampSide(view.side) + "px");
-    win.style.left = win.style.top = win.style.width = "";
-    if (m === "float"){
-      const w = Math.min(Math.max(280, view.w || 460), innerWidth - 16);
-      win.style.width = w + "px";
-      const x = view.x === null ? Math.max(8, (innerWidth - w) / 2) : view.x;
-      const y = view.y === null ? 70 : view.y;
-      win.style.left = Math.min(Math.max(4, x), innerWidth - Math.min(w, 120)) + "px";
-      win.style.top = Math.min(Math.max(4, y), innerHeight - 60) + "px";
-    }
-    const loose = !view.locked && !narrow();
-    bLeft.hidden = bFloat.hidden = bRight.hidden = !loose;
-    bLeft.classList.toggle("on", m === "left"); bRight.classList.toggle("on", m === "right");
-    bFloat.classList.toggle("on", m === "float"); bFull.classList.toggle("on", m === "full");
-    bLock.hidden = !canUnlock || narrow();
-    bLock.innerHTML = view.locked ? "&#128274;" : "&#128275;";
-    bLock.title = view.locked ? "Unlock it so it can be moved" : "Lock it on the right";
-    bLock.setAttribute("aria-label", bLock.title);
-    bLock.classList.toggle("on", !!view.locked);
+    bFull.classList.toggle("on", m === "full");
     open.classList.toggle("on", shown);
     open.setAttribute("aria-pressed", shown ? "true" : "false");
     try{ window.dispatchEvent(new Event("resize")); }catch(e){}
@@ -216,97 +192,51 @@ function viewer(o){
   function show(){
     shown = true;
     win.hidden = false;
-    if (view.mode === "mini") view.mode = lastMode;
+    if (view.mode === "mini") view.mode = "right";
     setMode(view.mode, true);
     if (!stage.firstElementChild) paint();
   }
   function hide(){
     keepPlace(); save();
     shown = false;
-    if (view.mode === "full") view.mode = lastMode;
+    if (view.mode === "full") view.mode = "right";
     win.hidden = true;
     place();
   }
-  bLock.addEventListener("click", () => {
-    view.locked = !view.locked;
-    /* locking puts it back where locked means: on the right */
-    if (view.locked && view.mode !== "full" && view.mode !== "mini") view.mode = "right";
-    setMode(view.mode);
-  });
-  bLeft.addEventListener("click", () => setMode("left"));
-  bRight.addEventListener("click", () => setMode("right"));
-  bFloat.addEventListener("click", () => setMode("float"));
-  bFull.addEventListener("click", () => setMode(view.mode === "full" ? lastMode : "full", true));
+  bFull.addEventListener("click", () => setMode(view.mode === "full" ? "right" : "full", true));
   bMini.addEventListener("click", () => setMode("mini", true));
   bClose.addEventListener("click", hide);
   win.addEventListener("click", (e) => {
-    if (view.mode === "mini" && !e.target.closest(".sl-tools")) setMode(lastMode);
+    if (view.mode === "mini" && !e.target.closest(".sl-tools")) setMode("right");
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && shown && view.mode === "full"){ setMode(lastMode, true); e.preventDefault(); }
+    if (e.key === "Escape" && shown && view.mode === "full"){ setMode("right", true); e.preventDefault(); }
   });
+  /* A phone and a laptop want different docking: a sheet along the bottom,
+     or the right-hand side. Turning the screen, or a window made narrow,
+     moves it between the two. */
   let placeTimer = null;
   addEventListener("resize", () => {
     if (!shown) return;
     clearTimeout(placeTimer);
-    placeTimer = setTimeout(() => {
-      if (narrow() && /^(float|left|right)$/.test(view.mode)) setMode("sheet", true);
-      else if (!narrow() && view.mode === "sheet") setMode(lastMode === "sheet" ? "right" : lastMode, true);
-    }, 120);
+    placeTimer = setTimeout(() => place(), 120);
   });
 
-  /* ---- moving it, once unlocked ----
-     Locked, the bar is not a handle at all, so reaching for the document
-     list or a scroll bar can never tear it off the side. */
-  let drag = null;
-  bar.addEventListener("pointerdown", (e) => {
-    if (view.locked || e.button !== 0 || e.target.closest("button, select") || narrow()) return;
-    if (view.mode === "full" || view.mode === "mini") return;
-    const r = win.getBoundingClientRect();
-    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, sx: e.clientX, sy: e.clientY, moved: false, snap: null };
-    bar.setPointerCapture(e.pointerId); e.preventDefault();
+  /* The width is the student's to choose: dragging the inside edge. */
+  let start = null;
+  split.addEventListener("pointerdown", (e) => {
+    start = { x: e.clientX, side: view.side };
+    split.setPointerCapture(e.pointerId); e.preventDefault();
+    win.classList.add("sl-dragging");
   });
-  bar.addEventListener("pointermove", (e) => {
-    if (!drag) return;
-    if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 6) return;
-    if (!drag.moved){
-      drag.moved = true;
-      win.classList.add("sl-dragging");
-      if (view.mode !== "float"){ view.w = Math.min(view.w || 460, 560); drag.dx = Math.min(drag.dx, view.w - 40); drag.dy = 16; setMode("float", true); }
-    }
-    view.x = e.clientX - drag.dx; view.y = e.clientY - drag.dy;
-    win.style.left = Math.min(Math.max(-view.w + 80, view.x), innerWidth - 80) + "px";
-    win.style.top = Math.min(Math.max(0, view.y), innerHeight - 40) + "px";
-    drag.snap = e.clientX < 28 ? "left" : e.clientX > innerWidth - 28 ? "right" : null;
-  });
-  const endDrag = () => {
-    if (!drag) return;
-    win.classList.remove("sl-dragging");
-    const { snap, moved } = drag; drag = null;
-    if (moved) setMode(snap || "float");
-  };
-  bar.addEventListener("pointerup", endDrag);
-  bar.addEventListener("pointercancel", endDrag);
-  function resizer(handle, onMove){
-    let start = null;
-    handle.addEventListener("pointerdown", (e) => {
-      start = { x: e.clientX, w: view.w, side: view.side };
-      handle.setPointerCapture(e.pointerId); e.preventDefault();
-      win.classList.add("sl-dragging");
-    });
-    handle.addEventListener("pointermove", (e) => { if (start) onMove(e, start); });
-    const end = () => { if (!start) return; start = null; win.classList.remove("sl-dragging"); save(); place(); };
-    handle.addEventListener("pointerup", end);
-    handle.addEventListener("pointercancel", end);
-  }
-  resizer(sizer, (e, s) => { view.w = Math.min(Math.max(280, s.w + (e.clientX - s.x)), innerWidth - 16); win.style.width = view.w + "px"; });
-  /* Width is still the student's to choose when locked: locked is about
-     where it is, not how much of the screen a worksheet needs. */
-  resizer(split, (e, s) => {
-    const d = view.mode === "left" ? e.clientX - s.x : s.x - e.clientX;
-    view.side = clampSide(s.side + d);
+  split.addEventListener("pointermove", (e) => {
+    if (!start) return;
+    view.side = clampSide(start.side + (start.x - e.clientX));
     document.documentElement.style.setProperty("--dc-side", view.side + "px");
   });
+  const endSplit = () => { if (!start) return; start = null; win.classList.remove("sl-dragging"); save(); place(); };
+  split.addEventListener("pointerup", endSplit);
+  split.addEventListener("pointercancel", endSplit);
 
   /* ---- a page can bring a document forward ---- */
   function page(i){
@@ -319,10 +249,10 @@ function viewer(o){
   zoomTo(view.zoom);
   place();
   /* Open as the lesson starts, unless the teacher said not to. Never on a
-     phone, where half the screen is too much to take without being asked. */
-  /* A tab opened behind the one in front can start with no width at all,
-     which reads as the narrowest phone there is. The choice waits until the
-     window has a size of its own. */
+     phone, where half the screen is too much to take without being asked.
+     A tab opened behind the one in front can start with no width at all,
+     which reads as the narrowest phone there is, so the choice waits until
+     the window has a size of its own. */
   const openIfRoom = () => {
     if (!innerWidth){ addEventListener("resize", openIfRoom, { once: true }); return; }
     if (!narrow()) show();

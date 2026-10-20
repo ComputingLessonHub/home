@@ -811,6 +811,51 @@
      Somewhere for a student to keep their own notes, with the same
      formatting bar the lesson builder uses.
      =================================================================== */
+  /* ===================================================================
+     PHOTOSHOP HELP
+     { type:"helper", title, task, topic:"photoshop" }
+     The help chat from helper.js, on the page like any other task, for a
+     lesson done in Photoshop. Nothing is saved and nothing is marked: it is
+     there to be asked. What it cannot answer goes to the teacher, filed
+     against this lesson and this task, and shows in the builder under this
+     task (author-editors.js). The answers are fetched the first time one
+     of these is drawn, so a lesson without one never loads them.
+     =================================================================== */
+  window.rHelper = function(b, ctx){
+    const s = make("section", "helpertask");
+    const box = make("div", "hp-task");
+    s.appendChild(box);
+    const out = make("a", "hp-taskout", "Open the help in its own window");
+    out.href = "help.html"; out.target = "hubPhotoshopHelp";
+    out.title = "Keep it open beside Photoshop";
+    s.appendChild(out);
+    const start = () => {
+      box.textContent = "";
+      window.hubHelper.mount(box, window.HELP_PHOTOSHOP, { lesson: ctx.lessonId || "", task: b.id || "" });
+    };
+    if (!window.hubHelper) box.textContent = "The help could not be loaded.";
+    else if (window.HELP_PHOTOSHOP) start();
+    else {
+      box.textContent = "Loading the help\u2026";
+      let tag = document.querySelector('script[data-help-pack]');
+      if (!tag){
+        tag = document.createElement("script");
+        tag.src = "help-photoshop.js";
+        tag.dataset.helpPack = "1";
+        document.head.appendChild(tag);
+      }
+      tag.addEventListener("load", start);
+      tag.addEventListener("error", () => { box.textContent = "The help could not be loaded. Check the internet connection and refresh."; });
+    }
+    return {
+      section: s,
+      get: () => null,
+      set: () => {},
+      /* never holds anyone up: it is help, not a task to finish */
+      done: () => true
+    };
+  };
+
   window.rNotes = function(b, ctx){
     const s = make("section", "notestask");
     const inner = make("div", "notes-inner");

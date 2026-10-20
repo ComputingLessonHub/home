@@ -19,9 +19,10 @@
    subject needs, Scratch or Python say, is another file in the same
    shape, and nothing here changes.
 
-   Questions are never sent anywhere. The last fifty, with what they were
-   matched to and whether that helped, stay in this browser
-   (hub_help_log) for checking what the file is missing.
+   On a lesson it is a task (rHelper in tasks-extra.js). What it could not
+   answer goes to the teacher, with no name, and shows under that task in
+   the builder. The last fifty questions, with what they were matched to and
+   whether that helped, are also kept in this browser (hub_help_log).
    =================================================================== */
 (function(){
 "use strict";
@@ -263,19 +264,22 @@ function mount(holder, pack, opts){
   }
 
   /* ---- passing a question on ----
-     What the helper could not answer goes to the class's teacher, through
-     the help-ask action, so the answers file can learn the words students
-     really use. Only the question, what it was matched to and why it is
-     being sent: never a name. Only for a signed-in student, because the
-     class is read from their sign-in, and never in offline mode. One send
-     per question, whichever reason comes first. */
+     What the helper could not answer goes to the teacher, through the
+     help-ask action, filed against the lesson and the task it was asked in,
+     so it shows under that task in the builder and the answers file can
+     learn the words students really use. Only the question, what it was
+     matched to and why it is being sent: never a name. Only for a
+     signed-in student, because the class is read from their sign-in; never
+     in offline mode; and never from help.html, which belongs to no lesson
+     and so to no task anybody would read it under. One send per question,
+     whichever reason comes first. */
   let asked = "";
   const sentFor = new Set();
   function canTell(){
     const hub = window.HUB || {};
     let token = "";
     try{ token = localStorage.getItem("hub_token") || ""; }catch(e){}
-    return !hub.OFFLINE && !!hub.API && hub.API.indexOf("PASTE_") !== 0 && !!token && !!asked;
+    return !hub.OFFLINE && !!hub.API && hub.API.indexOf("PASTE_") !== 0 && !!token && !!asked && !!opts.lesson;
   }
   function tell(how, matched){
     if (!canTell()) return false;
@@ -286,7 +290,8 @@ function mount(holder, pack, opts){
     try{ token = localStorage.getItem("hub_token") || ""; }catch(e){}
     fetch(window.HUB.API + "/api/teacher/help-ask", { method: "POST", keepalive: true,
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
-      body: JSON.stringify({ question: asked, matched: matched || "", how, topic: pack.topic || "photoshop" })
+      body: JSON.stringify({ question: asked, matched: matched || "", how, topic: pack.topic || "photoshop",
+                             lesson: opts.lesson, task: opts.task || "" })
     }).catch(() => {});
     return true;
   }
@@ -332,52 +337,5 @@ function mount(holder, pack, opts){
   return { ask, focus: () => input.focus() };
 }
 
-/* ---------------- the corner button ----------------
-   A round button over the bottom left of the lesson, above the Back
-   button, and a chat that opens from it. Shown only while o.when() says
-   so, and told again whenever Settings changes. The answers file is
-   loaded the first time it opens, so a lesson that never asks pays
-   nothing for it. */
-function corner(o){
-  const b = el("button", "hp-corner no-print");
-  b.type = "button";
-  b.innerHTML = '<span aria-hidden="true">?</span><span class="hp-corner-word">Photoshop help</span>';
-  b.setAttribute("aria-label", "Photoshop help");
-  const panel = el("div", "hp-panel no-print");
-  panel.hidden = true;
-  panel.setAttribute("role", "dialog");
-  panel.setAttribute("aria-label", "Photoshop help");
-  const head = el("div", "hp-head");
-  head.appendChild(el("span", "", "Photoshop help"));
-  const pop = el("a", "hp-out", "Open in its own window");
-  pop.href = "help.html"; pop.target = "hubPhotoshopHelp";
-  pop.title = "Keep it open beside Photoshop";
-  const x = el("button", "sl-tool", "✕");
-  x.type = "button"; x.setAttribute("aria-label", "Close");
-  head.appendChild(pop); head.appendChild(x);
-  const body = el("div", "hp-body");
-  panel.appendChild(head); panel.appendChild(body);
-  document.body.appendChild(b); document.body.appendChild(panel);
-  let chat = null, loading = false;
-  const paint = () => { const on = !!o.when(); b.hidden = !on; if (!on) panel.hidden = true; };
-  b.addEventListener("click", () => {
-    panel.hidden = !panel.hidden;
-    if (panel.hidden) return;
-    if (chat){ chat.focus(); return; }
-    if (window.HELP_PHOTOSHOP){ chat = mount(body, window.HELP_PHOTOSHOP); chat.focus(); return; }
-    if (loading) return;
-    loading = true;
-    body.textContent = "Loading…";
-    const s = document.createElement("script");
-    s.src = o.pack;
-    s.onload = () => { body.textContent = ""; chat = mount(body, window.HELP_PHOTOSHOP); chat.focus(); };
-    s.onerror = () => { loading = false; body.textContent = "The help could not be loaded. Check the internet connection and try again."; };
-    document.head.appendChild(s);
-  });
-  x.addEventListener("click", () => { panel.hidden = true; b.focus(); });
-  addEventListener("hubslideslab", paint);
-  paint();
-}
-
-window.hubHelper = { build, search, reply, mount, corner };
+window.hubHelper = { build, search, reply, mount };
 })();

@@ -55,10 +55,7 @@ const LAB = [
   ["speak",    "Read aloud",              "A button that reads the words on the slide out loud."],
   ["scribble", "Scribble on slides",      "Draw on a slide to make notes. Kept on this computer only and never handed in."],
   ["flip",     "Card flips",              "Slides turn over like cards when you move between them."],
-  ["peek",     "Hover peek",              "When the slides are shrunk to a bubble, point at it to see the slide large."],
-  /* not a slides idea, but the same kind of thing to try out, so it lives
-     in the same list rather than a group of its own */
-  ["helper",   "Photoshop helper",        "A help chat in the corner of every lesson. Ask it how to do something in Photoshop, or what has gone wrong."]
+  ["peek",     "Hover peek",              "When the slides are shrunk to a bubble, point at it to see the slide large."]
 ];
 function prefs(){ try{ return JSON.parse(localStorage.getItem("hub_prefs") || "{}"); }catch(e){ return {}; } }
 function lab(name){ const l = prefs().slidesLab; return !!(l && l[name]); }
@@ -73,7 +70,7 @@ function setLab(name, on){
 function settingsGroup(holder){
   if (!holder) return;
   const g = div("set-group sl-labgroup");
-  g.innerHTML = '<span class="set-label">Experiments</span>' +
+  g.innerHTML = '<span class="set-label">Slides experiments</span>' +
     '<p class="subnote" style="margin:0 0 10px">New ideas being tried out. Turn any of them on to see what it is like.</p>';
   LAB.forEach(([key, name, words]) => {
     const row = btn("sl-lab", "");
@@ -236,8 +233,8 @@ function swapInto(holder, next, dir, style){
 
 /* ---------------- the student's slides window ----------------
    Opened from a button in the lesson's top bar. It floats over the work
-   and can be dragged anywhere, pinned down the left or right so the work
-   moves over to make room, filled to the whole screen, or shrunk to a
+   and can be dragged anywhere, pinned down the right so the work moves
+   over to make room, filled to the whole screen, or shrunk to a
    bubble in the corner. On a phone there is not the room to float, so it
    is a sheet along the bottom instead.
 
@@ -252,6 +249,9 @@ function viewer(o){
   const AT_KEY = "hub_slides_at_" + lessonKey;
   const VIEW_KEY = "hub_slides_view";
   let view = Object.assign({ mode: "float", x: null, y: null, w: 440, side: 420 }, store(VIEW_KEY) || {});
+  /* The slides pin to the right only, where the documents pin too. A
+     place remembered from when they could also go left is the right. */
+  if (view.mode === "left") view.mode = "right";
   let cur = Math.min(Math.max(0, +store(AT_KEY) || 0), list.length - 1);
   let shown = false, lastMode = view.mode === "full" || view.mode === "mini" ? "float" : view.mode;
   let live = null, drifted = false, liveTimer = null;
@@ -273,7 +273,6 @@ function viewer(o){
   const bar = div("sl-bar");
   const grip = div("sl-grip", '<span class="sl-count"></span><span class="sl-livechip" hidden></span>');
   const tools = div("sl-tools");
-  const bLeft = btn("sl-tool", "&#9703;", "Pin to the left");
   const bFloat = btn("sl-tool", "&#10697;", "Float over the page");
   const bRight = btn("sl-tool", "&#9704;", "Pin to the right");
   const bFull = btn("sl-tool", "&#9974;", "Fill the screen");
@@ -284,7 +283,7 @@ function viewer(o){
   const bShow = btn("sl-tool sl-tool-text", "&#9654; Present", "Present these slides to the class");
   bShow.hidden = !o.present;
   bShow.addEventListener("click", () => o.present(cur));
-  [bShow, bLeft, bFloat, bRight, bFull, bPip, bMini, bClose].forEach(b => tools.appendChild(b));
+  [bShow, bFloat, bRight, bFull, bPip, bMini, bClose].forEach(b => tools.appendChild(b));
   bar.appendChild(grip); bar.appendChild(tools);
 
   const stage = div("sl-stage");
@@ -369,18 +368,19 @@ function viewer(o){
     buildThumbs();
     thumbs.hidden = !thumbs.hidden;
     bThumbs.classList.toggle("on", !thumbs.hidden);
-    if (view.mode === "left" || view.mode === "right"){ view.noThumbs = thumbs.hidden; store(VIEW_KEY, view); }
+    if (view.mode === "right"){ view.noThumbs = thumbs.hidden; store(VIEW_KEY, view); }
     paint(0);
   });
 
   /* ---- where the window is ---- */
   const narrow = () => matchMedia(NARROW).matches;
   function setMode(m, keep){
-    if (narrow() && (m === "float" || m === "left" || m === "right")) m = "sheet";
+    if (m === "left") m = "right";
+    if (narrow() && (m === "float" || m === "right")) m = "sheet";
     if (m !== "full" && m !== "mini") lastMode = m;
     /* pinned, there is a column of room under the slide: every slide goes
        in it, unless they have been put away while pinned before */
-    if ((m === "left" || m === "right") && thumbs.hidden && !view.noThumbs){
+    if (m === "right" && thumbs.hidden && !view.noThumbs){
       buildThumbs(); thumbs.hidden = false; bThumbs.classList.add("on");
     }
     view.mode = m;
@@ -391,7 +391,6 @@ function viewer(o){
     const m = view.mode;
     win.dataset.mode = m;
     const b = document.body.classList;
-    b.toggle("sl-pin-left", shown && m === "left");
     b.toggle("sl-pin-right", shown && m === "right");
     b.toggle("sl-sheet", shown && m === "sheet");
     document.documentElement.style.setProperty("--sl-side", clampSide(view.side) + "px");
@@ -405,9 +404,9 @@ function viewer(o){
       win.style.left = Math.min(Math.max(4, x), innerWidth - Math.min(w, 120)) + "px";
       win.style.top = Math.min(Math.max(4, y), innerHeight - Math.min(h, 60)) + "px";
     }
-    bLeft.classList.toggle("on", m === "left"); bRight.classList.toggle("on", m === "right");
+    bRight.classList.toggle("on", m === "right");
     bFloat.classList.toggle("on", m === "float"); bFull.classList.toggle("on", m === "full");
-    [bLeft, bRight, bFloat].forEach(x => { x.hidden = narrow(); });
+    [bRight, bFloat].forEach(x => { x.hidden = narrow(); });
     bPip.hidden = !lab("pip") || !!pipWin;
     win.classList.toggle("ghost", lab("ghost") && m === "float");
     open.classList.toggle("on", shown);
@@ -433,7 +432,6 @@ function viewer(o){
     stopSpeaking();
     place();
   }
-  bLeft.addEventListener("click", () => setMode("left"));
   bRight.addEventListener("click", () => setMode("right"));
   bFloat.addEventListener("click", () => setMode("float"));
   bFull.addEventListener("click", () => setMode(view.mode === "full" ? lastMode : "full", true));
@@ -447,14 +445,14 @@ function viewer(o){
   function placeSoon(){
     clearTimeout(placeTimer);
     placeTimer = setTimeout(() => {
-      if (narrow() && /^(float|left|right)$/.test(view.mode)) setMode("sheet", true);
+      if (narrow() && /^(float|right)$/.test(view.mode)) setMode("sheet", true);
       else if (!narrow() && view.mode === "sheet") setMode(lastMode === "sheet" ? "float" : lastMode, true);
       else { win.dataset.mode = view.mode; drawInk(); }
     }, 120);
   }
 
   /* ---- dragging it about ----
-     The bar is the handle. Pulled to the left or right edge it pins
+     The bar is the handle. Pulled to the right edge it pins
      there, to the top it fills the screen, and pulled away from a pinned
      edge it comes loose and floats under the pointer. */
   let drag = null;
@@ -485,7 +483,7 @@ function viewer(o){
     win.style.left = Math.min(Math.max(-view.w + 80, view.x), innerWidth - 80) + "px";
     win.style.top = Math.min(Math.max(0, view.y), innerHeight - 40) + "px";
     const edge = 28;
-    drag.snap = e.clientX < edge ? "left" : e.clientX > innerWidth - edge ? "right" : e.clientY < 10 ? "full" : null;
+    drag.snap = e.clientX > innerWidth - edge ? "right" : e.clientY < 10 ? "full" : null;
     snapHint.hidden = !drag.snap;
     if (drag.snap) snapHint.dataset.side = drag.snap;
   });
@@ -525,8 +523,7 @@ function viewer(o){
     win.style.width = view.w + "px";
   });
   resizer(split, (e, s) => {
-    const d = view.mode === "left" ? e.clientX - s.x : s.x - e.clientX;
-    view.side = clampSide(s.side + d);
+    view.side = clampSide(s.side + (s.x - e.clientX));
     document.documentElement.style.setProperty("--sl-side", view.side + "px");
   });
 
@@ -742,7 +739,7 @@ function viewer(o){
       win.dataset.mode = "pip";
       pipWin.document.body.appendChild(win);
       pipWin.addEventListener("keydown", onKey);
-      document.body.classList.remove("sl-pin-left", "sl-pin-right", "sl-sheet");
+      document.body.classList.remove("sl-pin-right", "sl-sheet");
       bPip.hidden = true;
       pipWin.addEventListener("pagehide", () => {
         pipWin = null;

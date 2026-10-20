@@ -39,6 +39,38 @@ window.HUB = {
   SCRATCH_ASSETS: ""
 };
 
+/* Inside the lesson Preview (lessonpreview.html) a page is a pretend student
+   or a pretend teacher marking them. The preview page hands it storage of
+   its own and answers its calls to the server itself, so nothing it does
+   reaches a real class, and nothing a real student left in this browser is
+   read or overwritten. It runs as if online whatever the switch above says,
+   because there is no hand-in or marking to try out otherwise; the switch
+   itself is untouched.
+
+   Done here because this runs before anything on a page asks the server for
+   anything or reads a saved answer. Anywhere else, a page that is not inside
+   the preview finds no preview above it and carries on as normal.
+
+   This was the original site's, and was lost when this file was written
+   again for Azure: every page in the Preview then ran as itself, so the
+   Home view found nobody signed in and showed Sign in, for every lesson. */
+(function(){
+  var w = window;
+  try{
+    while (w.parent && w.parent !== w){
+      w = w.parent;
+      if (w.hubSandbox && typeof w.hubSandbox.enter === "function"){
+        /* Said before entering rather than by it: the lesson page reads this
+           to open every page, and that should hold even where entering the
+           sandbox went wrong. */
+        window.hubInPreview = true;
+        w.hubSandbox.enter(window);
+        return;
+      }
+    }
+  }catch(e){ /* a page above on another site: not the preview */ }
+})();
+
 /* Everything below works out what that means, so no page has to. */
 if (window.HUB.OFFLINE) window.HUB.API = "";
 window.hubOffline = function(){ return !!(window.HUB && window.HUB.OFFLINE); };

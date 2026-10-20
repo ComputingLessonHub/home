@@ -4,17 +4,16 @@
    Word files come in through Import Word (several at once is fine) and
    are kept on the lesson as lesson.docs (see the top of docs.js). Each one
    can be renamed, put in order, tied to a page, and have its words put
-   right in place; the two choices for the whole lesson are whether the
-   document opens as the lesson starts and whether a student may unlock it
-   from the right and move it. Saved with the lesson's own autosave, the
-   same as the slides.
+   right in place; the one choice for the whole lesson is whether it opens
+   as the lesson starts. Saved with the lesson's own autosave, the same as
+   the slides.
    =================================================================== */
 (function(){
 "use strict";
 
 function newId(){ return "d" + Math.random().toString(36).slice(2, 9); }
 function docs(){
-  if (!lesson.docs || !Array.isArray(lesson.docs.list)) lesson.docs = { list: [], open: true, unlock: true };
+  if (!lesson.docs || !Array.isArray(lesson.docs.list)) lesson.docs = { list: [], open: true };
   return lesson.docs;
 }
 function changed(){
@@ -46,7 +45,7 @@ function build(box){
   picked = Math.min(picked, Math.max(0, d.list.length - 1));
   box.appendChild(el("h2", "", "Documents"));
   box.appendChild(el("p", "modal-text sle-lead",
-    "A Word document opens beside the lesson, pinned on the right with the lesson on the left. Worksheets, help sheets and reading all work."));
+    "A Word document opens beside the lesson, docked on the right with the lesson on the left. Worksheets, help sheets and reading all work."));
   const acts = el("div", "sle-acts");
   const wordBtn = el("button", "btn-primary", "Import Word");
   const delAll = el("button", "btn-ghost sle-danger", "Remove all");
@@ -58,13 +57,11 @@ function build(box){
   const msg = el("p", "sle-msg", ""); msg.setAttribute("aria-live", "polite");
   box.appendChild(msg);
 
-  /* the two choices for the lesson as a whole */
+  /* the one choice for the lesson as a whole */
   const opts = el("div", "dce-opts");
   const optOpen = toggleRow("Open it as the lesson starts", "Not on a phone, where it would take half the screen without being asked.",
     () => d.open !== false, (v) => { d.open = v; });
-  const optUnlock = toggleRow("Students can unlock it and move it", "Turn this off to keep it on the right for the whole lesson.",
-    () => d.unlock !== false, (v) => { d.unlock = v; });
-  opts.appendChild(optOpen); opts.appendChild(optUnlock);
+  opts.appendChild(optOpen);
   box.appendChild(opts);
 
   const main = el("div", "sle-main");
@@ -231,7 +228,6 @@ window.compileDocs = function(l){
   out.list.forEach(x => { if (!x.id) x.id = newId(); });
   /* only the choices turned away from the default are written down */
   if (d.open === false) out.open = false;
-  if (d.unlock === false) out.unlock = false;
   return out;
 };
 window.readDocs = function(data){
@@ -239,7 +235,8 @@ window.readDocs = function(data){
   if (!d || !Array.isArray(d.list) || !d.list.length) return null;
   const out = JSON.parse(JSON.stringify(d));
   out.open = d.open !== false;
-  out.unlock = d.unlock !== false;
+  /* documents cannot be moved any more, so there is nothing to unlock */
+  delete out.unlock;
   return out;
 };
 window.docIds = function(l){

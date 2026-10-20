@@ -228,6 +228,7 @@
           <button class="pal" data-add="notes"><b>Notes</b><span>Their own notes, with formatting</span></button>
           <button class="pal" data-add="mindmap"><b>Mind map</b><span>A middle idea with branches</span></button>
           <button class="pal" data-add="board"><b>Whiteboard</b><span>Draw and write freely</span></button>
+          <button class="pal" data-add="helper"><b>Photoshop help</b><span>A help chat they can ask</span></button>
         </div>
       </div>
       <div class="palgroup" data-group="coding">
@@ -620,6 +621,8 @@ const BLANK = {
   blanks:   () => ({ type:"blanks", prompt:"", text:"The [[cat]] sat on the mat.", distractors:"", topic:"" }),
   order:    () => ({ type:"order", prompt:"", items:["","",""], topic:"" }),
   notes:    () => ({ type:"notes", title:"", task:"", starter:"" }),
+  helper:   () => ({ type:"helper", title:"Stuck? Ask for help", topic:"photoshop",
+                     task:"Type what you want to do in Photoshop, or what has gone wrong." }),
   mindmap:  () => ({ type:"mindmap", title:"", task:"", centre:"", lockCentre:false, starter:[] }),
   board:    () => ({ type:"board", title:"", task:"", height:420 }),
   keywords: () => ({ type:"keywords", title:"", task:"",
@@ -715,7 +718,7 @@ function codeTaskLabel(entry){
 
 const LABEL = { text:"Paragraph", picture:"Image", pastelink:"Paste a link", ide:"Python task", question:"Written answer", quiz:"Quiz", image:"Screenshot",
                 embed:"Video", link:"Link to a site", mc:"Multiple choice", blanks:"Fill the gaps", order:"Put in order",
-                short:"Short answer", page:"Page", extension:"Extension tasks", group:"Group", choice:"Choice", frame:"Embedded page", binary:"Binary conversion", binadd:"Binary addition", notes:"Notes", mindmap:"Mind map", board:"Whiteboard", label:"Label a picture", keywords:"Keyword definitions", code:"Coding task", web:"Web page", scratch:"Block coding",
+                short:"Short answer", page:"Page", extension:"Extension tasks", group:"Group", choice:"Choice", frame:"Embedded page", binary:"Binary conversion", binadd:"Binary addition", notes:"Notes", helper:"Photoshop help", mindmap:"Mind map", board:"Whiteboard", label:"Label a picture", keywords:"Keyword definitions", code:"Coding task", web:"Web page", scratch:"Block coding",
                 password:"Password checker", caesar:"Caesar cipher", exam:"Exam question",
                 table:"Table", hotspot:"Click the right spot" };
 
@@ -1370,6 +1373,8 @@ function compileOne(b, id, target){
     else if (b.type === "notes")
       push(keepArrays({ type:"notes", id, title: b.title || "", task: b.task || "",
         starter: b.starter || "" }));
+    else if (b.type === "helper")
+      push({ type:"helper", id, title: b.title || "", task: b.task || "", topic: "photoshop" });
     else if (b.type === "mindmap")
       push(keepArrays({ type:"mindmap", id, title: b.title || "", task: b.task || "",
         centre: b.centre || "", lockCentre: b.lockCentre === true,
@@ -5416,7 +5421,8 @@ const BANK_TYPES = [
   ["text","Paragraph","Words, with formatting"],
   ["picture","Image","Show a picture from a link"],
   ["embed","Video","Embed a clip"],
-  ["notes","Notes","Their own notes, with formatting"]
+  ["notes","Notes","Their own notes, with formatting"],
+  ["helper","Photoshop help","A help chat they can ask"]
 ];
 
 let bankOpen = false;        // the Task bank tab is the one on screen
