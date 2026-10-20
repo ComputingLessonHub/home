@@ -113,6 +113,8 @@ function openSlides(){
   openModal(build);
 }
 window.openSlidesEditor = openSlides;
+/* the documents pop-up keeps its pictures the same way */
+window.slidePicture = (blob) => slidePicture(blob);
 
 function build(box){
   const d = deck();

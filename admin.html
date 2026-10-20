@@ -337,8 +337,25 @@ setTimeout(function(){
       <button class="classtile" id="openLessons"><b><span data-icon="lessons" data-size="22"></span> Units &amp; lessons</b><span>Publish, lock, watch progress, view work</span></button>
       <button class="classtile" id="openStudents"><b><span data-icon="classes" data-size="22"></span> Students</b><span>Add, edit and reset logins</span></button>
       <button class="classtile" id="openProgress"><b><span data-icon="progress" data-size="22"></span> Progress</b><span>How a unit is going, lesson by lesson</span></button>
+      <button class="classtile" id="openHelpQs" hidden><b><span data-icon="help" data-size="22"></span> Help questions</b><span id="helpQsCount">What the Photoshop helper could not answer</span></button>
       <button class="classtile" id="openCover" hidden><b><span data-icon="coverage" data-size="22"></span> Specification coverage</b><span>How the class is doing, point by point</span></button>
     </div>
+  </div>
+
+  <!-- ============ help questions ============
+       What this class asked the Photoshop helper that it could not answer,
+       or whose answer did not help. Read to see what to add to the
+       helper's answers file. Filled by loadHelpQs(). -->
+  <div id="helpQsView" hidden>
+    <button class="crumb" id="backClass4">&larr; <span class="bk"></span></button>
+    <button class="btn-ghost iconbtn refresh" id="refHelpQs" title="Refresh">&#8635;</button>
+    <h2 style="margin:14px 0 6px">Help questions</h2>
+    <p class="hint" id="helpQsNote"></p>
+    <div class="toolrow">
+      <button class="btn-ghost toggle" id="helpQsAll" type="button">Show dealt with</button>
+      <button class="btn-ghost" id="helpQsClear" type="button" hidden>Clear dealt with</button>
+    </div>
+    <div id="helpQsList"></div>
   </div>
 
   <!-- ============ specification coverage ============ -->
@@ -624,6 +641,7 @@ function paintCrumbs(){
                                           { name:"Students", go: () => { show("studentsView"); loadStudents(); } },
                                           { name: (window.studentProfile && window.studentProfile.name()) || "Student" }]);
   if (v === "coverView") return crumbs([home, { name: cls, go: toClass }, { name:"Specification coverage" }]);
+  if (v === "helpQsView") return crumbs([home, { name: cls, go: toClass }, { name:"Help questions" }]);
   if (v === "progressView") return crumbs([home, { name: cls, go: toClass }, { name:"Progress" }]);
   if (v === "unitsView") return crumbs([home, { name: cls, go: toClass }, { name:"Units" }]);
   if (v === "partsView") return crumbs([home, { name: cls, go: toClass }, { name:"Units", go: toUnits },
@@ -647,7 +665,7 @@ function crumbName(id){
 }
 
 /* ---------- view switching ---------- */
-const VIEWS = ["keyView","whoView","homeView","hubView","hubUnitsView","hubCompView","hubPointView","hubPointLessonsView","hubLessonsView","classesView","classView","studentsView","coverView","unitsView","partsView","lessonsView","keepView","pwView","practiceView","progressView","timetableView","studentView"];
+const VIEWS = ["keyView","whoView","homeView","hubView","hubUnitsView","hubCompView","hubPointView","hubPointLessonsView","hubLessonsView","classesView","classView","studentsView","coverView","unitsView","partsView","lessonsView","keepView","pwView","practiceView","progressView","timetableView","studentView","helpQsView"];
 let goingBack = false;          // set while the browser's Back is driving
 function show(view, quiet){
   /* Signing in and choosing who is teaching are pop-ups over Home, so Home
@@ -1115,6 +1133,7 @@ async function restoreSpot(spot){
     if (spot.view === "pwView"){ showPwView(); return; }
     if (spot.view === "keepView"){ $("keepBtn").click(); return; }
     if (here && spot.view === "coverView"){ nameClass(cls); show("coverView"); loadCoverage(); return; }
+    if (here && spot.view === "helpQsView"){ nameClass(cls); show("helpQsView"); loadHelpQs(); return; }
     if (here && spot.view === "progressView"){ nameClass(cls); await openProgressView(); return; }
     /* Nothing is put on screen before the catalogue has come. show() is what
        takes the dots away, so calling it for a page on the way past showed
@@ -3214,6 +3233,9 @@ async function openClass(name){
      from the home screen has not been through the hub. */
   const cover = $("openCover");
   if (cover) cover.hidden = true;
+  /* Help questions need the server that collects them. */
+  if ($("openHelpQs")) $("openHelpQs").hidden = OFFLINE;
+  if (!OFFLINE) countHelpQs();
   if (OFFLINE) return;
   try{ await loadCatalogue(); }catch(e){ return; }
   if (cover) cover.hidden = !classDoesSpecWork();
@@ -3229,6 +3251,127 @@ function classDoesSpecWork(){
   });
 }
 on("openCover", "click", () => { show("coverView"); loadCoverage(); });
+
+/* ---------------- help questions ----------------
+   The questions this class asked the Photoshop helper (helper.js) that it
+   could not answer, sent by its help-ask action with the class read from
+   the student's own sign-in and no name. They are here to be read: each
+   one is wording to add to an answer's ask list in help-photoshop.js, or a
+   gap to write a new answer for. Dealt with is a teacher's tick, and Clear
+   dealt with removes those for good. */
+let helpQsAll = false, helpQsRows = null, helpTitles = null;
+async function helpTitlesLoad(){
+  if (helpTitles) return helpTitles;
+  /* The answers file says what each matched id is called. Loaded only when
+     this screen is opened; the console has no other use for it. */
+  if (!window.HELP_PHOTOSHOP){
+    await new Promise((ok) => {
+      const s = document.createElement("script");
+      s.src = "help-photoshop.js"; s.onload = ok; s.onerror = ok;
+      document.head.appendChild(s);
+    });
+  }
+  helpTitles = {};
+  ((window.HELP_PHOTOSHOP || {}).entries || []).forEach(e => { helpTitles[e.id] = e.title; });
+  return helpTitles;
+}
+async function fetchHelpQs(all){
+  const r = await fetch(API + "/api/teacher/help-questions?group=" + encodeURIComponent(cls) + (all ? "&done=1" : ""),
+                        { headers: window.teacherAuth.headers(), cache:"no-store" });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || "Could not read the help questions.");
+  return d.rows || [];
+}
+/* The number on the class tile, so a teacher can see there is something to
+   read without opening it. Quiet if it fails: it is a hint, not the screen. */
+async function countHelpQs(){
+  const label = $("helpQsCount");
+  if (!label) return;
+  const forCls = cls;
+  try{
+    const rows = await fetchHelpQs(false);
+    if (forCls !== cls) return;
+    label.textContent = rows.length
+      ? rows.length + " the Photoshop helper could not answer"
+      : "What the Photoshop helper could not answer";
+  }catch(e){}
+}
+async function loadHelpQs(){
+  $("helpQsList").innerHTML = "";
+  $("helpQsNote").textContent = "Loading…";
+  try{
+    const [rows] = await Promise.all([fetchHelpQs(helpQsAll), helpTitlesLoad()]);
+    helpQsRows = rows;
+  }catch(e){ $("helpQsNote").textContent = e.message; return; }
+  paintHelpQs();
+}
+const HELP_HOW = { "unsure": "It did not understand",
+                   "not-quite": "The answer did not help",
+                   "still-stuck": "Still stuck after the fixes" };
+function paintHelpQs(){
+  const box = $("helpQsList");
+  box.innerHTML = "";
+  const rows = helpQsRows || [];
+  const open = rows.filter(r => !r.done).length;
+  $("helpQsAll").classList.toggle("on", helpQsAll);
+  $("helpQsAll").textContent = helpQsAll ? "Hide dealt with" : "Show dealt with";
+  $("helpQsClear").hidden = !helpQsAll || !rows.some(r => r.done);
+  if (!rows.length){
+    $("helpQsNote").textContent = (helpQsAll ? "Nothing yet." : "Nothing waiting.") +
+      " Questions appear here when " + cls + " uses the Photoshop helper and it cannot answer.";
+    return;
+  }
+  /* What it most often failed on, so the answer worth improving first is
+     the first thing read. */
+  const byMatch = {};
+  rows.filter(r => !r.done && r.matched).forEach(r => { byMatch[r.matched] = (byMatch[r.matched] || 0) + 1; });
+  const top = Object.keys(byMatch).sort((a, b) => byMatch[b] - byMatch[a])[0];
+  $("helpQsNote").textContent = open + " waiting" + (helpQsAll ? ", " + (rows.length - open) + " dealt with" : "") + "." +
+    (top && byMatch[top] > 1 ? " The answer that most often did not help: " + (helpTitles[top] || top) + " (" + byMatch[top] + ")." : "") +
+    " Each one is wording to add to the helper's answers, in help-photoshop.js.";
+  rows.forEach(r => {
+    const row = el("div", "hq-row" + (r.done ? " done" : ""));
+    const words = el("div", "hq-words");
+    words.appendChild(el("div", "hq-q", "“" + r.question + "”"));
+    const bits = [HELP_HOW[r.how] || "Not answered"];
+    if (r.matched) bits.push("it gave: " + (helpTitles[r.matched] || r.matched));
+    /* kept in UTC, the way every date in the database is; shown in the
+       time the teacher is living in, or British Summer Time is an hour out */
+    const at = new Date(String(r.at || "").replace(" ", "T") + "Z");
+    bits.push(isNaN(at) ? String(r.at || "") : at.toLocaleString("en-GB", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }));
+    words.appendChild(el("div", "hq-meta", bits.join(" · ")));
+    row.appendChild(words);
+    const b = el("button", "btn-ghost", r.done ? "Not dealt with" : "Dealt with");
+    b.type = "button";
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      try{
+        const res = await fetch(API + "/api/teacher/help-questions", { method:"POST", headers: HJ(),
+          body: JSON.stringify({ op: r.done ? "open" : "done", id: r.id }) });
+        if (!res.ok) throw new Error();
+        r.done = !r.done;
+        if (!helpQsAll && r.done) helpQsRows = helpQsRows.filter(x => x !== r);
+        paintHelpQs(); countHelpQs();
+      }catch(e){ b.disabled = false; b.textContent = "Try again"; }
+    });
+    row.appendChild(b);
+    box.appendChild(row);
+  });
+}
+on("openHelpQs", "click", () => { show("helpQsView"); loadHelpQs(); });
+on("backClass4", "click", () => openClass(cls));
+on("refHelpQs", "click", () => loadHelpQs());
+on("helpQsAll", "click", () => { helpQsAll = !helpQsAll; loadHelpQs(); });
+on("helpQsClear", "click", async () => {
+  if (!confirm("Remove every question marked dealt with for " + cls + "? This cannot be undone.")) return;
+  try{
+    const res = await fetch(API + "/api/teacher/help-questions", { method:"POST", headers: HJ(),
+      body: JSON.stringify({ op: "clear", group: cls }) });
+    if (!res.ok) throw new Error();
+  }catch(e){ $("helpQsNote").textContent = "Could not clear them. Try again in a moment."; return; }
+  loadHelpQs();
+});
+
 on("backClass3", "click", () => openClass(cls));
 on("refCover", "click", () => loadCoverage(true));
 

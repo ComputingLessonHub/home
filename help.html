@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="images/logo.svg" type="image/svg+xml">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photoshop help</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="look.css">
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<script src="config.js"></script>
+<script src="settings.js"></script>
+<script src="help-photoshop.js"></script>
+<script src="helper.js"></script>
+</head>
+<!-- The Photoshop helper on a page of its own, narrow enough to sit in a
+     browser window beside Photoshop. Nothing on it needs a server or a
+     sign-in, so it works in offline mode and on a machine nobody has
+     signed into. -->
+<body class="hp-page">
+<div class="topbar">
+  <a class="home" href="index.html">&larr; Home</a>
+  <span class="sep">/</span>
+  <div class="title">Photoshop help</div>
+  <button class="btn-ghost iconbtn no-print" id="setBtn" title="Settings">&#9881;&#65038;</button>
+</div>
+<main class="hp-pagebody" id="chat"></main>
+<script>
+window.hubHelper.mount(document.getElementById("chat"), window.HELP_PHOTOSHOP).focus();
+if (window.initSettings) initSettings(document.getElementById("setBtn"));
+</script>
+</body>
+</html>

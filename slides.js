@@ -55,7 +55,10 @@ const LAB = [
   ["speak",    "Read aloud",              "A button that reads the words on the slide out loud."],
   ["scribble", "Scribble on slides",      "Draw on a slide to make notes. Kept on this computer only and never handed in."],
   ["flip",     "Card flips",              "Slides turn over like cards when you move between them."],
-  ["peek",     "Hover peek",              "When the slides are shrunk to a bubble, point at it to see the slide large."]
+  ["peek",     "Hover peek",              "When the slides are shrunk to a bubble, point at it to see the slide large."],
+  /* not a slides idea, but the same kind of thing to try out, so it lives
+     in the same list rather than a group of its own */
+  ["helper",   "Photoshop helper",        "A help chat in the corner of every lesson. Ask it how to do something in Photoshop, or what has gone wrong."]
 ];
 function prefs(){ try{ return JSON.parse(localStorage.getItem("hub_prefs") || "{}"); }catch(e){ return {}; } }
 function lab(name){ const l = prefs().slidesLab; return !!(l && l[name]); }
@@ -70,7 +73,7 @@ function setLab(name, on){
 function settingsGroup(holder){
   if (!holder) return;
   const g = div("set-group sl-labgroup");
-  g.innerHTML = '<span class="set-label">Slides experiments</span>' +
+  g.innerHTML = '<span class="set-label">Experiments</span>' +
     '<p class="subnote" style="margin:0 0 10px">New ideas being tried out. Turn any of them on to see what it is like.</p>';
   LAB.forEach(([key, name, words]) => {
     const row = btn("sl-lab", "");

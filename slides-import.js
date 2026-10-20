@@ -793,5 +793,7 @@ async function readPptx(file, opts){
   return { ratio: r2(cx / cy * 1000) / 1000, hpt: r2(cy / 12700), list: slides, skipped };
 }
 
-window.hubSlideImport = { readPptx };
+/* The zip and XML helpers are shared with docs-import.js, which reads Word
+   files the same way, rather than kept twice. */
+window.hubSlideImport = { readPptx, zip: { readZip, bytesOf, textOf, parse, relsPath, resolve } };
 })();

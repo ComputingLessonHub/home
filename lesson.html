@@ -26,6 +26,8 @@
 <script src="worklink.js"></script>
 <script src="settings.js"></script>
 <script src="slides.js"></script>
+<script src="docs.js"></script>
+<script src="helper.js"></script>
 </head>
 <body class="lesson">
 
@@ -1215,9 +1217,28 @@ function startSlides(l){
     present: teacher ? (at) => window.hubSlides.present(l.slides, { start: at }) : null
   });
 }
+/* The lesson's Word documents (docs.js): open beside the work as the lesson
+   starts, pinned right and locked there unless the teacher said otherwise. */
+let docViewer = null;
+function startDocs(l){
+  if (!window.hubDocs || !window.hubDocs.has(l)) return;
+  if (embedParam !== null || pdfParam !== null || allParam !== null) return;
+  docViewer = window.hubDocs.viewer({
+    docs: l.docs, lessonId, before: $("setBtn"),
+    docForPage: (i) => { const b = l.blocks && l.blocks[i]; return b && b.doc ? b.doc : null; }
+  });
+}
+/* The experiments are offered on every lesson now, slides or not: the
+   Photoshop helper among them belongs to no deck. */
 window.settingsSection = (holder) => {
-  if (window.hubSlides && lesson && window.hubSlides.has(lesson)) window.hubSlides.settingsGroup(holder);
+  if (window.hubSlides) window.hubSlides.settingsGroup(holder);
 };
+/* The Photoshop helper's corner button, while that experiment is on.
+   helper.js is small; the answers are fetched the first time it opens. */
+function startHelper(){
+  if (!window.hubHelper || embedParam !== null || pdfParam !== null || allParam !== null) return;
+  window.hubHelper.corner({ when: () => window.hubSlides && window.hubSlides.lab("helper"), pack: "help-photoshop.js" });
+}
 
 function handedLesson(){
   if (OFFLINE || !spectate || viewParam === null) return null;
@@ -1253,6 +1274,8 @@ const handedOver = handedLesson();
     if (assessLayout()) arrangeAssessment();
     buildTracker();
     startSlides(l);
+    startDocs(l);
+    startHelper();
     /* Asked before anything is restored: a name change means a different
        child, and the work waiting on this machine is cleared, so restoring
        first would put the last one's answers on screen. */
@@ -2589,6 +2612,7 @@ function showStep(i){
   paintRail();
   refreshGate();
   if (slideViewer) slideViewer.page(step);
+  if (docViewer) docViewer.page(step);
 }
 function refreshGate(){
   /* Continue is never locked, and nothing is written along the bottom bar
