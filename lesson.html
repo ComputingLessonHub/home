@@ -608,6 +608,20 @@ function lessonTaskIds(){
 function hasFeedback(){
   return !!(teacherNote && (String(teacherNote.strength || "").trim() || String(teacherNote.target || "").trim()));
 }
+/* A practical the teacher has saved a mark, a grade or feedback on from Mark
+   work. Finishing posts a row of its own, 0 out of 1 with nothing written,
+   so a row alone is not a mark: something in it has to be the teacher's.
+   Once this is true the summary has everything the student needs to do
+   next, so the way back into the work is taken away, the same as a marked
+   assessment. Before it, a student who pressed Finish by accident can still
+   go back. */
+function practicalMarked(){
+  if (!lesson || !lesson.practical) return false;
+  const r = myResult;
+  if (r && ((typeof r.score === "number" && r.outOf > 1) || String(r.grade || "").trim())) return true;
+  return !!(teacherNote && (String(teacherNote.strength || "").trim() || String(teacherNote.target || "").trim()
+                            || String(teacherNote.comment || "").trim()));
+}
 function freezeIfFed(){
   if (workFrozen || spectate || !hasFeedback()) return;
   workFrozen = {};
@@ -2989,7 +3003,10 @@ function paintTracker(){
        that could not be reached from the summary. A teacher roaming counts
        the same way, so pressing the page they are on is the way back off the
        summary. */
-    const canGo = done && !shut && (finished || roam || n !== step);
+    /* A marked practical has no way back in from the summary, so the bar
+       cannot be one either. */
+    const sealed = !roam && finished && practicalMarked();
+    const canGo = done && !shut && !sealed && (finished || roam || n !== step);
     /* A page ahead of them can be pressed too, and asks the same question
        Continue does, "is it open yet", with the same wait between tries:
        tryJumpAhead. So the bar is a way forward as well as back, and still
@@ -9110,8 +9127,7 @@ async function assessmentFinish(){
    rubric itself is in the bar along the bottom. */
 function renderPracticalComplete(){
   const scored = !rubricRun() && myResult && typeof myResult.score === "number" && myResult.outOf > 1;
-  const marked = scored ||
-    (teacherNote && (teacherNote.strength || teacherNote.target || teacherNote.comment));
+  const marked = scored || practicalMarked();
 
   const box = doneShell(marked ? "Marked!" : "Submitted!");
   const hero = heroBits(marked ? "Marked!" : "Submitted!",
@@ -9124,7 +9140,8 @@ function renderPracticalComplete(){
   if (shots) hero.appendChild(shots);
   box.appendChild(hero);
 
-  /* No View my work here. Back to my work at the top is the way into it, a
+  /* No View my work here. Back to my work at the top is the way into it
+     until the teacher has marked it, and after that there is none: a
      practical's work is the whole program rather than a list of answers,
      and two ways in read as two different things. */
 
@@ -10441,10 +10458,12 @@ function doneShell(title){
     note.innerHTML = lockIcon(17);
     note.appendChild(document.createTextNode(" Your teacher has locked this while they mark it, so it cannot be changed just now."));
     box.appendChild(note);
-  } else if (steps.length && !(assessPages && !spectate)){
+  } else if (steps.length && !(assessPages && !spectate) && !(practicalMarked() && !spectate)){
     /* Not for a marked assessment a student has handed in. They were told
        twice that there was no going back; their answers are under View my
-       assessment, and a teacher's code is the way back in. */
+       assessment, and a teacher's code is the way back in. Nor for a
+       practical once the teacher has marked it: what to do next is on the
+       summary, and going back in only invites changing marked work. */
     const back = el("button","btn-ghost done-back", workFrozen ? "← View my original work" : "← Back to my work");
     back.addEventListener("click", () => leaveSummary(Math.max(0, steps.length - 1)));
     box.appendChild(back);
