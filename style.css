@@ -4,7 +4,7 @@
    Space Grotesk (display) · IBM Plex Sans (body) · IBM Plex Mono (code)
    ===================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Lexend:wght@400;500;600;700;800&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Lexend:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 /* =====================================================================
    The scale everything is sized from. Text comes in these sizes and corners
@@ -93,9 +93,41 @@ html[data-bg=yellow]{--bg:#F9F0CB; --bar:#EDE0AC; --panel:#FFFFFF; --panel-2:#FC
 html[data-bg=dark]{--bg:#23262E; --bar:#2C303A; --panel:#2C303A; --panel-2:#333846; --line:#3D434F; --line-2:#4C5464;
   --text:#EAEBEF; --muted:#A9AFBC; --dim:#7E8595; --amber:#E39B52; --amber-ink:#221A0F;
   --mint:#5BBE94; --mint-dim:#2C5847; --red:#DE7C74; --red-dim:#54312E}
-/* font choices */
-html[data-font=lexend]{--display:'Lexend',sans-serif; --body:'Lexend',sans-serif}
-html[data-font=atkinson]{--display:'Atkinson Hyperlegible',sans-serif; --body:'Atkinson Hyperlegible',sans-serif}
+/* The dyslexia friendly font, Settings. Atkinson Hyperlegible was a choice
+   too until there was one switch; settings.js moves anyone who had it to
+   Lexend, and the attribute is read as Lexend here so the first paint does
+   not flash Poppins before it does. */
+html[data-font=lexend],html[data-font=atkinson]{--display:'Lexend',sans-serif; --body:'Lexend',sans-serif}
+/* The rest of the switch follows the British Dyslexia Association style
+   guide, on the text a student reads and writes: the lesson, the question,
+   the brief, hints, feedback and their own answer. Buttons and labels keep
+   their spacing, so nothing in a toolbar wraps that did not wrap before.
+
+   - A little more space between letters, more again between words (the
+     guide asks for word spacing about three and a half times the letter
+     spacing), and between lines and paragraphs, so a line is easier to
+     keep hold of and the next one easier to find. */
+:is(html[data-font=lexend], html[data-font=atkinson]) :is(.prose, .q-ask, .pg-t, .rt-box, .brief p,
+  .hint, .banner, .feedbackNote, .fb-card, .check-hinttext, .checklist, textarea.answer, input.answer){
+  letter-spacing:.03em; word-spacing:.12em;
+}
+:is(html[data-font=lexend], html[data-font=atkinson]) :is(.prose, .q-ask, .pg-t, .rt-box, .feedbackNote, textarea.answer){
+  line-height:1.75;
+}
+:is(html[data-font=lexend], html[data-font=atkinson]) :is(.prose, .rt-box) :is(p, li){margin-bottom:.9em}
+/* - Slanted letters crowd together and are harder to make out, so emphasis
+     is bold instead of italic. */
+:is(html[data-font=lexend], html[data-font=atkinson]) :is(.prose, .q-ask, .pg-t, .rt-box, .brief, .hint, .feedbackNote) :is(em, i){
+  font-style:normal; font-weight:800;
+}
+/* - Text that is justified leaves rivers of uneven space between words, so a
+     teacher's justified paragraph is set ragged right. */
+:is(html[data-font=lexend], html[data-font=atkinson]) .rt-justify{text-align:left}
+/* - Words in capitals lose their shape, which is what a lot of dyslexic
+     readers recognise a word by, so labels drawn in capitals (CHECKLIST,
+     the save chip) are written as they are typed. !important because about
+     forty rules set capitals, some with longer selectors than this. */
+:is(html[data-font=lexend], html[data-font=atkinson]) *{text-transform:none !important}
 
 [hidden]{display:none !important}
 *{box-sizing:border-box}
@@ -1000,12 +1032,13 @@ textarea.code{background:var(--code-bg) !important; color:var(--code-fg) !import
 .swatches{display:flex; gap:10px; flex-wrap:wrap}
 .swatch{width:44px; height:44px; border-radius:var(--rad-md); border:2px solid var(--line-2); cursor:pointer; padding:0}
 .swatch.on{border-color:var(--amber); box-shadow:0 0 0 3px rgba(220,138,62,.2)}
+
+/* a page's own setting in the Settings pop-up, drawn as a choice to tick,
+   in a grid of them (Mark work's settings use this) */
 .font-opts{display:grid; gap:8px}
-/* .set-opt looks the same but is a page's own setting: settings.js repaints
-   every .font-opt from the font chosen, which would take its tick off */
-.font-opt,.set-opt{text-align:left; padding:11px 14px; border:1.5px solid var(--line-2); border-radius:var(--rad-md);
+.set-opt{text-align:left; padding:11px 14px; border:1.5px solid var(--line-2); border-radius:var(--rad-md);
   background:var(--panel); font-size:var(--text-xl); cursor:pointer}
-.font-opt.on,.set-opt.on{border-color:var(--amber); box-shadow:0 0 0 2px rgba(220,138,62,.18)}
+.set-opt.on{border-color:var(--amber); box-shadow:0 0 0 2px rgba(220,138,62,.18)}
 .modal{background:var(--panel); border-color:var(--line)}
 
 .masthead{position:relative}
@@ -1120,7 +1153,7 @@ html[data-bg=dark] .who-row .st.yes{color:var(--mint)}
 /* ---- v2.4.2 fixes ---- */
 /* belt and braces: every text surface follows the theme */
 .station,.qtext,.opt,.lead,.qhead,.paste-sub,.lock-text{color:var(--text)}
-.classtile,.classtile b,.font-opt,.set-opt{color:var(--text)}
+.classtile,.classtile b,.set-opt{color:var(--text)}
 .classtile span{color:var(--muted)}
 
 /* the spectator strip floats, so the page grid keeps its shape (pill fix) */

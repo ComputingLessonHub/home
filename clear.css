@@ -120,38 +120,33 @@ html[data-clear="on"] input, html[data-clear="on"] textarea{caret-color:var(--am
    A lesson
    ===================================================================== */
 
-/* The brief sits in the middle of the screen, 760px wide, and the tasks
-   under it ran from the far left to the far right: two different lines down
-   the page, and on a lab monitor a written answer box over 1800px wide.
+/* A lesson ran from the far left of the screen to the far right, so on a
+   lab monitor a written answer box was over 1800px wide and the task icons
+   were a long way from the brief in the middle. Every task now shares one
+   width: a little narrower than the screen, and no wider than 1320px with
+   its icons. The same width on every page, whatever is on it, so the line of
+   icons down the left never jumps about from one page to the next.
 
-   Now the column is centred, and a task you read or write in is the brief's
-   own width, straight under it: about 75 characters to a line, which a child
-   can follow back to its start. A task that needs room keeps it: code with
-   its console beside it, block coding, a picture to label, a drawing, a
-   video, the choose-your-challenge columns. A table stays in the column:
-   one too wide for it already scrolls sideways in its own box.
+   The icons and the gap after them take 48px on the left of the row, so the
+   row is padded 48px on the right to match, which puts the tasks in the true
+   middle, under the brief. A page with no icons (a code page hides them) is
+   padded 48px on both sides instead, so its tasks are exactly as wide as
+   everyone else's rather than the 96px wider they would otherwise be.
 
-   The row has the task icons down its left, so it is padded the same amount
-   on the right, which is what puts the tasks in the true middle rather than
-   48px to the right of it. */
-html[data-clear="on"] body.lesson .stagerow{max-width:1228px; margin-left:auto; margin-right:auto}
-/* Above 720px only: below it style.css takes the icons away altogether, and
-   the space would be taken from a phone for nothing. */
+   The notice about feedback sits above the row, in the same box, and takes
+   the tasks' width so it lines up with them.
+
+   Above 720px only: below it style.css takes the icons away altogether, and
+   the work keeps the whole of a phone screen. */
 @media (min-width:721px){
-  html[data-clear="on"] body.lesson .stagerow:has(> .taskrail:not([hidden])){padding-right:48px}
+  html[data-clear="on"] body.lesson .stagerow{
+    width:min(1320px, 94%); margin-left:auto; margin-right:auto; padding:0 48px;
+  }
+  html[data-clear="on"] body.lesson .stagerow:has(> .taskrail:not([hidden])){padding-left:0}
+  html[data-clear="on"] body.lesson .banner-frozen{
+    width:calc(min(1320px, 94%) - 96px); margin-left:auto; margin-right:auto;
+  }
 }
-/* On a page with nothing wide on it the whole row narrows to the brief, so
-   the icons stay beside the tasks they belong to instead of out on their
-   own at the left of the screen. Every page of the lesson is in the
-   document at once with the others hidden, so the question is asked of the
-   page on show only. */
-html[data-clear="on"] body.lesson .stagerow:not(:has(#blocks > :not([hidden]) :is(.ide, .scratch, canvas, iframe, video, img, .choice-panel))){max-width:856px}
-html[data-clear="on"] body.lesson #blocks .pg-item:not(:has(.ide, .scratch, canvas, iframe, video, img, .choice-panel)){
-  max-width:760px; margin-left:auto; margin-right:auto;
-}
-/* The notice about feedback belongs to the whole lesson, so it lines up
-   with the brief above it. */
-html[data-clear="on"] body.lesson .banner-frozen{max-width:760px; margin-left:auto; margin-right:auto}
 
 /* A question is a task heading like every other one. It was the one heading
    drawn in a grey band with a bar down its left, so a page with a question

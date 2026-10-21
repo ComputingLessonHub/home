@@ -12,11 +12,6 @@
     ["pink","Pink","#EA9AC0"], ["yellow","Yellow","#F2D479"],
     ["purple","Purple","#8B6FB5"], ["forest","Dark green","#4E8C63"]
   ];
-  const FONTS = [
-    ["","Poppins \u2014 the standard font","'Poppins'"],
-    ["lexend","Lexend \u2014 easier for some readers","'Lexend'"],
-    ["atkinson","Atkinson Hyperlegible \u2014 extra-clear letters","'Atkinson Hyperlegible'"]
-  ];
   function prefs(){ try{ return JSON.parse(localStorage.getItem("hub_prefs") || "{}"); }catch(e){ return {}; } }
 
   /* Everything a browser can be left holding that is neither a display choice
@@ -91,6 +86,13 @@
     if (p.clear === "on") document.documentElement.dataset.clear = "on";
     else delete document.documentElement.dataset.clear;
     if (p.bg) document.documentElement.dataset.bg = p.bg; else delete document.documentElement.dataset.bg;
+    /* One reading font now, Lexend, behind one switch. Anyone who had picked
+       Atkinson Hyperlegible when there were three to choose from wanted the
+       easier font, so they keep having one. */
+    if (p.font === "atkinson"){
+      p.font = "lexend";
+      try{ localStorage.setItem("hub_prefs", JSON.stringify(p)); }catch(e){}
+    }
     if (p.font) document.documentElement.dataset.font = p.font; else delete document.documentElement.dataset.font;
     applyTint(p);
     /* editors on the page follow along */
@@ -142,9 +144,9 @@
       '<label for="tintAmt">Strength</label>' +
       '<input type="range" id="tintAmt" min="5" max="60" step="5">' +
       '<span id="tintAmtOut"></span></div></div>' +
-      '<div class="set-group"><span class="set-label">Font</span><div class="font-opts" id="setFo">' +
-      FONTS.map(f => '<button class="font-opt" data-font="' + f[0] + '" style="font-family:' + f[2] + '">' + f[1] + '</button>').join("") +
-      '</div></div>' +
+      '<div class="set-group"><span class="set-label">Font</span>' +
+      '<button class="btn-ghost set-look" type="button" id="setDys" role="switch" style="width:100%; font-family:\'Lexend\',sans-serif"></button>' +
+      '<p class="subnote" style="margin:8px 0 0">Lexend, a font with wider letters and more space between them, which many people with dyslexia find easier to read.</p></div>' +
       /* The one layout choice left from trying the new console out: the
          side menu, or the console the way it was. Only on the teacher's
          pages, and only once ui.js is there. */
@@ -171,7 +173,13 @@
       const amt2 = back.querySelector("#tintAmt"), out = back.querySelector("#tintAmtOut");
       if (amt2){ amt2.value = String(p.tintAmt === undefined ? 25 : p.tintAmt); }
       if (out) out.textContent = (p.tintAmt === undefined ? 25 : p.tintAmt) + "%";
-      back.querySelectorAll(".font-opt").forEach(b => b.classList.toggle("on", (p.font || "") === b.dataset.font));
+      const dy = back.querySelector("#setDys");
+      if (dy){
+        const dysNow = p.font === "lexend";
+        dy.textContent = "Dyslexia friendly font: " + (dysNow ? "on" : "off");
+        dy.setAttribute("aria-checked", dysNow ? "true" : "false");
+        dy.classList.toggle("on", dysNow);
+      }
       const lk = back.querySelector("#setLook");
       if (lk){
         const onNow = p.look !== "classic";
@@ -225,9 +233,10 @@
       const p = prefs(); p.tintAmt = parseInt(amt.value, 10) || 25; save(p); paint();
     });
     function save(p){ localStorage.setItem("hub_prefs", JSON.stringify(p)); apply(p); }
-    back.querySelectorAll(".font-opt").forEach(b => b.addEventListener("click", () => {
-      const p = prefs(); p.font = b.dataset.font; localStorage.setItem("hub_prefs", JSON.stringify(p)); apply(p); paint();
-    }));
+    const dysBtn = back.querySelector("#setDys");
+    if (dysBtn) dysBtn.addEventListener("click", () => {
+      const p = prefs(); p.font = p.font === "lexend" ? "" : "lexend"; save(p); paint();
+    });
     /* Saved as they type. Only the name changes: the work already on this
        machine is theirs, so correcting a spelling must not throw it away.
        A different child is caught when the lesson opens, not here. */
