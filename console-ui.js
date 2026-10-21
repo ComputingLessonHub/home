@@ -111,6 +111,43 @@
     });
     const bar = $("topbar");
     if (bar && bar.parentNode) bar.parentNode.insertBefore(rail, bar.nextSibling);
+    /* At 900px and under there is no room for the menu down the side, so it
+       comes in from the left over the page, behind a button at the start of
+       the top bar, and the bar's own Passwords, Backups, Changelog and
+       Settings buttons go: they are all in the menu. It used to simply
+       vanish, which left Lessons, Classes and Practice with no way in. */
+    if (bar){
+      const toggle = el("button","btn-ghost iconbtn railtoggle");
+      toggle.type = "button";
+      toggle.id = "railToggle";
+      toggle.innerHTML = ic("menu", 20);
+      toggle.setAttribute("aria-label", "Menu");
+      toggle.setAttribute("aria-controls", "rail");
+      toggle.setAttribute("aria-expanded", "false");
+      bar.insertBefore(toggle, bar.firstChild);
+      const scrim = el("div","rail-scrim no-print");
+      document.body.appendChild(scrim);
+      const small = () => matchMedia("(max-width:900px)").matches;
+      const setOpen = (open) => {
+        document.body.classList.toggle("rail-open", open);
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open){
+          const first = rail.querySelector(".rail-item.on") || rail.querySelector(".rail-item");
+          if (first) setTimeout(() => first.focus(), 30);
+        }
+      };
+      toggle.addEventListener("click", () => setOpen(!document.body.classList.contains("rail-open")));
+      scrim.addEventListener("click", () => setOpen(false));
+      /* Going somewhere from the menu closes it, so the screen chosen is the
+         one on show; on a wide screen the menu is not a drawer at all. */
+      rail.addEventListener("click", (e) => {
+        if (small() && e.target.closest(".rail-item, .rail-brand")) setOpen(false);
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && document.body.classList.contains("rail-open")){ setOpen(false); toggle.focus(); }
+      });
+      matchMedia("(max-width:900px)").addEventListener("change", () => setOpen(false));
+    }
     /* the count of waiting password requests follows the one in the top bar */
     const count = $("pwCount");
     if (count){

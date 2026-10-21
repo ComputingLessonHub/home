@@ -9,8 +9,8 @@
 <title>Computing Lesson Hub</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="look.css">
-<link rel="stylesheet" href="clear.css">
-<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.clear==="on")document.documentElement.dataset.clear="on";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<script src="icons.js"></script>
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
 <script src="config.js"></script>
 <script src="lessonfile.js"></script>
 <script src="lessonorder.js"></script>
@@ -20,7 +20,7 @@
 <body>
 
 <div class="homebar">
-  <div class="title brandtitle"><img class="brandlogo" src="images/logo.svg" alt="" width="28" height="28"> Computing Lesson Hub</div>
+  <div class="title brandtitle"><img class="brandlogo" src="images/logo.svg" alt="" width="28" height="28"> <span class="brandword">Computing Lesson Hub</span></div>
   <button class="btn-ghost iconbtn" id="helpBtn" title="Help" aria-label="Help" hidden>?</button>
   <button class="btn-ghost settings-btn" id="setBtn"><span class="ico">&#9881;&#65038;</span><span class="lbl"> Settings</span></button>
   <div class="auth" id="auth"></div>
@@ -305,8 +305,14 @@ function renderAuth(){
   if (OFFLINE){ offlineHome(); return; }
   if (name && localStorage.getItem("hub_token")){
     if (help) help.hidden = true;
-    $("auth").innerHTML = '<span class="who"><b></b></span> <button class="btn-ghost" id="outBtn"><span class="ico">&#9099;</span><span class="lbl"> Sign out</span></button>';
+    /* Their name is a button: it opens their own profile. Settings sits
+       between it and Sign out, moved in here rather than drawn twice, so
+       the order along the bar is who they are, then their settings, then
+       the way out. */
+    $("auth").innerHTML = '<button class="who who-btn" id="whoBtn" type="button" title="My profile"><b></b></button> <button class="btn-ghost" id="outBtn"><span class="ico">&#9099;</span><span class="lbl"> Sign out</span></button>';
     $("auth").querySelector("b").textContent = name;
+    if ($("setBtn") && $("outBtn")) $("auth").insertBefore($("setBtn"), $("outBtn"));
+    on("whoBtn", "click", openProfile);
     on("outBtn", "click", () => {
       ["hub_token","hub_name","hub_group"].forEach(k => localStorage.removeItem(k));
       /* Not only the token. A teacher sign-in left on this machine goes stale
@@ -327,6 +333,9 @@ function renderAuth(){
     $("headline").textContent = part + ", " + name.split(" ")[0];
     signedInView(true);
   } else {
+    /* Settings back beside Help before the bar is emptied, or it goes with it */
+    const bar = $("auth").parentNode;
+    if (bar && bar.insertBefore && $("setBtn")) bar.insertBefore($("setBtn"), $("auth"));
     $("auth").innerHTML = "";
     if (help) help.hidden = false;
     $("loginCard").hidden = false;
@@ -1152,9 +1161,108 @@ async function fetchResults(){
     if (!r.ok) throw new Error(d.error || "Could not load results.");
     const fb = await fbComing;
     resultsLoaded = true;
+    myResults = { results: d.results || [], feedback: (fb && fb.feedback) || [] };
     paintResults(box, d, (fb && fb.feedback) || []);
 
   }catch(e){ box.innerHTML = '<p class="hint">' + e.message + '</p>'; }
+}
+
+/* ---------- My profile ----------
+   Pressing their own name in the bar. Everything on it is what this page
+   has already been sent for them, the lesson list and their results, so it
+   costs one request at most, for the results if that tab has not been
+   opened yet. Nothing on it is anybody else's, and nothing can be changed
+   here except through Settings, which it links to. */
+let myResults = null;
+async function openProfile(){
+  const back = el("div","modal-back");
+  const box = el("div","modal narrow me-profile");
+  box.setAttribute("role","dialog");
+  box.setAttribute("aria-modal","true");
+  box.setAttribute("aria-label","My profile");
+  const close = () => { back.remove(); document.removeEventListener("keydown", onKey); $("whoBtn") && $("whoBtn").focus(); };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  const x = el("button","btn-ghost iconbtn modal-x","✕");
+  x.setAttribute("aria-label","Close");
+  x.addEventListener("click", close);
+  box.appendChild(x);
+
+  const name = localStorage.getItem("hub_name") || "";
+  const initials = name.trim().split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase() || "?";
+  const who = el("div","me-who");
+  who.appendChild(el("span","me-initials", initials));
+  const words = el("div");
+  words.appendChild(el("h2","", name));
+  const meta = [localStorage.getItem("hub_user"), localStorage.getItem("hub_group") && "Class " + localStorage.getItem("hub_group")]
+    .filter(Boolean).join(" · ");
+  words.appendChild(el("p","me-meta", meta));
+  who.appendChild(words);
+  box.appendChild(who);
+
+  const stats = el("div","me-stats");
+  const stat = (n, label) => {
+    const s = el("div","me-stat");
+    s.appendChild(el("b","", String(n)));
+    s.appendChild(el("span","", label));
+    stats.appendChild(s);
+    return s.querySelector("b");
+  };
+  const cat = ((catalogue && catalogue.lessons) || []).filter(c => !lockedLessons.has(c.lesson_id) && !c.assessment);
+  const today = todayHere();
+  const openNow = cat.filter(c => !doneLessons.has(c.lesson_id) && !(c.close_on && c.close_on < today)).length;
+  stat(doneLessons.size, doneLessons.size === 1 ? "lesson finished" : "lessons finished");
+  stat(openNow, openNow === 1 ? "lesson open now" : "lessons open now");
+  const markedNum = stat("…", "assessments marked");
+  box.appendChild(stats);
+
+  const latest = el("div","me-latest");
+  box.appendChild(latest);
+
+  const acts = el("div","me-acts");
+  const setGo = el("button","btn-ghost","Settings and password");
+  setGo.type = "button";
+  setGo.addEventListener("click", () => { close(); $("setBtn").click(); });
+  const done = el("button","btn-primary","Done");
+  done.type = "button";
+  done.addEventListener("click", close);
+  acts.appendChild(setGo);
+  acts.appendChild(done);
+  box.appendChild(acts);
+
+  back.appendChild(box);
+  back.addEventListener("mousedown", (e) => { if (e.target === back) close(); });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(back);
+  setTimeout(() => done.focus(), 30);
+
+  /* The results tab may never have been opened, so they are fetched now if
+     they have not been. What came back fills in the last two parts. */
+  if (!myResults && ready && !OFFLINE){
+    try{ await fetchResults(); }catch(e){}
+  }
+  const res = (myResults && myResults.results) || [];
+  markedNum.textContent = String(res.filter(r => typeof r.score === "number" || r.grade).length);
+  const fbRows = ((myResults && myResults.feedback) || [])
+    .map(r => Object.assign({ at: r.updated_at || "", lesson: r.lesson_id }, parseFeedback(r.feedback)))
+    .filter(f => f.strength || f.target)
+    .sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  if (fbRows.length){
+    const f = fbRows[0];
+    latest.appendChild(el("h3","", "Your latest feedback"));
+    latest.appendChild(el("p","me-from", lessonTitles[f.lesson] || ""));
+    if (f.strength){
+      const p = el("p","me-fb");
+      p.appendChild(el("b","fb-str","Strength "));
+      p.appendChild(document.createTextNode(f.strength));
+      latest.appendChild(p);
+    }
+    if (f.target){
+      const p = el("p","me-fb");
+      p.appendChild(el("b","fb-tgt","Target "));
+      p.appendChild(document.createTextNode(f.target));
+      latest.appendChild(p);
+    }
+  }
 }
   if (window.initSettings) initSettings($("setBtn"));
 </script>

@@ -7,10 +7,10 @@
 <link rel="apple-touch-icon" href="images/logo-180.png">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Preview</title>
-<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.clear==="on")document.documentElement.dataset.clear="on";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="look.css">
-<link rel="stylesheet" href="clear.css">
+<script src="icons.js"></script>
 <script src="config.js"></script>
 <script src="teacher.js"></script>
 <script src="lessonfile.js"></script>
@@ -408,11 +408,11 @@ function overlay(src, role){
 function closeOverlay(){ document.querySelectorAll(".lpv-over").forEach(n => n.remove()); }
 
 /* Work in a lesson is saved to the browser as the student types and reaches
-   the teacher when they press Save Work or Finish. In the preview the person
+   the teacher when they press Save work or Finish. In the preview the person
    who typed it is the one now looking at it, and an empty View Work after
    ten minutes of trying the lesson out reads as broken, so what the student
    has typed is carried across before the Marking view opens, as though they
-   had just pressed Save Work. */
+   had just pressed Save work. */
 function carryWorkAcross(){
   const typed = stores.student.local.getItem("hub_work_" + lessonId);
   if (!typed) return;

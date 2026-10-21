@@ -9,8 +9,8 @@
 <title>Sandbox &middot; Computing Lesson Hub</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="look.css">
-<link rel="stylesheet" href="clear.css">
-<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.clear==="on")document.documentElement.dataset.clear="on";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<script src="icons.js"></script>
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
 <script src="config.js"></script>
 <script src="pyhub.js"></script>
 <script src="webhub.js"></script>
@@ -22,7 +22,7 @@
 <body>
 
 <div class="topbar">
-  <a class="home" id="backLink" href="index.html?tab=practice">&larr; Practice</a>
+  <a class="home" id="backLink" href="index.html?tab=practice"><img class="homelogo" src="images/logo.svg" alt="" width="20" height="20"><span>Home</span></a>
   <span class="sep">/</span>
   <div class="title" id="crumb">Sandbox</div>
   <button class="sb-save" id="saveState" hidden></button>
@@ -426,6 +426,16 @@ on("delYes", "click", () => {
    pages, so opening a program does not start Python again: it is tens of
    megabytes off a CDN and it is already here. The address still changes, so
    the browser's own Back button does what it looks like it does. */
+/* The button top left is the same Home button a lesson has, the site's logo
+   and the word, while the list of programs is on screen. Inside a program it
+   only goes back to that list, so it says so instead and leaves the logo out:
+   the logo means leaving the sandbox. */
+function wayBack(home, words){
+  const link = $("backLink");
+  link.querySelector(".homelogo").hidden = !home;
+  link.querySelector("span").textContent = words;
+}
+
 function showList(push){
   openId = "";
   $("listView").hidden = false;
@@ -433,7 +443,7 @@ function showList(push){
   $("holder").innerHTML = "";
   $("crumb").textContent = VIEW && viewing ? viewing.name + " · Sandbox" : "Sandbox";
   $("backLink").hidden = VIEW;
-  $("backLink").textContent = MINE_AS_TEACHER ? "← Console" : "← Practice";
+  wayBack(true, MINE_AS_TEACHER ? "Console" : "Home");
   $("backLink").href = HOME;
   paintList();
   paintFeedback(null);
@@ -449,7 +459,7 @@ function openProgram(id, push){
   $("editView").hidden = false;
   $("crumb").textContent = p.name || "Program";
   $("backLink").hidden = false;
-  $("backLink").textContent = "← Sandbox";
+  wayBack(false, "← Sandbox");
   $("backLink").href = HERE;
   paintFeedback(p);
   drawEditor(p);

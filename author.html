@@ -9,8 +9,8 @@
 <title>Lesson builder · Computing KS3</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="look.css">
-<link rel="stylesheet" href="clear.css">
-<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.clear==="on")document.documentElement.dataset.clear="on";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<script src="icons.js"></script>
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
 <script src="config.js"></script>
 <script src="lessonfile.js"></script>
 <script src="lessoncompat.js"></script>
@@ -109,6 +109,13 @@
     <button class="btn-ghost" id="optionsBtn">Lesson options</button>
     <button class="btn-ghost" id="slidesBtn" type="button" title="Slides students can open beside the lesson">Slides</button>
     <button class="btn-ghost" id="docsBtn" type="button" title="Word documents shown beside the lesson">Documents</button>
+  </div>
+  <!-- The year group and unit are chosen in Lesson options, which borrows
+       these pickers while it is open and puts them back here after. They
+       are kept out of sight rather than deleted because everything that
+       fills them, "+ New year group" included, is wired to these very
+       elements. -->
+  <div id="pickerHome" hidden>
     <select id="lYear" title="Year group"></select>
     <select id="lUnit" title="Unit"></select>
     <!-- Only for GCSE and A Level, where the unit picker beside it is the
@@ -1940,14 +1947,16 @@ function pageStrip(){
     const chip = el("button","pagechip");
     chip.type = "button";
     chip.__page = p;
+    /* The number and nothing else. A title cut to "Check what y…" said less
+       than the number did and took five times the room; the whole title and
+       how many tasks it holds are the tooltip, read out as its name. */
     chip.appendChild(el("span","n", String(n + 1)));
-    chip.appendChild(el("span","t", name));
-    chip.appendChild(el("span","c", String(count)));
     chip.title = name + " • " + count + " task" + (count === 1 ? "" : "s");
     if (p === questionsPage()){
       chip.classList.add("qpage");
       chip.title = name + " • the questions page • " + count + " question" + (count === 1 ? "" : "s");
     }
+    chip.setAttribute("aria-label", "Page " + (n + 1) + ": " + chip.title);
     /* Filled in when this is the page being edited; only outlined when every
        page is on screen, where it is saying which one the preview follows
        rather than which one you are in. */
@@ -4185,14 +4194,14 @@ function openLessonOptions(){
       const auto = lesson.linger !== false;
       howRows.appendChild(optRow("Autosave",
         auto ? "Work is sent as students go, as well as when they finish."
-             : "Work only arrives when a student presses Finish or Save Work.",
+             : "Work only arrives when a student presses Finish or Save work.",
         optSwitch(auto, "Autosave", () => {
           lesson.linger = lesson.linger === false; saveDraft(); schedulePreview(); paintHow(); }),
         ["On by default. Their work is sent half a minute after they stop typing, "
          + "at least every three minutes while they keep going, and again as they "
          + "press Continue if anything is still waiting, so a task that takes "
          + "twenty minutes is not twenty minutes at risk. Turned off, work only "
-         + "reaches you when a student presses Finish or Save Work."]));
+         + "reaches you when a student presses Finish or Save work."]));
       /* Only a standard assessment has STAR feedback to turn off, or asks
          Student Voice, so nothing else is shown either. */
       if (lesson.assessment && !lesson.practical){
@@ -6746,11 +6755,14 @@ function scrollBody(box){
    for one then stops halfway through building itself, leaving a pop-up with
    no buttons in it and no way out. */
 function homePickers(){
-  const titles = document.querySelector(".build-titles");
-  if (!titles) return;
+  /* Their home is out of sight now: the year and unit are set in Lesson
+     options and nowhere else, so the top of the builder does not carry two
+     dropdowns that only repeat what Lesson options says. */
+  const home = $("pickerHome");
+  if (!home) return;
   ["lYear", "lUnit", "lSub"].forEach(id => {
     const pick = $(id);
-    if (pick && pick.parentNode !== titles) titles.appendChild(pick);
+    if (pick && pick.parentNode !== home) home.appendChild(pick);
   });
 }
 function openModal(build){

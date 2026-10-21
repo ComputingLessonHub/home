@@ -888,7 +888,7 @@
                   .filter(Boolean).join("  ·  ");
       if (sub) t.appendChild(el("span","", sub));
       r.appendChild(t);
-      if (x.slot.cls) r.appendChild(btn("View Class", "btn-ghost bmini2", () => openClass(x.slot.cls)));
+      if (x.slot.cls) r.appendChild(btn("View class", "btn-ghost bmini2", () => openClass(x.slot.cls)));
       p.appendChild(r);
     });
   }
@@ -927,8 +927,8 @@
         return (l.unit || "") + "\u0000" + (l.subunit || "");
       }));
       const go = shelves.size === 1
-        ? btn("View Lessons", "btn-ghost bmini2", () => { const [u, part] = Array.from(shelves)[0].split("\u0000"); goToUnit(g, u, part); })
-        : btn("View Class", "btn-ghost bmini2", () => openClass(g));
+        ? btn("View lessons", "btn-ghost bmini2", () => { const [u, part] = Array.from(shelves)[0].split("\u0000"); goToUnit(g, u, part); })
+        : btn("View class", "btn-ghost bmini2", () => openClass(g));
       row(p, g, names.slice(0, 2).join(", ") + (names.length > 2 ? " and " + (names.length - 2) + " more" : ""), [go]);
     });
     if (byClass.size > 8) p.appendChild(el("p","hint","And " + (byClass.size - 8) + " more classes."));

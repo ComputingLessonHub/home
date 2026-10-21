@@ -127,7 +127,7 @@
     };
     const teachers = (classTeachers[String(group).toLowerCase()] || []).map(c => teacherNames[c] || c);
     fact("classes", "Class", group || "None", teachers.length ? "Taught by " + teachers.join(", ") : "",
-         group ? btn("View Class", "btn-ghost bmini2", () => openClass(group)) : null);
+         group ? btn("View class", "btn-ghost bmini2", () => openClass(group)) : null);
     const next = fact("calendar", "Next lesson", "…", "");
     /* The lessons themselves rather than a count, each with the way to it on
        the class's own lessons page. */
@@ -139,7 +139,7 @@
       live.forEach(a => {
         const r = el("div","prof-open-row");
         r.appendChild(el("b","", titleOf(a.lesson_id)));
-        r.appendChild(btn("View Lesson", "btn-ghost bmini2", () => showLessonInClass(group, a.lesson_id)));
+        r.appendChild(btn("View lesson", "btn-ghost bmini2", () => showLessonInClass(group, a.lesson_id)));
         list.appendChild(r);
       });
       openFact.f.appendChild(list);

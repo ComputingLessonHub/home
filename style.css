@@ -108,16 +108,16 @@ html[data-font=lexend],html[data-font=atkinson]{--display:'Lexend',sans-serif; -
      spacing), and between lines and paragraphs, so a line is easier to
      keep hold of and the next one easier to find. */
 :is(html[data-font=lexend], html[data-font=atkinson]) :is(.prose, .q-ask, .pg-t, .rt-box, .brief p,
-  .hint, .banner, .feedbackNote, .fb-card, .check-hinttext, .checklist, textarea.answer, input.answer){
+  .hint, .banner, .check-hinttext, .checklist, textarea.answer, input.answer){
   letter-spacing:.03em; word-spacing:.12em;
 }
-:is(html[data-font=lexend], html[data-font=atkinson]) :is(.prose, .q-ask, .pg-t, .rt-box, .feedbackNote, textarea.answer){
+:is(html[data-font=lexend], html[data-font=atkinson]) :is(.prose, .q-ask, .pg-t, .rt-box, textarea.answer){
   line-height:1.75;
 }
 :is(html[data-font=lexend], html[data-font=atkinson]) :is(.prose, .rt-box) :is(p, li){margin-bottom:.9em}
 /* - Slanted letters crowd together and are harder to make out, so emphasis
      is bold instead of italic. */
-:is(html[data-font=lexend], html[data-font=atkinson]) :is(.prose, .q-ask, .pg-t, .rt-box, .brief, .hint, .feedbackNote) :is(em, i){
+:is(html[data-font=lexend], html[data-font=atkinson]) :is(.prose, .q-ask, .pg-t, .rt-box, .brief, .hint) :is(em, i){
   font-style:normal; font-weight:800;
 }
 /* - Text that is justified leaves rivers of uneven space between words, so a
@@ -208,6 +208,7 @@ body.lesson > .dock{grid-row:5}
   color:var(--muted); text-decoration:none; white-space:nowrap;
 }
 .topbar .home:hover{color:var(--text)}
+.topbar .home .homelogo{vertical-align:middle; margin-right:6px}
 .topbar .title{
   font-family:var(--display); font-weight:700; font-size:var(--text-base); letter-spacing:-.01em;
   margin-right:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
@@ -391,6 +392,39 @@ textarea.code{
 .homebar .title{font-family:var(--display); font-weight:700; margin-right:auto}
 .who{font-size:var(--text-base); color:var(--muted)}
 .who b{color:var(--text)}
+/* A student's own name is a button: it opens their profile. It keeps
+   looking like their name, and says it can be pressed when pointed at. */
+.who-btn{background:none; border:1px solid transparent; padding:5px 10px; border-radius:var(--rad-pill);
+  font:inherit; font-size:var(--text-base); cursor:pointer}
+.who-btn:hover{background:var(--panel-2); border-color:var(--line-2)}
+.who-btn:hover b{text-decoration:underline; text-underline-offset:.18em}
+.homebar .auth{display:flex; align-items:center; gap:8px}
+
+/* ---------- My profile ---------- */
+.modal.me-profile{text-align:left; max-width:480px}
+.me-who{display:flex; align-items:center; gap:16px; margin:4px 0 18px}
+.modal .me-who h2{margin:0; font-size:var(--text-3xl)}
+.me-initials{flex:none; width:60px; height:60px; border-radius:50%; display:grid; place-items:center;
+  background:color-mix(in srgb, var(--brand) 16%, var(--panel)); color:var(--amber-dark);
+  font-family:var(--display); font-weight:800; font-size:var(--text-2xl)}
+.me-meta{margin:2px 0 0; color:var(--muted); font-size:var(--text-base)}
+.me-stats{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; margin:0 0 18px}
+.me-stat{background:var(--panel-2); border:1px solid var(--line); border-radius:var(--rad-md);
+  padding:12px 10px; text-align:center}
+.me-stat b{display:block; font-family:var(--display); font-size:var(--text-3xl); line-height:1.1;
+  font-variant-numeric:tabular-nums}
+.me-stat span{display:block; color:var(--muted); font-size:var(--text-sm); line-height:1.3; margin-top:4px}
+.me-latest h3{margin:0 0 2px; font-size:var(--text-lg)}
+.me-from{margin:0 0 8px; color:var(--muted); font-size:var(--text-sm)}
+.me-fb{margin:0 0 6px; line-height:1.5}
+.me-fb .fb-str{color:var(--mint)}
+.me-fb .fb-tgt{color:var(--amber-dark)}
+.me-acts{display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; margin-top:20px}
+@media (max-width:480px){
+  .me-stats{grid-template-columns:minmax(0,1fr)}
+  .me-stat{display:flex; align-items:baseline; gap:10px; text-align:left}
+  .me-stat b{display:inline; font-size:var(--text-2xl)}
+}
 
 .lessons{display:grid; gap:14px; margin-top:8px}
 .lessonCard{
@@ -835,6 +869,10 @@ html[data-bg=night] .result-card .st i{color:#F0938E}
 .ach-num{font-family:var(--display); font-size:var(--text-4xl); color:var(--amber); margin-right:7px}
 .ach-of{color:var(--muted)}
 .ach-also{font-weight:700; margin:16px 0 4px; color:var(--muted)}
+/* Nothing yet on these: the number is the size of the words beside it and
+   in their grey, so a 0 is read as a line, not shouted as a score. */
+.ach-zero .ach-num{font-family:var(--body); font-size:var(--text-xl); color:var(--muted)}
+.ach-still{margin-top:12px}
 
 .resp-sub{color:var(--muted); font-size:var(--text-lg); margin:0 0 18px}
 .resp-task{background:var(--panel); border:1px solid var(--line); border-radius:var(--rad-md); padding:20px 22px; margin:0 0 16px}
@@ -2092,12 +2130,6 @@ pre, code{overflow-wrap:anywhere}
 .mr-in{width:66px !important; text-align:center}
 .mr-max{color:var(--muted); font-size:var(--text-base)}
 
-/* a comment from the teacher, shown to the student */
-.feedbackNote{background:var(--panel-2); border:1.5px solid var(--amber); border-left-width:4px;
-  border-radius:0 12px 12px 0; padding:12px 16px; margin:0 0 18px}
-.feedbackNote b{display:block; font-size:var(--text-sm); letter-spacing:.06em; text-transform:uppercase;
-  color:var(--amber-dark); margin-bottom:4px}
-.feedbackNote p{margin:0; font-size:var(--text-lg); line-height:1.5}
 
 
 /* a way back to the summary once finished */
@@ -2121,13 +2153,6 @@ html[data-bg=dark] .qmark.full .qmark-n{color:var(--mint)}
 .menu{position:absolute; right:0; top:calc(100% + 4px)}
 
 
-/* feedback cards on the student results page */
-.fb-card{display:flex; flex-direction:column; gap:4px; padding:14px 16px; margin:0 0 10px;
-  background:var(--panel); border:1.5px solid var(--line); border-left:4px solid var(--amber);
-  border-radius:0 12px 12px 0; text-decoration:none; color:inherit}
-.fb-card:hover{border-color:var(--amber)}
-.fb-card b{font-size:var(--text-xl)}
-html[data-bg=dark] .fb-s{color:var(--mint)}
 .tabs .refresh{margin-left:auto}
 
 
@@ -2936,6 +2961,17 @@ html[data-bg=night] .st-target,html[data-bg=night] .st-target b{color:#F0938E}
   }
   .homebar .btn-ghost .ico, .topbar .btn-ghost .ico{ font-size:var(--text-md); line-height:1 }
   .homebar .auth{ font-size:var(--text-sm) }
+  /* The site's name was cut short at "Computing Lesson I". On a phone the
+     logo says it on its own, and the room goes to the student's name. */
+  .homebar .brandword{ display:none }
+  .homebar .who-btn{ padding:4px 6px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  /* The three tabs on a student's home page stay on one line and the line
+     scrolls sideways, rather than wrapping into a stack of three. The
+     refresh button stays pinned at the end, outside the scroll. */
+  #tabs{ flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch }
+  #tabs::-webkit-scrollbar{ display:none }
+  #tabs > button{ flex:none; white-space:nowrap }
+  #tabs .refresh{ position:sticky; right:0; background:var(--panel) }
   .homebar .who b{ font-size:var(--text-sm) }
   .crumbbar{ padding:6px 12px; font-size:var(--text-sm) }
 
@@ -4333,6 +4369,59 @@ html[data-bg=night] .check-hint code{
 .tracker:hover .seg-n{opacity:1; transform:translate(-50%,-50%) scale(1)}
 .seg.done .seg-n{border-color:var(--mint); color:var(--mint-dark, var(--mint))}
 .seg.now .seg-n{border-color:var(--amber); color:var(--amber-dark, var(--amber))}
+/* Pressed and still asking whether the page is open: the same wait Continue
+   shows, so the press is seen to have landed. */
+.seg.checking{opacity:.6; cursor:progress}
+
+/* ---------- arriving on a page never reached before ----------
+   lesson.html's playArrival puts .arrived on the page, the brief and the
+   new segment of the bar, the first time a page is reached and only then.
+   The page rises a few pixels into place, the brief lights up in the
+   school's blue and fades back over a second and a half, and the segment
+   swells once. Enough to see that something changed, quick enough not to
+   be in the way of starting the next task. */
+.pagegroup.arrived, #blocks > section.arrived{
+  --arrive-page:pageArrive .45s cubic-bezier(.16,1,.3,1);
+  animation:var(--arrive-page);
+}
+@keyframes pageArrive{
+  from{opacity:0; transform:translateY(14px)}
+  to{opacity:1; transform:none}
+}
+/* !important because the brief sits straight on <body>, and the fade every
+   page does as it opens (hub-arrive, further down) is written
+   body > *:not(...#hubTint...), whose id outranks any class here: without
+   it the brief kept that fade, never lit up, and never let go of .arrived. */
+.brief.arrived{
+  --arrive-brief:briefArrive 1.6s ease-out;
+  animation:var(--arrive-brief) !important;
+}
+@keyframes briefArrive{
+  0%, 30%{background:color-mix(in srgb, var(--brand) 20%, var(--panel-2));
+          border-color:color-mix(in srgb, var(--brand) 70%, var(--line))}
+}
+.seg.arrived{
+  --arrive-seg:segArrive .8s cubic-bezier(.16,1,.3,1);
+  animation:var(--arrive-seg);
+}
+@keyframes segArrive{
+  0%{transform:scaleY(1)}
+  35%{transform:scaleY(2.4)}
+  100%{transform:scaleY(1)}
+}
+/* ...and these run where Windows has its animation effects off, which is
+   every machine in the school, because without them nothing at all says the
+   page has changed. The page fades in without moving: the movement is what
+   that setting exists to spare anyone, the change of colour is not. */
+@media (prefers-reduced-motion:reduce){
+  .pagegroup.arrived, #blocks > section.arrived{animation:pageArriveStill .35s ease-out !important}
+  .brief.arrived{animation:var(--arrive-brief) !important}
+  .seg.arrived{animation:var(--arrive-seg) !important}
+}
+@keyframes pageArriveStill{
+  from{opacity:0}
+  to{opacity:1}
+}
 .seg:not(:disabled):hover .seg-n{background:var(--mint); border-color:var(--mint); color:#fff}
 .seg:focus-visible .seg-n{opacity:1; transform:translate(-50%,-50%) scale(1); outline:2px solid var(--amber)}
 html[data-bg=dark] .seg-n{background:#2A303B}
@@ -4721,40 +4810,30 @@ html[data-bg=dark] kbd{background:#2A303B; border-color:#4A515F}
   background:var(--panel); color:var(--dim);
   font:inherit; font-size:var(--text-base); line-height:1.2; cursor:pointer; white-space:nowrap}
 .pagechip:hover{border-color:var(--amber); color:var(--amber)}
-.pagechip .n{font-weight:700}
-/* Titles are cut rather than allowed to push the strip on to a fourth line.
-   The one being edited gets more room because it is the one being read. */
-.pagechip .t{max-width:108px; overflow:hidden; text-overflow:ellipsis}
-.pagechip.on .t{max-width:230px}
-.pagechip .c{font-size:var(--text-xs); padding:1px 6px; border-radius:var(--rad-pill);
-  background:var(--panel-2); color:var(--dim)}
+.pagechip .n{font-weight:700; font-variant-numeric:tabular-nums}
+/* A page is its number; its title is the tooltip. A numbered chip is round
+   and every one the same width, so the strip reads as a row of pages. */
+.pagechip:not(.add):not(.all){min-width:40px; justify-content:center; padding-left:10px; padding-right:10px}
 .pagechip.on{border-color:var(--amber); background:var(--amber); color:var(--amber-ink)}
-.pagechip.on .c{background:rgba(0,0,0,.18); color:inherit}
 /* which page the preview is following, while every page is on screen */
 .pagechip.here{border-color:var(--amber); color:var(--amber)}
 .pagechip.dragging{opacity:.45}
 .pagechip.over{border-color:var(--amber); box-shadow:0 0 0 3px rgba(220,138,62,.16)}
 .pagechip.add{border-style:dashed}
-/* An assessment's questions page: its count says questions. Kept on the
-   count rather than the title, because a phone hides the title and the
-   count is the part still there. */
-.pagechip.qpage .c::before{content:"Q "; font-weight:800}
+/* An assessment's questions page says so beside its number. */
+.pagechip.qpage .n::after{content:" Q"; font-weight:800}
 .pagechip.all{flex:none}
 
 html[data-build=compact] .pagestrip{top:var(--buildbar-h); margin:-14px -14px 12px; padding:10px 14px}
 /* A phone has no room for two rows of controls, so the strip wraps under
    itself rather than sitting beside All pages. */
-/* A phone has no room for a strip of titles: five of them ran to three lines
-   of a screen that is nine deep, and the strip is stuck to the top. Only the
-   page being edited says its name; the rest are their number and how many
-   tasks are on them, which is enough to move between them. Their titles are
-   all together in the All pages view. */
+/* A phone takes the strip a little smaller. Every chip is only its number on
+   every screen now, with the title in its tooltip and all of them together
+   in the All pages view. */
 @media (max-width: 700px){
   .pagestrip{flex-wrap:wrap; gap:8px}
   .pagestrip-bar{flex:1 1 100%}
   .pagechip{padding:6px 11px; font-size:var(--text-sm)}
-  .pagechip:not(.on) .t{display:none}
-  .pagechip.on .t{max-width:150px}
   /* A folded task's line wraps here, and what the task says was being squeezed
      into a couple of letters between the kind and the row of buttons. It takes
      the second line on its own instead, after the buttons rather than before
@@ -5741,18 +5820,21 @@ html[data-build=compact] .homebar .title{flex:1 1 0; min-width:0}
 .tt th, .prose th, .rt-box th{background:var(--panel-2); font-weight:700}
 .prose table, .rt-box table{margin:12px 0}
 
-/* the cells a student fills in */
+/* the cells a student fills in. Written .tt .tt-in, not .tt-in alone: the
+   timetable on the console took the same class name later in this file for
+   its own bordered, rounded, 13px boxes, and as a lone class it won, which
+   drew a rounded box inside every square cell of a student's table. */
 .tt td.tt-fill{padding:0}
-.tt-in{width:100%; min-width:120px; border:none; background:transparent; color:var(--text);
+.tt .tt-in{width:100%; min-width:120px; border:none; border-radius:0; background:transparent; color:var(--text);
   font-family:var(--body); font-size:var(--text-lg); padding:10px 12px; min-height:44px; box-sizing:border-box}
-.tt-in:focus{outline:2px solid var(--amber); outline-offset:-2px; background:var(--panel-2)}
+.tt .tt-in:focus{outline:2px solid var(--amber); outline-offset:-2px; background:var(--panel-2); box-shadow:none}
 /* A column the teacher gave a width keeps it: the box's own 120px floor
    would otherwise make "narrow" mean 120px. */
 .tt [data-sized] .tt-in{min-width:0}
 /* A row taller than one line. The box is a textarea sized to the lines
    asked for, and the given cells beside it are at least as tall so the
    row reads as one height rather than whatever the words happened to be. */
-textarea.tt-in{display:block; resize:none; line-height:1.45;
+.tt textarea.tt-in{display:block; resize:none; line-height:1.45;
   height:calc(var(--tt-lines, 1) * 1.45em + 20px)}
 .tt .tt-tall > td:not(.tt-fill), .tt .tt-tall > th{
   height:calc(var(--tt-lines, 1) * 1.45em + 20px); box-sizing:border-box}
@@ -5799,7 +5881,7 @@ textarea.tt-in{display:block; resize:none; line-height:1.45;
 
 @media (max-width:640px){
   .tt th, .tt td, .prose th, .prose td, .rt-box th, .rt-box td{padding:8px 10px; font-size:var(--text-md)}
-  .tt-in{min-width:100px; padding:9px 10px; font-size:var(--text-md)}
+  .tt .tt-in{min-width:100px; padding:9px 10px; font-size:var(--text-md)}
   .tt-actions .tt-check{width:100%}
   .tt-edit input{width:110px}
 }
@@ -6078,12 +6160,23 @@ html[data-bank=yes] .build-split{display:none}
    list of tasks rather than a column of buttons. A gate that is set stays
    bright: it is saying something about the page. */
 @media (hover:hover){
-  .bhead > .btools > *{opacity:.32; transition:opacity .15s}
+  /* .32 was too faint to find at all, so a teacher could not see there was
+     a Move or a Delete to aim for until they were already on it. Quieter
+     than the task's name, still plainly there. */
+  .bhead > .btools > *{opacity:.62; transition:opacity .15s}
   .bhead:hover > .btools > *, .bhead:focus-within > .btools > *,
   .bhead > .btools > .gatebtn.on{opacity:1}
-  .bhead > .bgrip{opacity:.4}
+  .bhead > .bgrip{opacity:.62}
   .bhead:hover > .bgrip{opacity:1}
 }
+/* A bigger mark to hit, with room between them, and drawn icons the same
+   size as each other (ui.js turns the arrows and the cross into them), so
+   Move up, Move down, Duplicate, Copy and Delete are told apart at a look. */
+.bhead > .btools{gap:6px}
+.bhead > .btools > .bmini{width:34px; min-width:34px; height:34px; min-height:34px; color:var(--text);
+  border-color:var(--line-2)}
+.bhead > .btools > .bmini:hover{background:var(--panel-2); color:var(--amber-dark); border-color:var(--amber)}
+.bhead > .btools > .bmini[aria-label="Delete"]:hover{background:var(--red-dim); color:var(--red); border-color:var(--red)}
 
 /* the builder's preview: a task can be clicked to open it in the builder */
 html.inbuilder .pg-item{border-radius:var(--rad-md)}
@@ -6135,10 +6228,35 @@ html.inbuilder .pg-item:hover{outline:2px dashed rgba(220,138,62,.45); outline-o
 body.has-rail .page{max-width:1100px}
 /* the top bar's own copies of these are not needed while the menu is up */
 body.has-rail #pwBtn, body.has-rail #keepBtn, body.has-rail #logBtn{display:none}
+/* The button that opens the menu on a smaller screen; console-ui.js puts it
+   at the start of the top bar. */
+#topbar .railtoggle{display:none}
+.rail-scrim{display:none}
+/* At 900px and under the menu comes in from the left over the page, behind
+   the menu button, instead of disappearing. The top bar keeps the site's
+   logo, the search box and who is teaching; Passwords, Backups, Changelog
+   and Settings are all in the menu, so their buttons in the bar go. */
 @media (max-width:900px){
-  .rail{display:none !important}
   body.has-rail .page, body.has-rail .crumbbar{margin-left:0}
-  body.has-rail #pwBtn, body.has-rail #keepBtn, body.has-rail #logBtn{display:inline-flex}
+  body.has-rail #topbar .railtoggle{display:inline-flex; flex:none}
+  body.has-rail #pwBtn, body.has-rail #keepBtn, body.has-rail #logBtn, body.has-rail #setBtn{display:none !important}
+  body.has-rail .rail{
+    top:0; z-index:80; width:264px; box-shadow:0 12px 40px rgba(16, 24, 40, .18);
+    transform:translateX(-100%); visibility:hidden;
+    transition:transform .24s cubic-bezier(.16,1,.3,1), visibility 0s linear .24s;
+  }
+  body.has-rail.rail-open .rail{transform:none; visibility:visible; transition:transform .24s cubic-bezier(.16,1,.3,1)}
+  body.has-rail.rail-open .rail-scrim{display:block; position:fixed; inset:0; z-index:79;
+    background:rgba(16, 24, 40, .38)}
+  /* the search box shares the line rather than taking a line of its own */
+  body.console .jump{flex:1 1 220px; max-width:320px; min-width:0; height:38px}
+}
+/* On a phone the site's name gives way to its logo, and the search box
+   stays on the one line beside it rather than dropping below. */
+@media (max-width:640px){
+  body.console.has-rail #topbar{flex-wrap:nowrap}
+  body.console #topbar .brandtitle{font-size:0; gap:0; flex:none; min-width:28px}
+  body.console.has-rail .jump{order:0; flex:1 1 auto; max-width:none}
 }
 
 /* The site's name and logo. In the top bar on a phone, and wherever the side

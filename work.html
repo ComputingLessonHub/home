@@ -9,8 +9,8 @@
 <title>Viewing student work</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="look.css">
-<link rel="stylesheet" href="clear.css">
-<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.clear==="on")document.documentElement.dataset.clear="on";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<script src="icons.js"></script>
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
 <script src="config.js"></script>
 <script src="worklink.js"></script>
 <script src="teacher.js"></script>
@@ -295,12 +295,14 @@ async function boot(){
     if (!PRACTICE) await loadMarks();
     if (!PRACTICE) lockedPages = await fetchLocks(lessonJson);
     if (PRACTICE){
-      $("barTitle").textContent = "Computing Lesson Hub \u2022 Practice programs \u2022 " + cls;
+      /* No site name in front: the logo on Console already says where this
+         is, and the name pushed the part worth reading off the end. */
+      $("barTitle").textContent = "Practice programs \u00b7 " + cls;
       document.title = "Practice programs \u00b7 " + cls;
       practiceBar();
     } else {
       const doing = (lessonJson && (lessonJson.practical || lessonJson.assessment)) ? "Marking" : "Viewing";
-      $("barTitle").textContent = "Computing Lesson Hub \u2022 " + doing + " Student Work for " +
+      $("barTitle").textContent = doing + " \u00b7 " +
         (lessonJson && lessonJson.title ? lessonJson.title : lessonId);
       document.title = "Student work \u00b7 " + (lessonJson && lessonJson.title ? lessonJson.title : lessonId);
     }
@@ -1318,13 +1320,13 @@ function replayHeld(held){
    then a lower case letter, with nothing to mark it out as a fragment of
    something else, since it reads as one no matter what case the real
    username happens to be in. */
+/* Two students with the same name are told apart by their usernames, in
+   full. The first letter or two of it, which this used to add, made "Ada
+   Bell Ad", which read as a name cut short rather than as a way of telling
+   two Ada Bells apart. */
 function pickerDisambig(st, group){
-  if (group.length < 2) return "";
-  let n = 1;
-  while (n < 2 && new Set(group.map(x => (x.username || "").slice(0, n).toLowerCase())).size < group.length) n++;
-  const letters = (st.username || "").slice(0, n).toLowerCase();
-  if (!letters) return "";
-  return " " + letters.charAt(0).toUpperCase() + letters.slice(1);
+  if (group.length < 2 || !st.username) return "";
+  return " (" + st.username + ")";
 }
 function paintPicker(){
   const sel = $("stuPick");

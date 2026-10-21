@@ -1238,6 +1238,25 @@
       get: () => boxes.map(x => x.input.value),
       set: (v) => {
         if (!Array.isArray(v)) return;
+        /* What this saves is a flat list, one answer per box. Work can also
+           arrive as the whole grid, a row for each row of the table with
+           the given cells in it too, heading row first. Read that as a flat
+           list and every box got a whole row joined with commas: ",101"
+           where "101" was typed. So a grid is read by where each box sits. */
+        if (v.some(Array.isArray)){
+          const skip = head.length && v.length === rows.length + 1 ? 1 : 0;
+          let n = 0;
+          rows.forEach((row, r) => {
+            (Array.isArray(row) ? row : []).forEach((cell, c) => {
+              if (!(cell && typeof cell === "object" && cell.fill)) return;
+              const line = v[r + skip];
+              const text = Array.isArray(line) ? line[c] : "";
+              if (boxes[n]) boxes[n].input.value = text == null ? "" : String(text);
+              n++;
+            });
+          });
+          return;
+        }
         v.forEach((text, i) => { if (boxes[i]) boxes[i].input.value = text == null ? "" : String(text); });
       },
       done: () => boxes.length > 0 && written() === boxes.length,

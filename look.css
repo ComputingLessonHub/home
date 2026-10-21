@@ -137,8 +137,7 @@ html[data-look="new"] .pastunit-head{
 
 /* ---------- a lesson ---------- */
 html[data-look="new"] .brief{
-  border-radius:var(--rad-lg); box-shadow:var(--look-shadow-1);
-  border-left:4px solid var(--brand)
+  border-radius:var(--rad-lg); box-shadow:var(--look-shadow-1)
 }
 html[data-look="new"] .dock{
   background:color-mix(in srgb, var(--bar) 86%, transparent);
@@ -162,6 +161,12 @@ html[data-look="new"] .topbar .home{
 }
 html[data-look="new"] .topbar .home:hover{background:var(--look-tint); border-color:color-mix(in srgb, var(--brand) 35%, var(--line-2))}
 html[data-look="new"] .topbar .sep{display:none}
+/* Home carries the site's logo, the same square that is on the home page,
+   so the way back looks like the place it goes back to. */
+html[data-look="new"] .topbar .home{display:inline-flex; align-items:center; gap:7px; padding-left:7px}
+html[data-look="new"] .topbar .home .homelogo{display:block; width:20px; height:20px; flex:none}
+html[data-look="new"] .topbar .home .homelogo[hidden]{display:none}
+html[data-look="new"] .topbar .home:has(.homelogo[hidden]){padding-left:12px}
 
 /* ---------- the builder ---------- */
 html[data-look="new"] .build-top{
@@ -213,6 +218,186 @@ html[data-look="new"] .modal-back{
   backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px)
 }
 html[data-look="new"] .modal{border-radius:var(--rad-lg); box-shadow:var(--look-shadow-3); border-color:transparent}
+
+/* =====================================================================
+   Clearer and more accessible, measured rather than preferred.
+
+   This began as a separate Clearer look with its own switch, so the two
+   could be compared side by side. It was kept, so it is simply part of the
+   New look now. Each rule fixes something that was measured to be wrong in
+   a browser:
+
+   - text and borders that fell short of WCAG AA contrast;
+   - a focus ring too faint to find, on boxes you type into;
+   - text set at 11 and 12px on the teacher's screens;
+   - a lesson whose tasks ran the full width of the screen from the left
+     while the brief above them sat in the middle;
+   - a question heading drawn differently from every other task heading,
+     and three coloured bars down the left of one page.
+
+   The few !important lines are each beating a rule in style.css.
+   ===================================================================== */
+
+/* ---------- colours that now pass ----------
+   Measured on the Light theme, which is the only one that has no data-bg.
+   Done Green on the page grey was 4.27:1, under the 4.5 small text needs:
+   "Looking good!", a Strength, "7 of 30 marked". Dim labels were 4.36:1.
+   A box you type into was outlined at 1.56:1 against white, and the edge
+   of a field has to reach 3:1 for someone to see there is a box there. */
+html[data-look="new"]:not([data-bg]){
+  --mint:#276C4F;      /* 5.36:1 on the page grey, 6.3:1 on white */
+  --dim:#646462;       /* 5.2:1 on the page grey */
+  --field-line:#8C8C8A; /* 3.4:1 on white */
+}
+html[data-look="new"][data-bg=night]{
+  --field-line:#7A7A84; /* 3.3:1 on the dark cards */
+}
+
+/* ---------- the smallest text, one step up ----------
+   The builder and the console both lean on 11 and 12px for counts, chips
+   and labels a teacher is reading at arm's length. Nothing in the scale is
+   now smaller than 12px. */
+html[data-look="new"]{
+  --text-2xs:12px;
+  --text-xs:13px;
+}
+
+/* ---------- where the keyboard is ----------
+   One ring, everywhere, the same width and colour: what has focus should be
+   findable at a glance, by a student tabbing through a quiz and by a teacher
+   marking with the keyboard. Before this some things had a 2px ring, some a
+   soft tint and some nothing. !important because a good many rules in
+   style.css say outline:none on :focus with a selector longer than this. */
+html[data-look="new"] :focus-visible{
+  outline:3px solid var(--amber) !important;
+  outline-offset:2px !important;
+}
+/* A box you type into keeps its ring tight to its edge, so it does not
+   reach over the label above it. */
+html[data-look="new"] input:focus-visible,
+html[data-look="new"] textarea:focus-visible,
+html[data-look="new"] select:focus-visible,
+html[data-look="new"] [contenteditable]:focus-visible{
+  outline-offset:1px !important;
+}
+/* A box in a table fills its cell, so its ring goes just inside the cell's
+   edge rather than over the cells next to it. */
+html[data-look="new"] .tt .tt-in:focus-visible{outline-offset:-3px !important}
+/* The code editor's typing box lies transparently over the coloured code,
+   so a ring on it would sit inside the editor's frame. The frame takes it. */
+html[data-look="new"] .ide-code:focus-visible{outline:none !important}
+html[data-look="new"] .ide-editor:has(.ide-code:focus-visible){
+  outline:3px solid var(--amber); outline-offset:-3px;
+}
+
+/* ---------- boxes you can see are boxes ---------- */
+html[data-look="new"] input[type=text]:not(:focus),
+html[data-look="new"] input[type=password]:not(:focus),
+html[data-look="new"] input[type=number]:not(:focus),
+html[data-look="new"] input[type=date]:not(:focus),
+html[data-look="new"] input[type=search]:not(:focus),
+html[data-look="new"] input:not([type]):not(:focus),
+html[data-look="new"] textarea:not(.ide-code):not(.code):not(:focus),
+html[data-look="new"] select:not(:focus){
+  border-color:var(--field-line, var(--line-2));
+}
+
+/* ---------- links say they are links ----------
+   Colour alone does not say it to someone who cannot tell blue from black,
+   so a link inside reading text is underlined too. */
+html[data-look="new"] .prose a,
+html[data-look="new"] .rt-box a,
+html[data-look="new"] .q-ask a,
+html[data-look="new"] .pg-t a,
+html[data-look="new"] .banner a,
+html[data-look="new"] .hint a,
+html[data-look="new"] .subnote a{
+  text-decoration:underline; text-decoration-thickness:1.5px; text-underline-offset:.18em;
+}
+
+/* ---------- a button that is off reads as off, and can still be read ----
+   It was white on light grey, 1.6:1: the words on it could not be made out
+   to know what it would do once it came on. */
+html[data-look="new"] .btn-primary:disabled{
+  background:var(--panel-2) !important; background-image:none !important;
+  color:var(--muted) !important; border-color:var(--line-2) !important; box-shadow:none !important;
+}
+
+/* ---------- the parts the browser draws ---------- */
+html[data-look="new"] ::selection{background:color-mix(in srgb, var(--brand) 32%, transparent)}
+html[data-look="new"] input, html[data-look="new"] textarea{caret-color:var(--amber)}
+
+/* =====================================================================
+   A lesson
+   ===================================================================== */
+
+/* A lesson ran from the far left of the screen to the far right, so on a
+   lab monitor a written answer box was over 1800px wide and the task icons
+   were a long way from the brief in the middle. Every task now shares one
+   width: a little narrower than the screen, and no wider than 1626px with
+   its icons. That is half way between the full width it used to take and
+   the 1320px it was first given, which was too narrow. The same width on every page, whatever is on it, so the line of
+   icons down the left never jumps about from one page to the next.
+
+   The icons and the gap after them take 48px on the left of the row, so the
+   row is padded 48px on the right to match, which puts the tasks in the true
+   middle, under the brief. A page with no icons (a code page hides them) is
+   padded 48px on both sides instead, so its tasks are exactly as wide as
+   everyone else's rather than the 96px wider they would otherwise be.
+
+   The notice about feedback sits above the row, in the same box, and takes
+   the tasks' width so it lines up with them.
+
+   Above 720px only: below it style.css takes the icons away altogether, and
+   the work keeps the whole of a phone screen. */
+@media (min-width:721px){
+  html[data-look="new"] body.lesson .stagerow{
+    width:min(1626px, 96%); margin-left:auto; margin-right:auto; padding:0 48px;
+  }
+  html[data-look="new"] body.lesson .stagerow:has(> .taskrail:not([hidden])){padding-left:0}
+  html[data-look="new"] body.lesson .banner-frozen{
+    width:calc(min(1626px, 96%) - 96px); margin-left:auto; margin-right:auto;
+  }
+  /* The brief is the same width as the tasks under it, so a page of code is
+     not a narrow title over a wide editor. It sits outside the stage, so its
+     100% is the whole window where theirs is the stage less its 18px either
+     side, which is what the sum takes off before the 96%. */
+  html[data-look="new"] body.lesson .brief{
+    width:calc(min(1626px, (100% - 36px) * .96) - 96px);
+  }
+}
+
+/* A question is a task heading like every other one. It was the one heading
+   drawn in a grey band with a bar down its left, so a page with a question
+   and a short answer on it had two kinds of heading for the same thing. */
+html[data-look="new"] .q-ask{
+  background:none; border:0; border-radius:0; padding:0; margin:0 0 8px;
+}
+
+/* One coloured edge on a page rather than three. The brief, the banner
+   about feedback and the question each had a thick bar down the left, and
+   together they told the eye nothing about which mattered. The brief's
+   bar is gone where the brief is drawn, under "a lesson" above. */
+html[data-look="new"] .brief{border-left:1px solid var(--line)}
+html[data-look="new"] .banner-frozen{
+  border-left-width:1.5px; border-radius:var(--rad-md);
+  background:color-mix(in srgb, var(--brand) 7%, var(--panel)) !important;
+}
+html[data-look="new"] .feedbackNote,
+html[data-look="new"] .fb-card{border-left-width:1.5px; border-radius:var(--rad-md)}
+html[data-look="new"] .check-hinttext{border-left:0}
+html[data-look="new"] .done-locked{border-left:0}
+
+/* =====================================================================
+   The builder
+   ===================================================================== */
+
+/* "Page 1 of 8" was small grey capitals in the code font, 11px at 4.4:1.
+   The code font is for code; this is a label. */
+html[data-look="new"] .pv-eyebrow{
+  font-family:var(--body); text-transform:none; letter-spacing:0;
+  font-weight:600; color:var(--muted);
+}
 
 /* ---------- motion ---------- */
 @media (prefers-reduced-motion:reduce){

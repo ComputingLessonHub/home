@@ -9,8 +9,8 @@
 <title>Lesson</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="look.css">
-<link rel="stylesheet" href="clear.css">
-<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.clear==="on")document.documentElement.dataset.clear="on";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<script src="icons.js"></script>
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
 <script src="pyhub.js"></script>
 <script src="webhub.js"></script>
 <script src="autograder.js"></script>
@@ -50,12 +50,12 @@
 </div>
 
 <div class="topbar">
-  <a class="home" id="homeLink" href="index.html">&larr; Home</a>
+  <a class="home" id="homeLink" href="index.html"><img class="homelogo" src="images/logo.svg" alt="" width="20" height="20"><span>Home</span></a>
   <span class="sep">/</span>
   <div class="title" id="lessonTitle">Lesson</div>
   <span class="savetime no-print" id="saveTime"></span>
   <button class="btn-ghost iconbtn no-print" id="setBtn" title="Settings">&#9881;&#65038;</button>
-  <button class="btn-primary no-print" id="saveBtn">Save Work</button>
+  <button class="btn-primary no-print" id="saveBtn">Save work</button>
 </div>
 
 <div class="tracker" id="tracker"></div>
@@ -78,8 +78,8 @@
 
 <div class="dock" id="dock">
   <button class="btn-ghost" id="backBtn">&larr; Back</button>
-  <div class="mid"><button class="btn-ghost dock-rubric" id="rubricBtn" hidden>Show Rubric</button></div>
-  <span id="bypassDot" role="button" tabindex="0" aria-label="Teacher options">&#183;</span>
+  <div class="mid"><button class="btn-ghost dock-rubric" id="rubricBtn" hidden>Show rubric</button></div>
+  <span id="bypassDot" role="button" tabindex="-1" aria-label="Teacher options">&#183;</span>
   <span class="btn-wrap" id="btnWrap">
     <button class="btn-primary btn-continue" id="nextBtn">Continue &rarr;</button>
     <span class="tip" id="nextTip" hidden></span>
@@ -838,13 +838,13 @@ function linkPossible(){
    once that is known.
 
    It also cannot be wordy. It shares the bar with a lesson title, and on a
-   narrow phone "Save Work" wrapped onto a second line and took the height of
+   narrow phone "Save work" wrapped onto a second line and took the height of
    the whole bar down with it. There is nothing else up there to save, so on a
    small screen the second word goes. */
 const narrowBar = window.matchMedia("(max-width: 420px)");
 function topSaveLabel(){
   const tight = narrowBar.matches;
-  if (!OFFLINE) return tight ? "Save" : "Save Work";
+  if (!OFFLINE) return tight ? "Save" : "Save work";
   if (linkPossible()) return tight ? "Copy link" : "Copy my work link";
   return "Save as PDF";
 }
@@ -855,7 +855,7 @@ function paintTopSave(){
 /* A phone turned on its side crosses that width, and turned back crosses it
    again. Only ever swaps one resting wording for another: the tick, "Saving"
    and the two failure messages say something this does not know about. */
-const RESTING_LABELS = ["Save Work", "Save", "Copy my work link", "Copy link", "Save as PDF"];
+const RESTING_LABELS = ["Save work", "Save", "Copy my work link", "Copy link", "Save as PDF"];
 narrowBar.addEventListener("change", () => {
   const b = $("saveBtn");
   if (b && RESTING_LABELS.indexOf(b.textContent) >= 0) b.textContent = topSaveLabel();
@@ -1161,11 +1161,14 @@ let cooldownUntil = 0, cooldownTimer = null;
 
 function coolingDown(){ return Date.now() < cooldownUntil; }
 
-function startCooldown(){
+/* fromBar: started by pressing a page ahead on the progress bar, where the
+   cursor is, rather than on Continue, so the tip over Continue stays shut
+   until somebody points at it. */
+function startCooldown(fromBar){
   cooldownUntil = Date.now() + COOLDOWN_SECONDS * 1000;
   $("btnWrap").classList.add("cooling");
   paintTip();
-  $("nextTip").hidden = false;              // the cursor is already on the button
+  if (!fromBar) $("nextTip").hidden = false;   // the cursor is already on the button
   clearInterval(cooldownTimer);
   cooldownTimer = setInterval(paintTip, 250);
 }
@@ -1417,7 +1420,9 @@ const handedOver = handedLesson();
       document.body.appendChild(vb);           // position:fixed, order doesn't matter
       const home = $("homeLink");
       if (home){
-        home.textContent = "\u2190 Teacher console"; home.href = "admin.html";
+        /* Only the words change: the logo in front of them is the same way
+           out as a student's Home. */
+        home.querySelector("span").textContent = "Teacher console"; home.href = "admin.html";
         home.addEventListener("click", (e) => {
           if (!window.consoleNav) return;
           e.preventDefault(); window.consoleNav.back();
@@ -2415,6 +2420,7 @@ function buildTracker(){
     seg.appendChild(el("span","seg-n", String(i + 1)));
     seg.addEventListener("click", () => {
       if (seg.disabled) return;
+      if (seg.dataset.ahead === "1"){ tryJumpAhead(i, seg); return; }
       if (seg.dataset.shut === "1"){ showLockTip(seg, seg.dataset.why); return; }
       hideLockTip();
       leaveSummary(i);
@@ -2545,6 +2551,9 @@ function showStep(i){
     step = (b !== null) ? b : (nextOpen(0, +1) !== null ? nextOpen(0, +1) : 0);
   }
   steps.forEach((s, n) => { s.section.hidden = (n !== step); });
+  /* How far they have been, so only a page never reached before announces
+     itself on arrival (playArrival). Where a lesson opens counts as reached. */
+  if (step > furthestStep) furthestStep = step;
   /* Now it is on the page: anything that needs to fetch from an earlier task
      does it here, with whatever was written by the time they got this far. */
   try{ const st = steps[step]; if (st && st.onShow) st.onShow(); }catch(e){}
@@ -2677,13 +2686,87 @@ async function tryContinue(){
        Asked here rather than on the page itself, because the question is
        "may I move on yet", not "can I do this task". */
     if (OFFLINE && !(await passGate(target))) return;
+    const fresh = target > furthestStep;
     hideWaitModal(); showStep(target);
+    if (fresh) playArrival();
     /* After the move, so the position stored with the work is the page they
        have arrived at: coming back to the lesson should carry on, not repeat
        the page they just finished. */
     lingerFlush();
   }
   else { showWaitModal(); startCooldown(); }
+}
+
+/* ---------- a page ahead, pressed on the progress bar ----------
+   The same question Continue asks, "is that page open yet", asked of the
+   page pressed rather than of the next one, and with the same five seconds
+   between tries, shared with Continue, so neither is a way round the other.
+   A page ahead that is still shut gets the same "Keep working on this task"
+   pop-up Continue gives. One that is open is gone to, skipping any pages in
+   between: Continue never stops anybody for unfinished work either. */
+async function tryJumpAhead(i, seg){
+  if (coolingDown()){
+    const left = Math.ceil((cooldownUntil - Date.now()) / 1000);
+    showLockTip(seg, "Please wait " + left + " second" + (left === 1 ? "" : "s") + " before trying again...");
+    return;
+  }
+  if (askingToMoveOn) return;                      // one is already in the air
+  hideLockTip();
+  askingToMoveOn = true;
+  seg.classList.add("checking");
+  $("nextBtn").classList.add("checking");
+  try{
+    if (!(bypassed || inPreview || !apiReady || !token)) await fetchRelease();
+  }
+  finally{
+    askingToMoveOn = false;
+    seg.classList.remove("checking");
+    $("nextBtn").classList.remove("checking");
+  }
+  if (isLocked(i)){ paintTracker(); showWaitModal(); startCooldown(true); return; }
+  if (OFFLINE && !(await passGate(i))) return;
+  const fresh = i > furthestStep;
+  hideWaitModal(); showStep(i);
+  if (fresh) playArrival();
+  lingerFlush();
+}
+
+/* ---------- arriving on a new page ----------
+   Continue was being pressed and the change of page missed: two pages of a
+   lesson can look alike, Continue very often does not move anybody because
+   the next page has not been opened yet, and so a page that did change
+   looked like one more press that had not worked. The first time a page is
+   reached, it rises into place, the brief with its title lights up in the
+   school's blue and fades back, and the new segment on the progress bar
+   pulses once. It rises rather than sliding in from the side, because a
+   slide sideways put a scrollbar along the bottom of the lesson while it
+   ran. A page gone back to, or opened again, does none of it: only
+   new is news.
+
+   The animations are kept in custom properties in style.css and named again
+   under prefers-reduced-motion, without the slide, because every machine in
+   the school reports that setting, and the blanket rule that stops all
+   animation would otherwise stop the one thing saying the page changed. */
+/* var, not let: showStep keeps it up to date and can run while the page is
+   still loading, before a let this far down the script would exist. */
+var furthestStep = -1;
+function playArrival(){
+  const sec = steps[step] && steps[step].section;
+  const seg = $("tracker").querySelectorAll(".seg")[step];
+  [sec, $("brief"), seg].forEach(n => {
+    if (!n) return;
+    n.classList.remove("arrived");
+    void n.offsetWidth;                            // so it plays again from the start
+    n.classList.add("arrived");
+    /* Only its own animation ending: one inside it, a tick or a counter,
+       bubbles up here too and would take the class off half way through. */
+    const done = (e) => {
+      if (e.target !== n) return;
+      n.classList.remove("arrived");
+      n.removeEventListener("animationend", done);
+    };
+    n.addEventListener("animationend", done);
+  });
 }
 
 /* ---------- saving as they leave a page ----------
@@ -2913,15 +2996,22 @@ function paintTracker(){
        the same way, so pressing the page they are on is the way back off the
        summary. */
     const canGo = done && !shut && (finished || roam || n !== step);
+    /* A page ahead of them can be pressed too, and asks the same question
+       Continue does, "is it open yet", with the same wait between tries:
+       tryJumpAhead. So the bar is a way forward as well as back, and still
+       never a way round the teacher's pacing. */
+    const ahead = !finished && !roam && !onSummary && n > step;
+    seg.dataset.ahead = ahead ? "1" : "";
     seg.dataset.shut = shut ? "1" : "";
     seg.dataset.why = why;
     /* A shut page stays pressable so that pressing it can say why. Everything
        else out of reach is switched off as it always was. */
-    seg.disabled = !canGo && !shut;
-    seg.setAttribute("aria-disabled", canGo ? "false" : "true");
+    seg.disabled = !canGo && !shut && !ahead;
+    seg.setAttribute("aria-disabled", (canGo || ahead) ? "false" : "true");
     /* "Back to" only when it really is behind them. From the summary every
        page is somewhere to go, and for a teacher roaming so is a page ahead. */
     seg.title = canGo ? ((!onSummary && n < step) ? "Back to page " : "Go to page ") + (n + 1)
+              : ahead ? "Go to page " + (n + 1)
               : shut ? why : "Page " + (n + 1);
     seg.setAttribute("aria-label", seg.title);
   });
@@ -3370,7 +3460,7 @@ async function submitWork(){
   if (spectate) return "offline";
   if (!restoreDone) return "offline";      // never send blanks over real work
   /* Writes to the database only when something actually changed since the
-     last successful write, pressing Save Work twice costs nothing. */
+     last successful write, pressing Save work twice costs nothing. */
   if (!token || !apiReady) return "offline";
   const payload = JSON.stringify(snapshot());
   const mark = typedAt;             // what they had typed when this one left
@@ -3755,7 +3845,7 @@ async function manualSave(){
   }
   /* Every Save button on the page moves together, and the tick stays until
      something is typed. It used to flash Saved for two seconds and go back to
-     Save Work, which read as though the save had come undone. */
+     Save work, which read as though the save had come undone. */
   clearTimeout(flashTimer);
   btn.classList.remove("flash-ok","flash-bad");
   paintSaveButtons("saving");
@@ -10137,7 +10227,7 @@ function renderResponses(container, targetTopic, statusEl){
   const wrap = el("div","responses");
   wrap.appendChild(el("h2","sect-head","Response tasks"));
   /* a practical gives everyone the same list, so it is not chosen from anything */
-  const saving = OFFLINE ? " Press Save Work when you're done." : " Your work saves as you go.";
+  const saving = OFFLINE ? " Press Save work when you're done." : " Your work saves as you go.";
   wrap.appendChild(el("p","resp-sub", lesson && lesson.practical
     ? "Use your feedback to make your work even better." + saving
     : "Chosen from your target. Work through them." + saving));
@@ -10371,8 +10461,11 @@ function doneShell(title){
   dock.classList.add("on-summary");
   /* A handed-in assessment keeps the bar for its teacher's dot and nothing
      else: the code that lets a student back in is typed there, the same
-     place as every other teacher code. */
-  const keepDot = !!assessPages && !spectate;
+     place as every other teacher code. Every kind of assessment, a practical
+     included, and whether it has been marked or not: asked of the lesson,
+     not of assessPages, which a practical does not have, so its summary used
+     to leave the teacher no dot at all. */
+  const keepDot = !!(lesson && lesson.assessment) && !spectate;
   dock.classList.toggle("keep-dot", keepDot);
   dock.classList.toggle("gone", !rubricOnSummary() && !keepDot);
   paintFrozenNote(true);
@@ -10424,7 +10517,7 @@ const saveButtons = [];
    made to agree with the ones already on screen.
 
    It starts plain. The settled green outline belongs to the "Saved" wording
-   and nothing else: a button reading "Save Work" in the saved colours was
+   and nothing else: a button reading "Save work" in the saved colours was
    telling a student two things at once, and a lesson just opened has not
    saved anything yet. */
 let saveState = "idle";
@@ -10502,8 +10595,8 @@ function saveButton(statusEl){
     }
     return pdfButton(statusEl, true);
   }
-  const btn = el("button","btn-primary done-save","Save Work");
-  const entry = { btn: btn, label: "Save Work" };
+  const btn = el("button","btn-primary done-save","Save work");
+  const entry = { btn: btn, label: "Save work" };
   saveButtons.push(entry);
   paintOneSave(entry, saveState);      // say what the one in the corner says
   btn.addEventListener("click", async () => {
@@ -10527,10 +10620,10 @@ function paintStatus(elm, state){
                   : state === "offline" ? "Sign in so your work can be sent to your teacher"
                   : state === "busy" ? "The server is very busy just now. Your work is safe on this computer."
                   : state === "locked" ? "Your teacher has locked this while they mark it"
-                  : "Could not reach the server, press Save Work to try again";
+                  : "Could not reach the server, press Save work to try again";
   /* Busy clears in a minute or so, when a few classes have finished handing
      in at once. The button is right beside the words that explain it, so
-     nobody has to work out that Save Work is the way to try again. */
+     nobody has to work out that Save work is the way to try again. */
   if (state === "busy"){
     const again = el("button", "btn-ghost handin-retry", "Try again");
     again.addEventListener("click", async () => {
@@ -10730,18 +10823,29 @@ function countUp(target, to, ms){
   }
   requestAnimationFrame(tick);
 }
+/* What they got comes first, most nearly all right at the top, and anything
+   they have nothing for yet goes underneath on its own, in quieter type. In
+   lesson order a big blue 0 could be the first thing on the screen, which
+   reads as "you failed" to an eleven year old who got the rest right. */
 function achievementLines(totals){
   const box = el("div");
-  Object.keys(totals).forEach(label => {
+  const labels = Object.keys(totals);
+  const share = (l) => totals[l].max ? totals[l].got / totals[l].max : 0;
+  const got = labels.filter(l => totals[l].got > 0).sort((a, b) => share(b) - share(a));
+  const none = labels.filter(l => !(totals[l].got > 0));
+  const line = (label, zero) => {
     const t = totals[label];
     const tail = (ACH_PHRASE[label] || (m => " of " + m + " on " + label.toLowerCase()))(t.max);
-    const row = el("p","ach-row");
+    const row = el("p","ach-row" + (zero ? " ach-zero" : ""));
     const num = el("b","ach-num");
     row.appendChild(num);
     row.appendChild(el("span","ach-of", tail));
     box.appendChild(row);
     countUp(num, t.got, 700);
-  });
+  };
+  got.forEach(l => line(l, false));
+  if (none.length && got.length) box.appendChild(el("p","ach-also ach-still","Still to pick up"));
+  none.forEach(l => line(l, true));
   return box;
 }
 /* Left out entirely when there is nothing quantifiable in the lesson, the
