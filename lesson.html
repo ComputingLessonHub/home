@@ -4160,6 +4160,11 @@ function tuneColours(){
     /* a formatting box is somewhere a teacher is writing, and what is in there
        is about to be saved, so it is left exactly as typed */
     if (n.closest && n.closest(".rt")) return;
+    /* A document is white paper and a slide carries its own background in
+       every theme, so their colours were picked against those and are right
+       as they are. Mirrored, the paper's own near-black became #E5E5E5 and a
+       worksheet in dark mode was pale grey on white. */
+    if (n.closest && n.closest(".dc-paper, .sl-slide")) return;
     let orig = n.dataset.colourWas;
     if (orig === undefined){
       orig = n.style.color;
