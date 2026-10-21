@@ -245,7 +245,11 @@
   function layerRecord(r){
     const top = r.i32(), left = r.i32(), bottom = r.i32(), right = r.i32();
     const channels = r.u16();
-    r.skip(channels * 6);               // channel id and length, for pixels never read
+    /* Each channel's id and how many bytes of pixels it has, which is how
+       a layer's own transparency is found later. -1 is transparency, -2 a
+       layer mask, 0 up the colours. */
+    const chans = [];
+    for (let i = 0; i < channels; i++) chans.push({ id: r.i16(), len: r.u32() });
     if (r.key() !== "8BIM") throw new Error("blend signature");
     const blend = r.key();
     const opacity = r.u8();
@@ -271,7 +275,8 @@
     let name = r.pascal(4);
 
     const L = { name, blend, opacity, clipped: clipping === 1, hidden: !!(flags & 2),
-                empty: right <= left || bottom <= top, mask, maskOff, maskBlank };
+                empty: right <= left || bottom <= top, mask, maskOff, maskBlank,
+                w: Math.max(0, right - left), h: Math.max(0, bottom - top), chans };
     while (r.p + 12 <= extraEnd){
       if (!atSig(r)) break;
       const sig = r.key();
@@ -344,6 +349,7 @@
         if (L.fonts && L.fonts.length) row.fo = L.fonts;
       }
       if (kind === "pixel" && L.empty) row.e = 1;
+      if (L.cut) row.cut = 1;
       out.push(row);
       if (kind === "group") depth++;
       if (out.length >= 300) break;
@@ -362,7 +368,91 @@
       try{ records.push(layerRecord(r)); }
       catch(e){ break; }               // ran past what was read, or a record it cannot follow
     }
+    /* The layers' pixels follow the last record, each layer's channels in
+       the order its record listed them. Only worth placing when every record
+       was read, or every offset after the first one missed would be wrong. */
+    if (records.length === count){
+      let at = r.base + r.p;
+      records.forEach(L => L.chans.forEach(c => { c.at = at; at += c.len; }));
+    } else records.forEach(L => L.chans.forEach(c => { c.at = -1; }));
     return { records, transparent, count };
+  }
+
+  /* ---------- whether a layer has been cut out ----------
+     A photo pasted in is a rectangle: Photoshop trims a layer's box to what
+     is on it, so every pixel inside that box is solid. Cut something out of
+     its background, with the Magic Wand, Quick Selection or the eraser, and
+     the box keeps the shape's corners while what was round the shape goes
+     see-through. So a layer whose own transparency is partly clear and
+     partly solid inside its box has been cut to a shape.
+
+     What it cannot tell apart is a picture that came already cut out, a PNG
+     with a see-through background, from one the student cut themselves:
+     the file holds the result, not how it was got. */
+  async function inflate(bytes){
+    const ds = new DecompressionStream("deflate");
+    const out = new Blob([bytes]).stream().pipeThrough(ds);
+    return new Uint8Array(await new Response(out).arrayBuffer());
+  }
+  async function cutOut(file, L, depth){
+    const alpha = L.chans.find(c => c.id === -1);
+    if (!alpha || alpha.at < 0 || alpha.len < 3 || L.w < 8 || L.h < 8) return false;
+    if (alpha.len > 32 * 1024 * 1024) return false;
+    const r = await slice(file, alpha.at, alpha.len);
+    const compression = r.u16();
+    const w = L.w, h = L.h, bpp = depth === 16 ? 2 : 1, rowBytes = w * bpp;
+    let plane;
+    if (compression === 0) plane = r.bytes(Math.min(rowBytes * h, r.left()));
+    else if (compression === 1){
+      const counts = [];
+      for (let y = 0; y < h; y++) counts.push(r.u16());
+      plane = new Uint8Array(rowBytes * h);
+      const src = new Uint8Array(r.v.buffer, r.v.byteOffset, r.v.byteLength);
+      let p = r.p;
+      const row = new Uint8Array(rowBytes);
+      for (let y = 0; y < h; y++){
+        unpackRow(src, p, counts[y], row);
+        plane.set(row, y * rowBytes);
+        p += counts[y];
+      }
+    }
+    else if (compression === 2 || compression === 3){
+      plane = await inflate(r.bytes(r.left()));
+      /* Prediction stores each sample as the step from the one before it
+         along the row, so the row is added back up. */
+      if (compression === 3){
+        for (let y = 0; y < h; y++){
+          const o = y * rowBytes;
+          if (bpp === 1) for (let x = 1; x < w; x++) plane[o + x] = (plane[o + x] + plane[o + x - 1]) & 255;
+          else for (let x = 1; x < w; x++){
+            const k = o + x * 2;
+            const v = (((plane[k] << 8) | plane[k + 1]) + ((plane[k - 2] << 8) | plane[k - 1])) & 65535;
+            plane[k] = v >> 8; plane[k + 1] = v & 255;
+          }
+        }
+      }
+    }
+    else return false;
+    let clear = 0, solid = 0;
+    const n = Math.min(w * h, Math.floor(plane.length / bpp));
+    for (let i = 0; i < n; i++){
+      const a = plane[i * bpp];          // the high byte, for 16 bit
+      if (a < 32) clear++; else if (a > 223) solid++;
+    }
+    /* A few per cent of each, so soft edges or one stray pixel do not count. */
+    return n > 0 && clear / n > 0.03 && solid / n > 0.03;
+  }
+  /* Image layers only: pixels and smart objects with something on them.
+     Text, shapes and adjustments are see-through round their contents by
+     nature. Capped, so a file of hundreds of layers still opens quickly. */
+  async function findCutOuts(file, records, depth){
+    let looked = 0;
+    for (const L of records){
+      const image = !L.section && !L.adjust && !L.fillKind && (L.kind === "smart" || !L.kind);
+      if (!image || L.empty) continue;
+      if (++looked > 60) break;
+      try{ L.cut = await cutOut(file, L, depth); }catch(e){ L.cut = false; }
+    }
   }
 
   /* ---------- image resources ----------
@@ -664,6 +754,7 @@
       }
       if (placed.length) stats.placed = placed;
     }
+    await findCutOuts(file, records, depth);
     stats.layers = arrange(records);
     /* Saved selections: channels beyond the colours and the transparency. */
     const colour = mode === 3 ? 3 : mode === 4 ? 4 : 1;
@@ -680,6 +771,54 @@
     catch(e){ throw e && e.forStudent ? e : fail(SAY.broken); }
     return { canvas, stats };
   }
+
+  /* ---------- a checklist ticked from the file ----------
+     The same shape of result as runPythonChecks in autograder.js, so the
+     checklist a coding task uses can sit on a Photoshop task unchanged:
+     { label, ok, note } a line, manual for one only a teacher can tick.
+     Each kind counts something in the stats and compares it with the
+     line's count, at least one unless the builder said otherwise.
+
+     Counted from the layer list rather than from totals worked out when the
+     file was read, so a lesson's checklist can be changed after students
+     have handed in and their files still answer it. */
+  const IMAGE_KINDS = { pixel: 1, smart: 1 };
+  const isImage = (l) => IMAGE_KINDS[l.k] && !l.e && !/^background$/i.test(String(l.n || "").trim());
+  const COUNT = {
+    psdLayers:  (L) => L.filter(l => l.k !== "group").length,
+    psdImages:  (L) => L.filter(isImage).length,
+    psdText:    (L) => L.filter(l => l.k === "text").length,
+    psdShapes:  (L) => L.filter(l => l.k === "shape").length,
+    psdStyles:  (L) => L.filter(l => l.fx && l.fx.length).length,
+    psdEffects: (L) => new Set([].concat.apply([], L.map(l => l.fx || []))).size,
+    psdAdjust:  (L) => L.filter(l => l.k === "adjust").length,
+    psdCutout:  (L) => L.filter(l => isImage(l) && (l.cut || l.m === 1)).length,
+    psdMasks:   (L) => L.filter(l => l.m === 1 || l.vm).length,
+    psdGroups:  (L) => L.filter(l => l.k === "group").length,
+    psdBlend:   (L) => L.filter(l => l.b).length,
+    psdSmart:   (L) => L.filter(l => l.k === "smart").length,
+    psdFonts:   (L) => new Set([].concat.apply([], L.map(l => l.fo || []))).size
+  };
+  function psdCount(stats, kind){
+    const L = (stats && Array.isArray(stats.layers)) ? stats.layers : [];
+    return COUNT[kind] ? COUNT[kind](L) : null;
+  }
+  window.runPsdChecks = function(checks, stats){
+    return (checks || []).map(c => {
+      const label = (c && c.label) || "Check";
+      if (c && c.manual === true) return { ok:false, manual:true, label };
+      const n = psdCount(stats, c && c.kind);
+      if (n === null) return { ok:false, broken:true, label, note:"Unknown kind of check: " + (c && c.kind) };
+      const want = Math.max(0, parseInt(c.count, 10) || 1);
+      const ok = !stats ? false
+               : c.compare === "exactly" ? n === want
+               : c.compare === "atMost" ? n <= want
+               : n >= want;
+      /* As on a coding task, a line not met yet says only the teacher's hint. */
+      return { label, ok, note: ok ? "" : String(c.hint || "").trim() };
+    });
+  };
+  window.psdCount = psdCount;
 
   window.readPsd = readPsd;
   window.isPsdFile = (file) => !!file && (/\.psd$/i.test(file.name || "") || file.type === "image/vnd.adobe.photoshop");

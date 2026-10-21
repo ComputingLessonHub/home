@@ -1288,6 +1288,7 @@ function compileOne(b, id, target){
       if (b.tooltips === false) blk.tooltips = false;
       if (b.autocomplete === false) blk.autocomplete = false;
       if (blk.checks && b.checksShowAll === true) blk.checksShowAll = true;
+      if (blk.checks && b.checksHidden === true) blk.checksHidden = true;      // kept off the page, still marked
       if (blk.checks && b.checksLive === false) blk.checksLive = false;
       if (String(b.modelCode || "").trim()) blk.modelCode = b.modelCode;
       if (b.helpful === true) blk.helpful = true;  // off unless turned on
@@ -1342,6 +1343,7 @@ function compileOne(b, id, target){
       if (b.tooltips === false) blk.tooltips = false;
       if (b.autocomplete === false) blk.autocomplete = false;
       if (blk.checks && b.checksShowAll === true) blk.checksShowAll = true;
+      if (blk.checks && b.checksHidden === true) blk.checksHidden = true;      // kept off the page, still marked
       if (blk.checks && b.checksLive === false) blk.checksLive = false;
       /* the model answer: a page they can try but not read */
       if (["modelHtml","modelCss","modelJs"].some(k => String(b[k] || "").trim())){
@@ -1366,6 +1368,7 @@ function compileOne(b, id, target){
         blk.checks.forEach(c => { delete c.more; });
       }
       if (blk.checks && b.checksShowAll === true) blk.checksShowAll = true;
+      if (blk.checks && b.checksHidden === true) blk.checksHidden = true;      // kept off the page, still marked
       if (blk.checks && b.checksLive === false) blk.checksLive = false;
       blk.required = false;
       push(blk);
@@ -1467,9 +1470,22 @@ function compileOne(b, id, target){
                           b.pass.hold === true ? { hold:true } : {})
           : undefined });
     else if (b.type === "image")
-      push(keepArrays({ type:"image", id, title: b.title || "", task: b.task || "",
-                        compare: b.compare === true ? true : undefined,
-                        psd: b.psd === true ? true : undefined }));
+    {
+      const blk = { type:"image", id, title: b.title || "", task: b.task || "",
+                    compare: b.compare === true ? true : undefined,
+                    psd: b.psd === true ? true : undefined };
+      /* A checklist only means something on a task that takes a file: a
+         plain screenshot has nothing in it to tick a line off. */
+      if (b.psd === true && Array.isArray(b.checks) && b.checks.length){
+        const checks = savedChecks(b.checks, PSD_CHECKS);
+        if (checks.length){
+          blk.checks = checks;
+          if (b.checkMode === "one" || b.checkMode === "choose") blk.checkMode = b.checkMode;
+          if (b.checksHidden === true) blk.checksHidden = true;
+        }
+      }
+      push(keepArrays(blk));
+    }
     else if (b.type === "embed")
       push(keepArrays({ type:"embed", id, url: toEmbed(b.url), title: b.title || "",
              note: b.note || "", confirm: b.confirm === true }));
@@ -2976,6 +2992,24 @@ const SCRATCH_CHECKS = [
   ["costumes",   "A sprite has this many costumes", "count"],
   ["runCount",   "Clicks the green flag at least...", "number"]
 ];
+/* What a Photoshop file can be checked for. Each counts something in the
+   file's layers (runPsdChecks in psd.js), so every one takes how many. */
+const PSD_CHECKS = [
+  ["psdText",    "Text layers",                   "count"],
+  ["psdImages",  "Image layers (not the background)", "count"],
+  ["psdShapes",  "Shape layers (shape tools)",    "count"],
+  ["psdStyles",  "Layers with a layer style",     "count"],
+  ["psdEffects", "Different layer style effects", "count"],
+  ["psdAdjust",  "Adjustment layers",             "count"],
+  ["psdCutout",  "Images cut out from their background", "count"],
+  ["psdMasks",   "Layer masks",                   "count"],
+  ["psdGroups",  "Groups",                        "count"],
+  ["psdBlend",   "Layers with a blend mode",      "count"],
+  ["psdSmart",   "Smart objects",                 "count"],
+  ["psdFonts",   "Different fonts",               "count"],
+  ["psdLayers",  "Layers of any kind",            "count"]
+];
+const isPsdKind = (kind) => /^psd/.test(String(kind || ""));
 const USES_OPTIONS = ["for loop","while loop","if","else","elif","input","print",
                       "list","function","variable","comment","random","turtle"];
 
@@ -3103,6 +3137,7 @@ function checkFields(c, row, kinds, repaint){
   };
 
   const kind = c.kind || kinds[0][0];
+  if (isPsdKind(kind)){ howMany(); return; }
   if (kinds === SCRATCH_CHECKS){
     if (kind === "block"){ whichBlock(); howMany(); }
     else if (kind === "runCount") needs("How many times", "count", "1");
@@ -3162,7 +3197,7 @@ function settleKind(c, scratch){
   }
   if (picksFromList(c.kind) && !c.value) c.value = USES_OPTIONS[0];
   if ((c.kind === "usesCount" || c.kind === "codeCount" ||
-       c.kind === "lineCount" || c.kind === "runCount") && !String(c.count || "").trim())
+       c.kind === "lineCount" || c.kind === "runCount" || isPsdKind(c.kind)) && !String(c.count || "").trim())
     c.count = "1";
 }
 
@@ -3238,9 +3273,9 @@ function logicSentence(more){
   return out;
 }
 
-function checklistPopup(block, isWeb){
+function checklistPopup(block, isWeb, psd){
   const isScratch = block.type === "scratch";
-  const kinds = isScratch ? SCRATCH_CHECKS : isWeb ? WEB_CHECKS : PY_CHECKS;
+  const kinds = psd ? PSD_CHECKS : isScratch ? SCRATCH_CHECKS : isWeb ? WEB_CHECKS : PY_CHECKS;
   /* Which cards are open. Held against the checks themselves rather than
      against their positions, so moving one up or down does not open a
      different line than the one that was being edited. Nothing about it is
@@ -3251,9 +3286,11 @@ function checklistPopup(block, isWeb){
   openModal(box => {
     box.classList.add("narrow", "checkmodal");
     box.appendChild(el("h2","","Checklist"));
-    box.appendChild(el("p","modal-text",
-      "Each line becomes something the student can tick off. Keep the wording plain, " +
-      "it is what they read when they are stuck."));
+    box.appendChild(el("p","modal-text", psd
+      ? "Each line is ticked from the Photoshop file the student chooses, or by you when you mark it. " +
+        "Keep the wording plain, it is what they read when they are stuck."
+      : "Each line becomes something the student can tick off. Keep the wording plain, " +
+        "it is what they read when they are stuck."));
     /* Students get one line at a time unless this is on: a long list read
        all at once is a wall, and one thing to do next is somewhere to start.
        They can always press Show all themselves. */
@@ -3277,6 +3314,7 @@ function checklistPopup(block, isWeb){
        rather the Run button was the only thing that ticks anything. */
     const liveBtn = el("button","btn-ghost bmini2");
     liveBtn.type = "button";
+    liveBtn.hidden = !!psd;          // a file is chosen, not typed: nothing to tick as they type
     const paintLive = () => {
       const on = block.checksLive !== false;
       liveBtn.textContent = "Tick off as they type: " + (on ? "on" : "off");
@@ -3510,9 +3548,10 @@ function checklistPopup(block, isWeb){
            is written inside those lines: pick "uses an if" and a condition
            inside the block asks about what the if actually does, rather than
            about the condition on it. */
-        /* A block coding line is about the project, which has no lines of
-           text for a condition to narrow down to, so it has none. */
-        if (!Array.isArray(c.more) || isScratch) c.more = [];
+        /* A block coding line is about the project, and a Photoshop line
+           about the file: neither has lines of text for a condition to
+           narrow down to, so neither has any. */
+        if (!Array.isArray(c.more) || isScratch || psd) c.more = [];
         c.more.forEach((m, mi) => {
           const mr = el("div","morecond" + (m.group ? " grouped" : ""));
           const top = el("div","brow condtop");
@@ -3584,7 +3623,7 @@ function checklistPopup(block, isWeb){
           saveDraft(); paint();
         });
         /* on the same row as the box it adds a condition to, not under it */
-        if (!isScratch) mainRow.appendChild(addMore);
+        if (!isScratch && !psd) mainRow.appendChild(addMore);
         if (c.more.length){
           const sum = el("div","logicline");
           sum.appendChild(el("span","logiclead","Ticked when"));
@@ -3615,6 +3654,7 @@ function checklistPopup(block, isWeb){
            appears under the line. Nought offers it as soon as the line is
            not ticked. */
         const after = el("label","hintafter");
+        if (psd) after.hidden = true;             // there is no Run to count
         after.appendChild(document.createTextNode("Offer after "));
         const hnum = el("input");
         hnum.type = "number"; hnum.min = "0"; hnum.max = "99"; hnum.className = "stepnum";
@@ -3644,6 +3684,8 @@ function checklistPopup(block, isWeb){
       const made = { label:"", labelHtml:"", kind: first,
                      value: picksFromList(first) ? USES_OPTIONS[0] : "" };
       if (isScratch) settleKind(made, true);
+      /* a Photoshop line counts something, and starts at one */
+      if (psd){ delete made.value; made.count = "1"; }
       block.checks.push(made);
       /* whatever was just added is the thing being written, so it opens */
       open.clear();
@@ -3858,7 +3900,7 @@ function checklistSentences(into){
   const tasks = [];
   const walk = (blocks) => (blocks || []).forEach(b => {
     if (!b) return;
-    if ((b.type === "ide" || b.type === "web") && Array.isArray(b.checks)
+    if ((b.type === "ide" || b.type === "web" || (b.type === "image" && b.psd === true)) && Array.isArray(b.checks)
         && b.checks.some(c => String(c.label || "").trim())) tasks.push(b);
     if (Array.isArray(b.blocks)) walk(b.blocks);
     if (b.type === "choice") (b.options || []).forEach(o => walk(o.blocks));
@@ -3877,7 +3919,11 @@ function checklistSentences(into){
   tasks.forEach((b, n) => {
     const card2 = el("div","bcard");
     const top = el("div","bhead");
-    const name = plainWords(b.title || b.task || "") || ("Coding task " + (n + 1));
+    const name = plainWords(b.title || b.task || "") || (b.type === "image" ? "Photoshop task " : "Coding task ") + (n + 1);
+    /* A coding task in a chain is a level of its own. A Photoshop task is
+       one task holding every level, so each of its lines says which. */
+    const levels = b.type === "image"
+      ? (lesson.rubric || []).map(g => String((g && g.name) || "").trim()).filter(Boolean) : [];
     top.appendChild(el("b","btype", name));
     card2.appendChild(top);
     const body = el("div","bbody");
@@ -3899,6 +3945,23 @@ function checklistSentences(into){
         pair.appendChild(w);
       });
       line.appendChild(pair);
+      if (levels.length){
+        const lw = el("div","bfield");
+        lw.appendChild(el("label","","Rubric level"));
+        const sel = document.createElement("select");
+        [["", "No level"]].concat(levels.map(n2 => [n2, n2])).forEach(([v, t]) => {
+          const o = document.createElement("option");
+          o.value = v; o.textContent = t;
+          sel.appendChild(o);
+        });
+        sel.value = levels.indexOf(String(c.level || "").trim()) >= 0 ? String(c.level).trim() : "";
+        sel.addEventListener("change", () => {
+          if (sel.value) c.level = sel.value; else delete c.level;
+          saveDraft();
+        });
+        lw.appendChild(sel);
+        line.appendChild(lw);
+      }
       line.appendChild(shortNameField(c, "Welcome message"));
       body.appendChild(line);
     });

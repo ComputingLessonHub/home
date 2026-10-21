@@ -7,7 +7,7 @@
 (function(){
   const TASK_LABEL = { quiz:"Quiz", mc:"Multiple choice", order:"Put in order",
                        blanks:"Fill the gaps", short:"Short answer",
-                       ide:"Coding task", web:"Coding task", scratch:"Coding task",
+                       ide:"Coding task", web:"Coding task", scratch:"Coding task", image:"Photoshop task",
                        table:"Table", label:"Label a picture", hotspot:"Click the right spot" };
   function plainText(html){ return String(html || "").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim(); }
   function normAns(x){ return String(x || "").toLowerCase().trim().replace(/\s+/g," ").replace(/[.,!?;:'"]+$/g,""); }
@@ -53,11 +53,22 @@
     const dx = v.x - Number(b.x || 0), dy = (v.y - Number(b.y || 0)) * ratio;
     return { got: Math.sqrt(dx * dx + dy * dy) <= Number(b.r || 0) ? 1 : 0, max: 1 };
   }
+  /* The tasks a practical's ticks are counted from: Python and web tasks,
+     and a Screenshot task set to take a Photoshop file. Scratch is left out
+     on purpose, as it always was here: counting it now would change how
+     every Scratch practical already marked adds up. */
+  function hasChecklist(b){
+    return !!b && (b.type === "ide" || b.type === "web" || (b.type === "image" && b.psd === true))
+      && Array.isArray(b.checks) && b.checks.length > 0;
+  }
   function taskInfo(b){
     const label = TASK_LABEL[b.type];
     if (!label) return null;
     if (b.type === "quiz" && !(b.questions || []).length) return null;
     if ((b.type === "ide" || b.type === "web" || b.type === "scratch") && !(Array.isArray(b.checks) && b.checks.length)) return null;
+    /* A screenshot has nothing to mark; a Photoshop task with a checklist
+       is marked by it, ticked from the file, the same as a coding task. */
+    if (b.type === "image" && !hasChecklist(b)) return null;
     if (b.type === "blanks" && !/\[\[.*?\]\]/.test(String(b.text || ""))) return null;
     /* nothing to mark against, so not a task with a score */
     if (b.type === "table" && !tableScore(b, null).max) return null;
@@ -437,7 +448,7 @@
   function checklistOnly(lessonJson){
     if (!lessonJson || !lessonJson.practical) return false;
     const tasks = quantifiableTasks(lessonJson);
-    if (!tasks.length || !tasks.every(t => t.type === "ide" || t.type === "web")) return false;
+    if (!tasks.length || !tasks.every(t => hasChecklist(t.block))) return false;
     const topics = lessonJson.topics || {};
     return !Object.keys(topics).some(k => topics[k] && (topics[k].strength || topics[k].target));
   }
@@ -447,7 +458,7 @@
   function checklistTicks(lessonJson, data){
     let got = 0, max = 0;
     quantifiableTasks(lessonJson).forEach(t => {
-      if (t.type !== "ide" && t.type !== "web") return;
+      if (!hasChecklist(t.block)) return;
       const sc = scoreTask(t.block, data ? data[t.id] : undefined);
       got += sc.got; max += sc.max;
     });
@@ -464,7 +475,7 @@
   }
 
   window.progressMath = { TASK_LABEL, plainText, normAns, taskInfo,
-                          quantifiableTasks, scoreTask, checkDone, attempted, withMarkingTicks, withTeacherEdits,
+                          quantifiableTasks, scoreTask, checkDone, hasChecklist, attempted, withMarkingTicks, withTeacherEdits,
                           pagesLock, defaultLocks, fetchLockedPages, markRoster,
                           levelChain, levelName, levelReached, levelLadder, rubricLevels,
                           rubricRun, showsGrades, rubricEntry, gradeRange, checklistOnly, checklistTicks,

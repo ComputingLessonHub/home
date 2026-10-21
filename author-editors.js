@@ -1404,6 +1404,9 @@ EDITORS.choice = function(b, k){
 EDITORS.image = function(b, k){
   const { F, toggleRow, settings } = k;
   F("Heading (optional)", "title"); F("Instruction (optional)", "task", { area:true, rows:2 });
+  /* A checklist only means something on a task that takes a file: a
+     plain screenshot has nothing in it to tick a line off. */
+  if (b.psd === true) checklistField(b, k, true);
   /* For a screenshot taken again, after feedback: Original and Updated
      tabs over the new picture, the original being the first other
      screenshot in the lesson the student has one for. Off unless asked. */
@@ -1524,9 +1527,10 @@ EDITORS.order = function(b, k){
   });
 };
 
-/* The checklist is the same button on both kinds of coding task. */
-function checklistField(b, k){
-  const { add } = k;
+/* The checklist is the same button on both kinds of coding task, and on a
+   Photoshop task, whose lines are ticked from the file it is handed. */
+function checklistField(b, k, psd){
+  const { add, toggleRow } = k;
   // once Python or web has been chosen
   const isWeb = b.type === "web";
   if (!Array.isArray(b.checks)) b.checks = [];
@@ -1535,13 +1539,21 @@ function checklistField(b, k){
   const n = b.checks.length;
   const open2 = el("button","btn-ghost bmini2",
     n ? "Edit the checklist (" + n + ")" : "+ Add a checklist");
-  open2.addEventListener("click", () => checklistPopup(b, isWeb));
+  open2.addEventListener("click", () => checklistPopup(b, isWeb, psd));
   const checkRow = el("div","brow");
   checkRow.appendChild(open2);
-  checkRow.appendChild(helpDot(
-    "Students see these above the editor and press Check my work. Leave empty for no checklist."));
+  checkRow.appendChild(helpDot(psd
+    ? "Ticked from the Photoshop file they choose: how many text layers, shapes, layer styles and so on. " +
+      "A line can be yours to tick instead, for anything the file cannot show, like whether the design suits the brief."
+    : "Students see these above the editor and press Check my work. Leave empty for no checklist."));
   w.appendChild(checkRow);
   add(w);
+  /* A checklist kept off the page: still run, saved and marked, and still
+     what the marking list and the Strength and Target are worked out from,
+     but seen by nobody in the lesson, students or teachers. */
+  if (n) toggleRow([["checksHidden","Hide the checklist", false]], "Checklist on the page",
+    "Hidden, nobody sees the checklist in the lesson, but it still ticks itself and is still used " +
+    "for the marking list and the Strength and Target in Mark work.");
 }
 
 /* A model answer program: the teacher's own finished version, which a

@@ -4355,7 +4355,7 @@ function isCodeTask(b){ return !!b && (b.type === "ide" || b.type === "web" || b
    so Full on a coding task asks for every line the code can tick itself,
    and counts the teacher's ticks only once they are there. */
 function gateScore(b, v){
-  if (isCodeTask(b) && Array.isArray(b.checks) && b.checks.length){
+  if ((isCodeTask(b) || (b.type === "image" && b.psd === true)) && Array.isArray(b.checks) && b.checks.length){
     const flags = (v && Array.isArray(v.checks)) ? v.checks : [];
     const manual = (v && v.manual && typeof v.manual === "object") ? v.manual : {};
     let got = 0, own = 0, ownGot = 0;
@@ -4393,7 +4393,9 @@ function gateAttempted(b, v){
   return lessonTaskAttempted(b, v);
 }
 function gateWords(b){
-  const code = isCodeTask(b);
+  /* A checklist the builder hid cannot be pointed at, so a level behind
+     one is asked for in the words any other task uses. */
+  const code = isCodeTask(b) && b.checksHidden !== true;
   if (b.gate === "attempted")
     return b.type === "quiz" ? "Answer a question in the quiz above to open it."
                              : "Have a go at the task above to open it.";
@@ -5956,6 +5958,12 @@ function attachChecklist(section, checks, runner, blockId, b){
   holder.appendChild(list);
   if (section.firstChild) section.insertBefore(holder, section.firstChild);
   else section.appendChild(holder);
+  /* Hidden by the builder: kept off the page for students and teachers
+     alike, and still run, saved and posted exactly as a shown one is,
+     because the marking list and the Strength and Target are worked out
+     from it. Nothing on the page points at a list nobody can see. */
+  const hidden = !!(b && b.checksHidden === true);   // the builder can hide a checklist
+  if (hidden) holder.hidden = true;
 
   /* The list is ticked off every time they run their code, so there is
      nothing extra to remember to press.
@@ -5966,6 +5974,7 @@ function attachChecklist(section, checks, runner, blockId, b){
      saved work back, a run that is still waiting on an input. */
   function mark(){ sinceRun = list.ticked(); }
   function refresh(cheerOver){
+    if (hidden) cheerOver = null;
     const before = cheerOver ? (sinceRun || list.ticked()) : null;
     let results;
     try{ results = runner(); }
@@ -6106,7 +6115,7 @@ function attachChecklist(section, checks, runner, blockId, b){
     }
     return true;
   }
-  return { list, refresh, mark, typed, tickWritten, results: () => last, whenSettled, justCheered,
+  return { list, refresh, mark, typed, tickWritten, results: () => last, whenSettled, justCheered, hidden,
            /* only kept when there is something in it, so ordinary work
               is saved exactly as it was */
            teacher: () => { const t = list.getTeacher(); return Object.keys(t).length ? t : undefined; },
@@ -8224,6 +8233,7 @@ function psdSummary(st){
     styled: count(l => l.fx && l.fx.length),
     masks: count(l => (l.m && l.m !== 3) || l.vm),     // 3 is a mask nothing was painted on
     clipped: count(l => l.c),
+    cut: count(l => l.cut),
     hidden: count(l => l.h),
     blended: count(l => l.b),
     faded: count(l => l.o !== undefined || l.f !== undefined),
@@ -8300,6 +8310,7 @@ function showPsdDetails(st){
   section("Techniques used");
   const used = [];
   sum.effects.forEach(e => used.push(e));
+  if (sum.cut) used.push(["Cut out from a background", sum.cut]);
   if (sum.clipped) used.push(["Clipping mask", sum.clipped]);
   sum.blends.forEach(([name, n]) => used.push(["Blend mode: " + name, n]));
   if (sum.faded) used.push(["Opacity or fill changed", sum.faded]);
@@ -8309,6 +8320,9 @@ function showPsdDetails(st){
   if (st.guides) used.push(["Guides", st.guides]);
   if (used.length) chips(used);
   else box.appendChild(el("p","psd-none","No layer styles, masks, blend modes or adjustments."));
+  if (sum.cut) box.appendChild(el("p","psd-none",
+    "Cut out means part of an image layer has been made see-through, as the Magic Wand or Quick Selection " +
+    "and Delete leave it. A picture downloaded with no background looks the same in the file."));
 
   const layers = Array.isArray(st.layers) ? st.layers : [];
   section("Layers, top to bottom" + (sum.hidden ? " (" + sum.hidden + " hidden)" : ""));
@@ -8325,6 +8339,7 @@ function showPsdDetails(st){
       (l.fx || []).forEach(f => tags.push(f));
       if (l.m) tags.push(l.m === 3 ? "Blank mask" : l.m === 2 ? "Mask (switched off)" : "Mask");
       if (l.vm) tags.push("Vector mask");
+      if (l.cut) tags.push("Cut out");
       if (l.c) tags.push("Clipped");
       if (l.b) tags.push(l.b);
       if (l.o !== undefined) tags.push("Opacity " + l.o + "%");
@@ -8410,6 +8425,13 @@ function shrinkImage(file, cb){
   };
   img.onerror = () => { URL.revokeObjectURL(url); cb(null, "That picture could not be opened."); };
   img.src = url;
+}
+/* The picture a Screenshot task saved. A plain data address, as it always
+   was, or the src of { src, checks, ... } once a Photoshop task carries a
+   checklist. Everything that shows a screenshot reads it through this. */
+function shotSrc(v){
+  if (typeof v === "string") return v;
+  return (v && typeof v === "object" && typeof v.src === "string") ? v.src : "";
 }
 /* The size and quality rule above, for anything that can be drawn: a
    picture file, or the canvas a Photoshop file was read onto. One rule, so
@@ -8601,8 +8623,8 @@ function earlierScreenshot(selfId){
   walk(lesson && lesson.extensions);
   for (const id of found){
     let v = "";
-    try{ v = fields[id] ? fields[id].get() : ""; }catch(e){}
-    if (!v && restoredData && typeof restoredData[id] === "string") v = restoredData[id];
+    try{ v = shotSrc(fields[id] ? fields[id].get() : ""); }catch(e){}
+    if (!v && restoredData) v = shotSrc(restoredData[id]);
     if (v) return v;
   }
   return "";
@@ -8753,6 +8775,9 @@ function rImage(b){
       window.readPsd(file).then(({ canvas, stats }) => {
         psdLive[b.id] = stats;
         keep(shrinkDrawn(canvas, canvas.width, canvas.height));
+        /* ticked against the file now on the page, with the tick over the
+           picture for whatever it has just earned */
+        if (checklist) checklist.refresh(shotFrame);
       }).catch(e => {
         err.textContent = (e && e.forStudent) ? e.message : "That file could not be read. Try saving it again in Photoshop.";
       }).then(() => { reading.hidden = true; fileBtn.disabled = false; });
@@ -8766,6 +8791,7 @@ function rImage(b){
       if (problem){ err.textContent = problem; return; }
       if (psdStatsFor(b.id)) psdLive[b.id] = null;   // a plain picture now, not the file's
       keep(out);
+      if (checklist) checklist.refresh();            // nothing in a picture to tick
     });
   }
   /* A picture ready to keep, from whichever way it arrived. */
@@ -8848,9 +8874,44 @@ function rImage(b){
     err.textContent = NO_PICTURE;
   });
 
+  /* A Photoshop task can carry a checklist, ticked from what the file was
+     made of rather than from code, and otherwise the same list a coding
+     task has: lines a teacher ticks, ticks given while marking, a list the
+     builder can hide. Its work is then saved the way a coding task's is,
+     { src, checks, manual, teacher }, because that is the shape the marking
+     list, the level and the Strength and Target all read. Without a
+     checklist it stays the plain picture it always was. */
+  const listed = b.psd === true && Array.isArray(b.checks) && b.checks.length > 0;
+  const checklist = listed
+    ? attachChecklist(s, b.checks, () => window.runPsdChecks(b.checks, dataUrl ? psdStatsFor(b.id) : null),
+                      b.id, b)      // the task itself: attachChecklist reads its view and hidden from it
+    : null;
+  /* In marking, the file is checked again against the checklist as it now
+     stands, the same as a coding task's code is, so a line added after
+     they handed in is answered without asking them to hand in again. */
+  if (checklist) writtenTickers.push(() =>
+    checklist.tickWritten(window.runPsdChecks(b.checks, dataUrl ? psdStatsFor(b.id) : null)));
+
   fields[b.id] = {
-    get: () => dataUrl,
-    set: (v) => { if (v) showPicture(v); }
+    get: () => {
+      if (!checklist) return dataUrl;
+      const manual = checklist.list.getManual();
+      const teacher = checklist.teacher();
+      const any = (o) => !!o && Object.keys(o).some(k => o[k]);
+      if (!dataUrl && !any(manual) && !any(teacher)) return "";
+      const out = { src: dataUrl, checks: checkFlags(checklist) };
+      if (any(manual)) out.manual = manual;
+      if (teacher) out.teacher = teacher;
+      return out;
+    },
+    set: (v) => {
+      const src = shotSrc(v);
+      if (src) showPicture(src);
+      if (!checklist || !v || typeof v !== "object") return;
+      if (v.manual) checklist.list.setManual(v.manual);
+      if (checklist.list.setTeacher) checklist.list.setTeacher(v.teacher || {});
+      if (Array.isArray(v.checks)) checklist.list.show(v.checks.map(ok => ({ ok: !!ok })));
+    }
   };
   return { section:s,
            check: () => dataUrl ? { ok:true } : { ok:false, message:"Add a screenshot to continue" },
@@ -9499,8 +9560,8 @@ function submittedShots(){
   const pics = [];
   ids.forEach(id => {
     let v = "";
-    try{ v = fields[id] ? fields[id].get() : ""; }catch(e){}
-    if (!v && restoredData && typeof restoredData[id] === "string") v = restoredData[id];
+    try{ v = shotSrc(fields[id] ? fields[id].get() : ""); }catch(e){}
+    if (!v && restoredData) v = shotSrc(restoredData[id]);
     if (v && !pics.some(p => p.src === v)) pics.push({ id, src: v });
   });
   if (!pics.length) return null;
@@ -11034,7 +11095,7 @@ function lessonTaskScore(b, v){
     return m.max ? { got: m.got, max: m.max } : null;
   }
   if (b.type === "hotspot") return { got: window.hotspotHit(b, v) ? 1 : 0, max: 1 };
-  if (isCodeTask(b) && Array.isArray(b.checks) && b.checks.length){
+  if ((isCodeTask(b) || (b.type === "image" && b.psd === true)) && Array.isArray(b.checks) && b.checks.length){
     const flags = (v && Array.isArray(v.checks)) ? v.checks : [];
     const manual = (v && v.manual && typeof v.manual === "object") ? v.manual : {};
     let got = 0;
@@ -12009,7 +12070,7 @@ function buildPdf(){
                  text: title || (b.type === "board" ? "Whiteboard" : "Screenshot") });
       const data = b.type === "board"
         ? ((v && Array.isArray(v.strokes) && v.strokes.length) ? boardImage(v.strokes) : null)
-        : (v || null);
+        : (shotSrc(v) || null);
       if (!data){
         out.push(answerBox("", b.type === "board" ? "Nothing drawn" : "No screenshot added"));
         return out;

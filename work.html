@@ -1811,9 +1811,11 @@ function feedbackMode(row, saved){
   showAsk(false);
   /* Every line a checklist line, each already ticked or not by the work:
      the boxes already hold what the list would come to, so it waits behind
-     Change the ticks for the teacher who disagrees with one. */
+     Change the ticks for the teacher who disagrees with one. Not when some
+     of those lines are the teacher's to tick, though: nothing has answered
+     them yet, so the list opens for them to be ticked. */
   const items = (PRACTICE || !lessonJson) ? [] : listItems(row).items;
-  const onlyChecklist = items.length > 0 && items.every(it => it.key === undefined);
+  const onlyChecklist = items.length > 0 && items.every(it => it.key === undefined && !it.manual);
   listOpen = { user: (row && row.username) || "", at: null, phase: (saved || onlyChecklist) ? "done" : "levels" };
   paintList(row);
 }
@@ -1871,7 +1873,7 @@ function checklistAuto(row){
   const data = (row && row.data) || {};
   const done = [], todo = [];
   quantifiableTasks().forEach(t => {
-    if (t.type !== "ide" && t.type !== "web") return;
+    if (!window.progressMath.hasChecklist(t.block)) return;
     (t.block.checks || []).forEach((c, i) => {
       (window.progressMath.checkDone(c, i, data[t.id]) ? done : todo).push(c);
     });
@@ -1925,14 +1927,18 @@ function askItems(row, ladder){
     const data = (row && row.data) || {};
     const chain = window.progressMath.levelChain(lessonJson) || [];
     quantifiableTasks().forEach(t => {
-      if (t.type !== "ide" && t.type !== "web") return;
+      if (!window.progressMath.hasChecklist(t.block)) return;
       const onLevel = chain.findIndex(b => b.id === t.id);
       (t.block.checks || []).forEach((c, i) => {
         const strength = String((c && c.strength) || "").trim(), target = String((c && c.target) || "").trim();
         if (!strength && !target) return;
         const v = data[t.id] || {};
+        /* A coding task is a level of its own when it is one of the chain.
+           Otherwise each line can say which rubric level it belongs to,
+           which is how one Photoshop checklist covers all four. */
+        const level = onLevel >= 0 ? onLevel : ladder.indexOf(String((c && c.level) || "").trim());
         out.push({ topic: String(c.label || "Checklist").trim(), short: String((c && c.short) || "").trim(),
-                   strength, target, level: onLevel,
+                   strength, target, level, from: t.type,
                    met: window.progressMath.checkDone(c, i, v),
                    task: t.id, line: i, manual: !!(c && c.manual),
                    /* ticked by their program rather than by a teacher */
@@ -1972,7 +1978,7 @@ function startAsk(row, saved, force){
      boxes already hold what the questions would come to, so asking them is
      thirty students' worth of pressing Yes to things the work has decided.
      They wait behind a button for the teacher who disagrees with a tick. */
-  const onlyChecklist = items.length > 0 && items.every(it => it.met !== undefined);
+  const onlyChecklist = items.length > 0 && items.every(it => it.met !== undefined && !it.manual);
   ask = { row, items, ladder, answers: items.map(it => it.met === undefined ? null : it.met),
           at: 0, phase: "strength", stop: -1, target: "", targetChosen: false,
           strength: "", strengthEdited: false, editingStrength: false, onlyChecklist };
@@ -2472,7 +2478,7 @@ function listRow(row, it){
   line.appendChild(tick);
   /* the few words it goes by, and the whole line on hover */
   const words = el("span","fblist-words", it.short || it.topic);
-  if (locked) words.appendChild(el("span","fblist-by"," by their code"));
+  if (locked) words.appendChild(el("span","fblist-by", it.from === "image" ? " from their file" : " by their code"));
   line.appendChild(words);
   line.title = it.topic;
   tick.addEventListener("change", () => listTick(row, it, tick.checked));
