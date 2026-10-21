@@ -8896,21 +8896,14 @@ function rImage(b){
   const shotRow = el("div","row");
   const redo = el("button","btn-ghost","Replace picture");
   shotRow.appendChild(redo);
-  /* Only a teacher is offered the details: a student knows what they did,
-     and a list of their own layers is one more thing on the page. The
-     button opens the same Photoshop window full screen does. */
-  const details = el("button","btn-ghost psd-details-btn","Photoshop details");
-  details.type = "button";
-  details.hidden = true;
-  details.addEventListener("click", () => { showingOriginal = false; paintCompare(); fullBtn.click(); });
-  shotRow.appendChild(details);
+  /* The Photoshop details are reached by the picture's own full screen
+     button, which a teacher opens into the Photoshop window. */
   const fromFile = el("p","psd-from");
   fromFile.hidden = true;
   function paintFromFile(){
     const st = dataUrl ? psdStatsFor(b.id) : null;
     fromFile.hidden = !st;
     fromFile.textContent = st ? "From the Photoshop file " + (st.file || "") : "";
-    details.hidden = !(st && spectate && pdfParam === null);
   }
   shot.appendChild(tabs); shot.appendChild(shotFrame); shot.appendChild(fromFile); shot.appendChild(shotRow);
   s.appendChild(shot);
@@ -9711,25 +9704,38 @@ function renderPracticalComplete(){
    work, without opening every page to find it. Read from the live task where
    it was built and from what was saved where it was not, as earlierScreenshot
    does. Null when there are none, so the page is as it was. */
-function submittedShots(){
-  const ids = [];
+/* `onlyPsd` is the ordinary lesson's summary, which shows no screenshots:
+   there only the tasks set to take a Photoshop file are shown, so a
+   teacher walking round at the end can see each one really was a file. */
+function submittedShots(onlyPsd){
+  const ids = [], wantsPsd = {};
   const walk = (list) => (list || []).forEach(x => {
     if (!x) return;
-    if (x.type === "image" && x.id) ids.push(x.id);
+    if (x.type === "image" && x.id){ ids.push(x.id); if (x.psd === true) wantsPsd[x.id] = true; }
     walk(x.blocks);
     (x.options || []).forEach(o => walk(o.blocks));
   });
   walk(lesson && lesson.blocks);
   const pics = [];
   ids.forEach(id => {
+    if (onlyPsd && !wantsPsd[id]) return;
     let v = "";
     try{ v = shotSrc(fields[id] ? fields[id].get() : ""); }catch(e){}
     if (!v && restoredData) v = shotSrc(restoredData[id]);
     if (v && !pics.some(p => p.src === v)) pics.push({ id, src: v });
+    /* a Photoshop task with nothing in it is the thing most worth seeing */
+    else if (!v && onlyPsd && !pics.some(p => p.id === id)) pics.push({ id, src: "" });
   });
   if (!pics.length) return null;
   const row = el("div","done-shots");
   pics.forEach(p => {
+    if (!p.src){
+      const card = el("div","done-psd-card not-psd");
+      card.appendChild(tel("b","done-psd-title","No Photoshop file"));
+      card.appendChild(tel("p","done-psd-file","Nothing handed in yet"));
+      row.appendChild(card);
+      return;
+    }
     const frame = el("div","shot-frame done-shot");
     const img = el("img","shot-img");
     img.src = p.src;
@@ -9737,9 +9743,39 @@ function submittedShots(){
     frame.appendChild(img);
     /* the whole picture opens it: it is too small to read anything in here */
     img.addEventListener("click", () => showPictureFull(p.src, ""));
-    row.appendChild(frame);
+    const card = psdDoneCard(psdStatsFor(p.id), !!wantsPsd[p.id]);
+    if (!card){ row.appendChild(frame); return; }
+    const pair = el("div","done-psd");
+    pair.appendChild(frame); pair.appendChild(card);
+    row.appendChild(pair);
   });
   return row;
+}
+/* Beside a picture on the finished screen, what it came from, short
+   enough to read over a student's shoulder on the way out of the room:
+   whether it really was a Photoshop file, and enough about the file to
+   tell real work from an empty one. A task set to take a Photoshop file
+   that was handed a screenshot says so in a small plain box rather than
+   a warning: some students cannot hand in the file, and a screenshot is
+   the way round that the task offers them. Nothing for an ordinary
+   screenshot task. */
+function psdDoneCard(st, wanted){
+  if (!st && !wanted) return null;
+  if (!st) return tel("div","done-shot-tag","Screenshot file");
+  const card = el("div","done-psd-card");
+  const layers = Array.isArray(st.layers) ? st.layers : [];
+  const sum = psdSummary(st);
+  const hidden = layers.length - (window.psdShowing ? window.psdShowing(layers).length : layers.length);
+  card.appendChild(tel("b","done-psd-title","Photoshop file"));
+  card.appendChild(tel("p","done-psd-file", st.file || ""));
+  const facts = el("ul","done-psd-facts");
+  const fact = (words) => { if (words) facts.appendChild(tel("li","", words)); };
+  fact(sum.layers + (sum.layers === 1 ? " layer" : " layers") + (hidden ? ", " + hidden + " hidden" : ""));
+  fact(sum.text ? sum.text + " text" : "");
+  fact(sum.styled ? sum.styled + " with a layer style" : "");
+  fact(st.modified ? "Last saved " + psdWhen(st.modified) : "");
+  card.appendChild(facts);
+  return card;
 }
 
 /* A padlock drawn the way the console draws its icons, in the colour of
@@ -11422,6 +11458,8 @@ function showLessonComplete(revisit, justFinished, sentAlready){
   const hero = heroBits(words, lesson.title + " complete");
   const status = el("p","handin");
   hero.appendChild(status);
+  const psdShots = submittedShots(true);
+  if (psdShots) hero.appendChild(psdShots);
   /* Online the work is sent as soon as this screen opens and the line under
      the title says so, so a Save button here would only confuse. Offline
      nothing has been sent anywhere: the PDF is the hand-in, and this is the

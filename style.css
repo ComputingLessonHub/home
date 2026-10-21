@@ -638,7 +638,7 @@ html[data-bg=dark] .shot-full-btn:hover,html[data-bg=night] .shot-full-btn:hover
 
 /* A screenshot task's picture that came from a Photoshop file. */
 .psd-from{font-size:14px; color:var(--muted); text-align:center; margin:-6px 0 12px; overflow-wrap:anywhere}
-.psd-from[hidden],.psd-details-btn[hidden],.psd-reading[hidden]{display:none}
+.psd-from[hidden],.psd-reading[hidden]{display:none}
 .psd-reading{font-weight:600; color:var(--text)}
 /* The full screen view of a picture from a Photoshop file, dressed as
    Photoshop's own window: menu bar, document tab, the canvas on a dark
@@ -951,6 +951,21 @@ html[data-bg=night] .result-card .st i{color:#F0938E}
 .done-shots{display:flex; flex-wrap:wrap; justify-content:center; gap:12px; margin:14px 0 6px}
 .done-shots .done-shot{margin:0}
 .done-shots .shot-img{max-height:220px; cursor:zoom-in}
+/* A picture from a Photoshop file, with a short card of what was in it to
+   its right; under it on a phone, where there is no right. */
+.done-psd{display:flex; align-items:stretch; justify-content:center; gap:10px; min-width:0; max-width:100%}
+/* the picture gives way rather than the card dropping underneath it */
+.done-psd .done-shot{flex:0 1 auto; min-width:0}
+@media (max-width:520px){ .done-psd{flex-wrap:wrap} }
+.done-psd-card{flex:0 0 190px; min-width:0; text-align:left; padding:10px 12px; border:1.5px solid var(--line-2);
+  border-radius:12px; background:var(--panel)}
+.done-psd-card.not-psd{border-color:var(--red); background:var(--red-dim)}
+.done-psd-title{display:block; font-size:15px}
+.done-psd-file{margin:2px 0 8px; font-size:13px; color:var(--muted); overflow-wrap:anywhere}
+.done-psd-card.not-psd .done-psd-file{color:var(--text); margin-bottom:0}
+.done-shot-tag{flex:none; align-self:flex-start; padding:4px 10px; border:1px solid var(--line-2); border-radius:8px;
+  background:var(--panel); color:var(--muted); font-size:12.5px; white-space:nowrap}
+.done-psd-facts{list-style:none; margin:0; padding:0; font-size:13.5px; line-height:1.5}
 /* where Back to my work would be, while the teacher has it locked */
 .done-locked .hi,.warnline .hi{vertical-align:-3px}
 /* a padlock where the tick would be: not finished, so not green */
