@@ -403,6 +403,8 @@ const TASK_ICONS = {
   extension: '<path d="M12 3l2.6 5.5 6 .8-4.4 4.1 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.3l6-.8z"/>',
   group:     '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/>',
   image:     '<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/>',
+  /* a stack of layers: a Photoshop file is read for its layers */
+  photoshop: '<path d="M12 3.5l8.5 4.5L12 12.5 3.5 8z"/><path d="M3.5 12L12 16.5 20.5 12"/><path d="M3.5 16L12 20.5 20.5 16"/>',
   pastelink: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9.5 4V3h5v1M10 13.5a2 2 0 0 0 2.8 0l1.5-1.5a2 2 0 0 0-2.8-2.8M14 13.5"/><path d="M12.5 12.3a2 2 0 0 0-2.8 0l-1 1a2 2 0 0 0 2.8 2.8"/>',
   exam:      '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 15l1.5-4.5L12 15M9.5 13.5h2M15.5 11.5v3M14 13h3"/>',
   paste:     '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9.5 4V3h5v1M9 11h6M9 15h4"/>',
@@ -1405,9 +1407,17 @@ EDITORS.image = function(b, k){
   /* For a screenshot taken again, after feedback: Original and Updated
      tabs over the new picture, the original being the first other
      screenshot in the lesson the student has one for. Off unless asked. */
-  settings(() => toggleRow([["compare","Compare with an earlier screenshot", false]], "Options",
-    "After pasting, the student can switch between this screenshot and their earlier one from the same lesson. " +
-    "Nothing changes for a student who has no earlier screenshot."));
+  settings(() => {
+    toggleRow([["compare","Compare with an earlier screenshot", false]], "Options",
+      "After pasting, the student can switch between this screenshot and their earlier one from the same lesson. " +
+      "Nothing changes for a student who has no earlier screenshot.");
+    /* The file stays on their computer: only the picture read from it, and
+       a short account of its layers, are saved. */
+    toggleRow([["psd","Photoshop file", false]], "What they hand in",
+      "The student chooses their .psd file instead of pasting. The picture is read from it on their computer and " +
+      "only that is saved, never the file. In View Work and Mark work, Photoshop details lists its layers, " +
+      "layer styles, masks, text and history.");
+  });
 };
 
 EDITORS.frame = function(b, k){

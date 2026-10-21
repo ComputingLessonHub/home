@@ -635,6 +635,44 @@ html[data-bg=dark] .shot-full-btn:hover,html[data-bg=night] .shot-full-btn:hover
    screens. The wheel zooms it from its top-left corner, which is what
    showPictureFull's sums assume. */
 .shot-viewer-img{width:100%; height:100%; object-fit:contain; transform-origin:0 0}
+
+/* A screenshot task's picture that came from a Photoshop file, and what the
+   teacher is shown about how it was made. Three classes on the pop-up so it
+   beats .modal.wide wherever that ends up, and reads left to right, being
+   lists rather than a message. */
+.psd-from{font-size:14px; color:var(--muted); text-align:center; margin:-6px 0 12px; overflow-wrap:anywhere}
+.psd-from[hidden],.psd-details-btn[hidden],.psd-reading[hidden]{display:none}
+.psd-reading{font-weight:600; color:var(--text)}
+.modal.wide.psd-modal{max-width:760px; text-align:left}
+.psd-modal .modal-text{margin-bottom:18px; overflow-wrap:anywhere}
+.psd-h{font-size:16px; margin:22px 0 10px}
+.psd-tiles{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px}
+.psd-tile{border:1.5px solid var(--line-2); border-radius:12px; padding:10px 8px; text-align:center; background:var(--panel)}
+.psd-tile b{display:block; font-size:24px; line-height:1.1}
+.psd-tile span{display:block; font-size:12.5px; color:var(--muted); margin-top:3px}
+.psd-tile.none{opacity:.55}
+.psd-chips{display:flex; flex-wrap:wrap; gap:6px}
+.psd-chip{padding:5px 11px; border-radius:999px; background:var(--mint-dim); color:var(--text); font-size:13.5px; font-weight:600}
+.psd-none{font-size:14px; color:var(--muted); margin:6px 0 0}
+.psd-layers{list-style:none; margin:0; padding:0; border:1.5px solid var(--line-2); border-radius:12px; overflow:hidden}
+.psd-layer{display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:7px 10px; border-top:1px solid var(--line); font-size:14px}
+.psd-layer:first-child{border-top:0}
+.psd-layer.grp{background:var(--panel-2); font-weight:700}
+.psd-layer.off .psd-lname{color:var(--muted); text-decoration:line-through}
+.psd-lname{flex:1 1 140px; min-width:0; overflow-wrap:anywhere}
+.psd-kind{flex:none; min-width:84px; font-size:12px; font-weight:700; color:var(--muted)}
+.psd-tag{font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--line-2); color:var(--muted); white-space:nowrap}
+.psd-texts{display:flex; flex-direction:column; gap:8px}
+.psd-text{border-left:4px solid var(--amber); padding:4px 0 4px 12px}
+.psd-text p{margin:0 0 4px; white-space:pre-wrap; overflow-wrap:anywhere}
+.psd-facts{display:grid; grid-template-columns:max-content minmax(0,1fr); gap:6px 16px; margin:0; font-size:14.5px}
+.psd-facts dt{color:var(--muted)}
+.psd-facts dd{margin:0; overflow-wrap:anywhere}
+@media (max-width:600px){
+  .psd-tiles{grid-template-columns:repeat(2, minmax(0,1fr))}
+  .psd-facts{grid-template-columns:minmax(0,1fr)}
+  .psd-facts dd{margin-bottom:6px}
+}
 /* only while zoomed, so a phone can still pinch the picture the usual way */
 .shot-viewer.zoomed .shot-viewer-img{cursor:grab; touch-action:none}
 .shot-viewer.zoomed .shot-viewer-img:active{cursor:grabbing}

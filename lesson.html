@@ -22,6 +22,7 @@
 <script src="pyedit.js"></script>
 <script src="teacher.js"></script>
 <script src="tasks-extra.js"></script>
+<script src="psd.js"></script>
 <script src="dragline.js"></script>
 <script src="config.js"></script>
 <script src="worklink.js"></script>
@@ -259,12 +260,12 @@ function showFeedback(raw){
    they are the same envelope with more in it the second time. */
 function applyHandedIn(box){
   const d = (box && box.d) || {};
+  restoredData = d;             // first, as when a teacher opens it in View Work
+  wasDone = !!d.__done;
   Object.keys(d).forEach(k => {
     if (!k.startsWith("__") && fields[k]){ try{ fields[k].set(d[k]); }catch(e){} }
   });
   if (typeof d.__step === "number") step = Math.min(Math.max(d.__step, 0), steps.length - 1);
-  restoredData = d;
-  wasDone = !!d.__done;
   if (box && box.fb) teacherNote = parseFeedback(JSON.stringify(box.fb));
   if (box && box.mk) myResult = { score: box.mk.score, outOf: box.mk.outOf, grade: box.mk.grade || "" };
   if (box && box.ov) markOverrides = box.ov;
@@ -573,9 +574,30 @@ function snapshot(){
      answers. Never held by workFrozen: it is not work being marked. */
   const voice = voiceAnswers || (restoredData && restoredData.__voice);
   if (voice && typeof voice === "object" && Object.keys(voice).length) data.__voice = voice;
+  const psd = psdAll();
+  if (Object.keys(psd).length) data.__psd = psd;
   return data;
 }
 let voiceAnswers = null;          // question id -> option picked, once they answer here
+
+/* What a Photoshop file handed in to a Screenshot task was made of, kept
+   beside the picture under __psd as { task id: stats }, rather than inside
+   the task's own value. Everything that reads a screenshot (the PDF, View
+   Work's thumbnails, Original and Updated) reads a string there, and none of
+   it had to change. psdLive holds what was picked on this visit, null where
+   a picture without a file replaced one, over what was restored. Work held
+   since feedback keeps the stats it was marked with. */
+const psdLive = {};
+function psdAll(){
+  const out = Object.assign({}, (restoredData && restoredData.__psd) || {});
+  Object.keys(psdLive).forEach(id => {
+    if (workFrozen && Object.prototype.hasOwnProperty.call(workFrozen, id)) return;
+    out[id] = psdLive[id];
+  });
+  Object.keys(out).forEach(id => { if (!out[id] || typeof out[id] !== "object") delete out[id]; });
+  return out;
+}
+function psdStatsFor(id){ return psdAll()[id] || null; }
 
 /* ---------- work a teacher has given feedback on ----------
    Once a Strength or a Target has come back, the work it is about stays as
@@ -1674,11 +1696,14 @@ async function loadSaved(){
         if (box && box.lesson === lessonId && box.data){
           inspectName = box.name || "";
           const d = box.data;
+          /* Before the tasks are filled in, as the student's own restore
+             does: a Screenshot task looks here for what its Photoshop file
+             was made of while it is being given its picture. */
+          restoredData = d; wasDone = !!d.__done;
           Object.keys(d).forEach(k => {
             if (!k.startsWith("__") && fields[k]){ try{ fields[k].set(d[k]); }catch(e){} }
           });
           if (typeof d.__step === "number") step = Math.min(Math.max(d.__step, 0), steps.length - 1);
-          restoredData = d; wasDone = !!d.__done;
         }
       }catch(e){}
     }
@@ -8172,6 +8197,201 @@ function applyLock(b, built){
   };
 }
 
+/* ---------- what a Photoshop file was made of ----------
+   Everything psd.js read, for a teacher marking it: the counts first, then
+   the techniques, the layers as the Layers panel had them, the words, and
+   the file's own history. Worked out here from the layer list rather than
+   stored as totals, so a better way of counting later applies to work
+   already handed in. */
+const PSD_KIND = { pixel:"Pixel", text:"Text", shape:"Shape", smart:"Smart object",
+                   adjust:"Adjustment", fill:"Fill", group:"Group" };
+function psdSummary(st){
+  const layers = Array.isArray(st.layers) ? st.layers : [];
+  const real = layers.filter(l => l.k !== "group");
+  const count = (fn) => layers.filter(fn).length;
+  const tally = (pick) => {
+    const t = {};
+    layers.forEach(l => (pick(l) || []).forEach(x => { t[x] = (t[x] || 0) + 1; }));
+    return Object.keys(t).sort((a, b) => t[b] - t[a]).map(k => [k, t[k]]);
+  };
+  return {
+    layers: real.length,
+    groups: count(l => l.k === "group"),
+    text: count(l => l.k === "text"),
+    shapes: count(l => l.k === "shape"),
+    smart: count(l => l.k === "smart"),
+    adjust: count(l => l.k === "adjust" || l.k === "fill"),
+    styled: count(l => l.fx && l.fx.length),
+    masks: count(l => (l.m && l.m !== 3) || l.vm),     // 3 is a mask nothing was painted on
+    clipped: count(l => l.c),
+    hidden: count(l => l.h),
+    blended: count(l => l.b),
+    faded: count(l => l.o !== undefined || l.f !== undefined),
+    effects: tally(l => l.fx),
+    blends: tally(l => l.b ? [l.b] : null),
+    adjustments: tally(l => (l.k === "adjust" || l.k === "fill") && l.a ? [l.a] : null),
+    fonts: tally(l => l.fo),
+    deepest: layers.reduce((n, l) => Math.max(n, (l.d || 0) + (l.k === "group" ? 1 : 0)), 0)
+  };
+}
+/* A font as a person would name it. Photoshop keeps the PostScript name,
+   "Arial-BoldMT", "TimesNewRomanPSMT", and the tidying is done here rather
+   than when it is read, so the name as stored stays exact. */
+function psdFontName(n){
+  return String(n || "").replace(/(PS)?MT$/, "").replace(/-/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2").replace(/\s+/g, " ").trim();
+}
+/* "3 Oct 2026, 14:05" from an XMP date, or the text as it came if it is not one. */
+function psdWhen(s){
+  const d = new Date(s);
+  if (!s || isNaN(d)) return String(s || "");
+  return d.toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" }) + ", " +
+         d.toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit" });
+}
+function psdOneLine(st){
+  const sum = psdSummary(st);
+  const bits = [sum.layers + (sum.layers === 1 ? " layer" : " layers")];
+  if (sum.styled) bits.push(sum.styled + " with a layer style");
+  if (sum.text) bits.push(sum.text + " text");
+  if (sum.masks) bits.push(sum.masks + (sum.masks === 1 ? " mask" : " masks"));
+  return "From " + (st.file || "a Photoshop file") + ": " + bits.join(", ");
+}
+function showPsdDetails(st){
+  const sum = psdSummary(st);
+  const back = el("div","modal-back");
+  const box = el("div","modal wide psd-modal");
+  const x = el("button","btn-ghost iconbtn modal-x","✕");
+  x.addEventListener("click", () => back.remove());
+  box.appendChild(x);
+  box.appendChild(el("h2","","Photoshop details"));
+  box.appendChild(el("p","modal-text", "Read from <b></b> when it was handed in."));
+  box.lastChild.querySelector("b").textContent = st.file || "the Photoshop file";
+
+  const tiles = el("div","psd-tiles");
+  [["Layers", sum.layers], ["Groups", sum.groups], ["Text layers", sum.text],
+   ["Layer styles", sum.styled], ["Masks", sum.masks], ["Adjustment and fill", sum.adjust],
+   ["Shapes", sum.shapes], ["Smart objects", sum.smart]].forEach(([name, n]) => {
+    const t = el("div","psd-tile" + (n ? "" : " none"));
+    t.appendChild(el("b","", String(n)));
+    t.appendChild(el("span","", name));
+    tiles.appendChild(t);
+  });
+  box.appendChild(tiles);
+
+  const section = (title) => { box.appendChild(el("h3","psd-h", title)); };
+  const chips = (list) => {
+    const row = el("div","psd-chips");
+    list.forEach(([name, n]) => {
+      const c = el("span","psd-chip");
+      c.textContent = n > 1 ? name + " ×" + n : name;
+      row.appendChild(c);
+    });
+    box.appendChild(row);
+  };
+  const facts = (rows) => {
+    const dl = el("dl","psd-facts");
+    rows.filter(r => r[1] !== "" && r[1] !== undefined && r[1] !== null).forEach(([k, v]) => {
+      dl.appendChild(el("dt","", k));
+      const dd = el("dd"); dd.textContent = String(v); dl.appendChild(dd);
+    });
+    box.appendChild(dl);
+  };
+
+  section("Techniques used");
+  const used = [];
+  sum.effects.forEach(e => used.push(e));
+  if (sum.clipped) used.push(["Clipping mask", sum.clipped]);
+  sum.blends.forEach(([name, n]) => used.push(["Blend mode: " + name, n]));
+  if (sum.faded) used.push(["Opacity or fill changed", sum.faded]);
+  sum.adjustments.forEach(e => used.push(e));
+  if (sum.deepest > 1) used.push(["Groups inside groups", 1]);
+  if (st.placed && st.placed.length) used.push(["Placed images", st.placed.length]);
+  if (st.guides) used.push(["Guides", st.guides]);
+  if (used.length) chips(used);
+  else box.appendChild(el("p","psd-none","No layer styles, masks, blend modes or adjustments."));
+
+  const layers = Array.isArray(st.layers) ? st.layers : [];
+  section("Layers, top to bottom" + (sum.hidden ? " (" + sum.hidden + " hidden)" : ""));
+  if (!layers.length) box.appendChild(el("p","psd-none","Only a background, no layers."));
+  else {
+    const list = el("ol","psd-layers");
+    layers.forEach(l => {
+      const li = el("li","psd-layer" + (l.h ? " off" : "") + (l.k === "group" ? " grp" : ""));
+      li.style.paddingLeft = (10 + (l.d || 0) * 22) + "px";
+      const name = el("span","psd-lname"); name.textContent = l.n || "(no name)";
+      li.appendChild(el("span","psd-kind k-" + l.k, l.a || PSD_KIND[l.k] || l.k));
+      li.appendChild(name);
+      const tags = [];
+      (l.fx || []).forEach(f => tags.push(f));
+      if (l.m) tags.push(l.m === 3 ? "Blank mask" : l.m === 2 ? "Mask (switched off)" : "Mask");
+      if (l.vm) tags.push("Vector mask");
+      if (l.c) tags.push("Clipped");
+      if (l.b) tags.push(l.b);
+      if (l.o !== undefined) tags.push("Opacity " + l.o + "%");
+      if (l.f !== undefined) tags.push("Fill " + l.f + "%");
+      if (l.h) tags.push("Hidden");
+      if (l.e) tags.push("Empty");
+      tags.forEach(t => { const s = el("span","psd-tag"); s.textContent = t; li.appendChild(s); });
+      list.appendChild(li);
+    });
+    box.appendChild(list);
+    if (layers.length >= 300) box.appendChild(el("p","psd-none","Only the first 300 layers are listed."));
+  }
+
+  const texts = layers.filter(l => l.k === "text");
+  if (texts.length){
+    section("Words in text layers");
+    const tl = el("div","psd-texts");
+    texts.forEach(l => {
+      const q = el("div","psd-text");
+      const said = el("p",""); said.textContent = l.t || "(empty)";
+      q.appendChild(said);
+      if (l.fo && l.fo.length){
+        const f = el("span","psd-tag"); f.textContent = l.fo.map(psdFontName).join(", "); q.appendChild(f);
+      }
+      tl.appendChild(q);
+    });
+    box.appendChild(tl);
+    if (sum.fonts.length) facts([["Fonts used", sum.fonts.map(f => psdFontName(f[0])).join(", ")]]);
+  }
+
+  if (st.placed && st.placed.length){
+    section("Images placed into it");
+    chips(st.placed.map(n => [n, 1]));
+  }
+
+  section("The file");
+  const mb = st.bytes ? (st.bytes / 1048576).toFixed(st.bytes < 10485760 ? 1 : 0) + " MB" : "";
+  facts([
+    ["Size on disk", mb],
+    ["Canvas", st.w && st.h ? st.w + " × " + st.h + " pixels" : ""],
+    ["Resolution", st.ppi ? st.ppi + " pixels per inch" : ""],
+    ["Colour", (st.mode || "") + (st.depth ? ", " + st.depth + " bit" : "")],
+    ["Saved selections", st.alphas || ""],
+    ["Layer comps", st.comps || ""],
+    ["Patterns saved in it", st.patterns || ""]
+  ]);
+
+  if (st.created || st.modified || st.saves || st.tool){
+    section("History");
+    facts([
+      ["Made with", st.tool || ""],
+      ["Started", st.created ? psdWhen(st.created) : ""],
+      ["Last saved", st.modified ? psdWhen(st.modified) : ""],
+      ["Times saved", st.saves || ""],
+      ["Days worked on", st.days || ""],
+      ["Other files copied in", st.ancestors || ""]
+    ]);
+    box.appendChild(el("p","psd-none",
+      "Started is when the file was first made. A file that began as a starter file you handed out shows when you made that."));
+  }
+
+  scrollBody(box);
+  back.appendChild(box);
+  back.addEventListener("mousedown", (e) => { if (e.target === back) back.remove(); });
+  document.body.appendChild(back);
+}
+
 /* ---------- IMAGE: paste a screenshot, or pick a file ----------
    Pictures are shrunk in the browser before they are stored. A raw screenshot
    can be 2 MB; browser storage only has about 5 MB in total, so we scale the
@@ -8184,19 +8404,27 @@ function shrinkImage(file, cb){
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
-    const MAX = 1400;
-    let w = img.width, h = img.height;
-    if (w > MAX || h > MAX){ const r = Math.min(MAX/w, MAX/h); w = Math.round(w*r); h = Math.round(h*r); }
-    const c = document.createElement("canvas");
-    c.width = w; c.height = h;
-    c.getContext("2d").drawImage(img, 0, 0, w, h);
+    const out = shrinkDrawn(img, img.width, img.height);
     URL.revokeObjectURL(url);
-    let out = c.toDataURL("image/jpeg", 0.8);
-    if (out.length > 900000) out = c.toDataURL("image/jpeg", 0.45);   // still huge: squeeze harder
     cb(out, null);
   };
   img.onerror = () => { URL.revokeObjectURL(url); cb(null, "That picture could not be opened."); };
   img.src = url;
+}
+/* The size and quality rule above, for anything that can be drawn: a
+   picture file, or the canvas a Photoshop file was read onto. One rule, so
+   a picture from a .psd costs the database what a screenshot does. */
+function shrinkDrawn(source, w, h){
+  const MAX = 1400;
+  if (w > MAX || h > MAX){ const r = Math.min(MAX/w, MAX/h); w = Math.round(w*r); h = Math.round(h*r); }
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(source, 0, 0, w, h);
+  let out = c.toDataURL("image/jpeg", 0.8);
+  if (out.length > 900000) out = c.toDataURL("image/jpeg", 0.45);   // still huge: squeeze harder
+  return out;
 }
 
 /* A screenshot squeezed into the page is often too small to read code in,
@@ -8405,28 +8633,49 @@ function rImage(b){
      keyboard, because "the Windows key" means nothing to a lot of Year 7s. */
   const zone = el("div","paste-zone");
   const howTo = el("ol","paste-steps");
+  /* Set to take a Photoshop file, the two steps are saving it and choosing
+     it. Pasting still works underneath, for a student whose file will not
+     open: a screenshot is better than nothing handed in. */
+  if (b.psd){
+    howTo.appendChild(el("li","",
+      '<span class="paste-num">1</span><span><b>Save your work in Photoshop.</b> Press <kbd>Ctrl</kbd> + <kbd>S</kbd>. ' +
+      'If it asks about Maximise compatibility, leave it ticked.</span>'));
+    howTo.appendChild(el("li","",
+      '<span class="paste-num">2</span><span><b>Come back here.</b> Press the button below and choose your Photoshop file. ' +
+      'Its name ends in <b>.psd</b>.</span>'));
+  } else
   howTo.appendChild(el("li","",
     '<span class="paste-num">1</span><span><b>Go to your work.</b> Hold <kbd>' + KEY_WINDOWS + 'Windows</kbd> + ' +
     '<kbd>' + KEY_SHIFT + 'Shift</kbd> + <kbd>S</kbd> and draw a box around your work</span>'));
   const stepTwo = el("li","",
     '<span class="paste-num">2</span><span><b>Come back here.</b> Press <kbd>Ctrl</kbd> + <kbd>V</kbd> to paste the screenshot of your work.</span>');
-  howTo.appendChild(stepTwo);
+  if (!b.psd) howTo.appendChild(stepTwo);
   zone.appendChild(howTo);
   /* Ctrl + V is not something every child finds, so the clipboard has a
      button of its own, under the step it belongs to. */
   const pasteRow = el("div","paste-or");
-  const pasteBtn = el("button","btn-primary","Paste screenshot");
+  const pasteBtn = el("button", b.psd ? "btn-ghost" : "btn-primary","Paste screenshot");
   pasteBtn.type = "button";
   pasteRow.appendChild(pasteBtn);
-  zone.appendChild(pasteRow);
-  zone.appendChild(el("p","paste-sub","Something not working? Try attaching your screenshot instead:"));
   const orRow = el("div","paste-or");
-  const fileBtn = el("button","btn-ghost","Browse pictures");
+  const fileBtn = el("button", b.psd ? "btn-primary" : "btn-ghost", b.psd ? "Choose your Photoshop file" : "Browse pictures");
   fileBtn.type = "button";
-  const fileInp = el("input"); fileInp.type = "file"; fileInp.accept = "image/*";
+  const fileInp = el("input"); fileInp.type = "file";
+  fileInp.accept = b.psd ? ".psd,image/vnd.adobe.photoshop,image/*" : "image/*,.psd";
   fileInp.style.display = "none";
   orRow.appendChild(fileBtn); orRow.appendChild(fileInp);
-  zone.appendChild(orRow);
+  if (b.psd){
+    zone.appendChild(orRow);
+    zone.appendChild(el("p","paste-sub","Something not working? Take a screenshot of your work and paste it instead:"));
+    zone.appendChild(pasteRow);
+  } else {
+    zone.appendChild(pasteRow);
+    zone.appendChild(el("p","paste-sub","Something not working? Try attaching your screenshot instead:"));
+    zone.appendChild(orRow);
+  }
+  const reading = el("p","paste-sub psd-reading","Reading your Photoshop file\u2026");
+  reading.hidden = true;
+  zone.appendChild(reading);
   s.appendChild(zone);
 
   const shot = el("div","shot"); shot.hidden = true;
@@ -8463,7 +8712,22 @@ function rImage(b){
   const shotRow = el("div","row");
   const redo = el("button","btn-ghost","Replace picture");
   shotRow.appendChild(redo);
-  shot.appendChild(tabs); shot.appendChild(shotFrame); shot.appendChild(shotRow);
+  /* Only a teacher is offered the details: a student knows what they did,
+     and a list of their own layers is one more thing on the page. */
+  const details = el("button","btn-ghost psd-details-btn","Photoshop details");
+  details.type = "button";
+  details.hidden = true;
+  details.addEventListener("click", () => { const st = psdStatsFor(b.id); if (st) showPsdDetails(st); });
+  shotRow.appendChild(details);
+  const fromFile = el("p","psd-from");
+  fromFile.hidden = true;
+  function paintFromFile(){
+    const st = dataUrl ? psdStatsFor(b.id) : null;
+    fromFile.hidden = !st;
+    fromFile.textContent = st ? "From the Photoshop file " + (st.file || "") : "";
+    details.hidden = !(st && spectate && pdfParam === null);
+  }
+  shot.appendChild(tabs); shot.appendChild(shotFrame); shot.appendChild(fromFile); shot.appendChild(shotRow);
   s.appendChild(shot);
 
   const err = el("p","err");
@@ -8478,24 +8742,45 @@ function rImage(b){
     shot.hidden = false;
     zone.hidden = true;
     paintCompare();
+    paintFromFile();
     try{ document.dispatchEvent(new CustomEvent("hubScreenshot", { detail: b.id })); }catch(e){}
   }
   function accept(file){
     err.textContent = "";
+    if (window.isPsdFile && window.isPsdFile(file)){
+      reading.hidden = false;
+      fileBtn.disabled = true;
+      window.readPsd(file).then(({ canvas, stats }) => {
+        psdLive[b.id] = stats;
+        keep(shrinkDrawn(canvas, canvas.width, canvas.height));
+      }).catch(e => {
+        err.textContent = (e && e.forStudent) ? e.message : "That file could not be read. Try saving it again in Photoshop.";
+      }).then(() => { reading.hidden = true; fileBtn.disabled = false; });
+      return;
+    }
+    if (b.psd && file && !/^image\//.test(file.type)){
+      err.textContent = "That is not a Photoshop file. Choose a file whose name ends in .psd.";
+      return;
+    }
     shrinkImage(file, (out, problem) => {
       if (problem){ err.textContent = problem; return; }
-      showPicture(out);
-      try{
-        markDirty(); save();
-      }catch(e){
-        err.textContent = "That picture is too big to store. Download your PDF now to keep your work.";
-      }
-      /* Sent now rather than half a minute later. A paste is one finished
-         thing, not typing that may carry on, so there is nothing to wait
-         for, and the pause timer was long enough for a student to paste,
-         close the tab and leave the teacher looking at an empty task. */
-      if (lesson && lesson.linger !== false) lingerSave();
+      if (psdStatsFor(b.id)) psdLive[b.id] = null;   // a plain picture now, not the file's
+      keep(out);
     });
+  }
+  /* A picture ready to keep, from whichever way it arrived. */
+  function keep(out){
+    showPicture(out);
+    try{
+      markDirty(); save();
+    }catch(e){
+      err.textContent = "That picture is too big to store. Download your PDF now to keep your work.";
+    }
+    /* Sent now rather than half a minute later. A paste is one finished
+       thing, not typing that may carry on, so there is nothing to wait
+       for, and the pause timer was long enough for a student to paste,
+       close the tab and leave the teacher looking at an empty task. */
+    if (lesson && lesson.linger !== false) lingerSave();
   }
   const NO_PICTURE = "There was no picture on the clipboard. Take a screenshot first with Windows + Shift + S.";
   const USE_KEYS = "Try to press Ctrl + V on your keyboard to paste the screenshot";
@@ -8526,10 +8811,14 @@ function rImage(b){
   fileBtn.addEventListener("click", async () => {
     if (window.showOpenFilePicker){
       try{
-        const [handle] = await window.showOpenFilePicker({ startIn: "pictures", types: [{
-          description: "Pictures",
+        const pictures = { description: "Pictures",
           accept: { "image/png": [".png"], "image/jpeg": [".jpg", ".jpeg"], "image/gif": [".gif"],
-                    "image/webp": [".webp"], "image/bmp": [".bmp"] } }] });
+                    "image/webp": [".webp"], "image/bmp": [".bmp"] } };
+        const photoshop = { description: "Photoshop files", accept: { "image/vnd.adobe.photoshop": [".psd"] } };
+        /* Photoshop saves into Documents unless told otherwise. */
+        const [handle] = await window.showOpenFilePicker(b.psd
+          ? { startIn: "documents", types: [photoshop, pictures] }
+          : { startIn: "pictures", types: [pictures, photoshop] });
         accept(await handle.getFile());
         return;
       }catch(e){
@@ -11734,6 +12023,8 @@ function buildPdf(){
       }catch(e){
         out.push(answerBox("", "This picture could not be added"));
       }
+      const psd = b.type === "image" ? psdStatsFor(b.id) : null;
+      if (psd) out.push({ t: "text", face: "small", text: psdOneLine(psd) });
       return out;
     }
     /* Anything new that holds an answer, so a task can never quietly vanish

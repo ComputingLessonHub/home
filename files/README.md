@@ -40,5 +40,10 @@ by year group:
 Keep them small. A starter file is downloaded by a whole class at once on the
 school's connection, and every version committed stays in the repository's
 history for good. In Photoshop, flatten anything students do not need as a
-layer, keep the canvas no bigger than the task needs, and save with
-**Maximise compatibility** off. Under 2MB is a good aim.
+layer and keep the canvas no bigger than the task needs. Under 2MB is a good
+aim.
+
+Leave **Maximise compatibility** ticked when saving one, even though it
+makes the file a little bigger. A **Photoshop work** task reads the picture
+students hand in from the flattened copy that option saves, and a class that
+has only ever seen it ticked will not untick it.

@@ -273,6 +273,7 @@
         <button class="pal-head" type="button">Handing work in</button>
         <div class="palbody" hidden>
           <button class="pal" data-add="image"><b>Screenshot</b><span>They paste a picture</span></button>
+          <button class="pal" data-add="photoshop"><b>Photoshop work</b><span>They choose their .psd file</span></button>
           <button class="pal" data-add="pastelink"><b>Paste a link</b><span>They hand in a link</span></button>
         </div>
       </div>
@@ -622,6 +623,9 @@ const BLANK = {
   choice:   () => ({ type:"choice", title:"", task:"", prompt:"Choose one",
                      options:[{ label:"", blocks:[] }, { label:"", blocks:[] }] }),
   image:    () => ({ type:"image", title:"", task:"" }),
+  /* A Screenshot task set to take a Photoshop file, so the lesson page, the
+     PDF and View Work treat it as the screenshot it ends up as. */
+  photoshop:() => ({ type:"image", psd:true, title:"", task:"" }),
   embed:    () => ({ type:"embed", url:"", title:"", note:"", confirm:false }),
   frame:    () => ({ type:"frame", url:"", heading:"", task:"", width:"100%", height:520, confirm:false }),
   link:     () => ({ type:"link", url:"", title:"Open this", heading:"", task:"", confirm:false }),
@@ -1464,7 +1468,8 @@ function compileOne(b, id, target){
           : undefined });
     else if (b.type === "image")
       push(keepArrays({ type:"image", id, title: b.title || "", task: b.task || "",
-                        compare: b.compare === true ? true : undefined }));
+                        compare: b.compare === true ? true : undefined,
+                        psd: b.psd === true ? true : undefined }));
     else if (b.type === "embed")
       push(keepArrays({ type:"embed", id, url: toEmbed(b.url), title: b.title || "",
              note: b.note || "", confirm: b.confirm === true }));
