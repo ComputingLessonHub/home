@@ -2,7 +2,7 @@
    helper.js — a help chat that answers from a file of answers, with no
    AI service behind it, so it costs nothing to run and works offline.
 
-   What makes it feel like a conversation is three small things rather
+   What makes it feel like a conversation is four small things rather
    than a language model:
 
      matching  each question is scored against every answer, mostly on
@@ -14,6 +14,9 @@
      honesty   when nothing scores well it says so, offers the closest
                few, and sends the student to their teacher rather than
                guessing
+     pace      every reply comes after a moment of "typing", longer for a
+               longer answer, so it reads as being answered rather than
+               as a page appearing all at once
 
    A topic is one file of answers (help-photoshop.js). Anything another
    subject needs, Scratch or Python say, is another file in the same
@@ -183,6 +186,33 @@ function mount(holder, pack, opts){
   holder.appendChild(root);
 
   const scroll = () => { log.scrollTop = log.scrollHeight; };
+
+  /* ---- the helper's turn ----
+     Every reply waits behind three dots for a moment that grows with how
+     much is about to be said: under a second for "Great!", never more than
+     about two for a full set of steps. Long enough to read as an answer
+     being written, short enough that someone in the middle of Photoshop is
+     not left waiting. Replies queue, so two questions asked quickly are
+     answered in the order they were asked, and the box can be typed in
+     the whole time. */
+  let turn = Promise.resolve();
+  const sizeOf = (e) => e ? (e.title + " " + (e.steps || []).join(" ")).length : 60;
+  function botTurn(size, draw){
+    turn = turn.then(() => new Promise(done => {
+      setTimeout(() => {
+        const dots = el("div", "hp-msg hp-bot hp-typing");
+        dots.setAttribute("aria-hidden", "true");
+        dots.innerHTML = "<span></span><span></span><span></span>";
+        log.appendChild(dots); scroll();
+        setTimeout(() => {
+          dots.remove();
+          try{ draw(); }catch(e){}
+          scroll();
+          done();
+        }, Math.min(1700, 500 + size * 6));
+      }, 250);
+    }));
+  }
   function bubble(who, node){
     const b = el("div", "hp-msg hp-" + who);
     if (typeof node === "string") b.textContent = node; else b.appendChild(node);
@@ -196,7 +226,7 @@ function mount(holder, pack, opts){
       if (!e) return;
       const c = el("button", "hp-chip", e.title);
       c.type = "button";
-      c.addEventListener("click", () => { bubble("me", e.title); state.last = e.id; answer(e); note(e.title, e.id, "chip"); });
+      c.addEventListener("click", () => { bubble("me", e.title); state.last = e.id; botTurn(sizeOf(e), () => answer(e)); note(e.title, e.id, "chip"); });
       row.appendChild(c);
     });
     return row;
@@ -215,13 +245,13 @@ function mount(holder, pack, opts){
     [good, bad].forEach(x => { x.type = "button"; acts.appendChild(x); });
     good.addEventListener("click", () => {
       acts.remove(); mark(e.id, true);
-      bubble("bot", "Great! Ask again any time.");
       state.last = null;
+      botTurn(26, () => bubble("bot", "Great! Ask again any time."));
     });
     bad.addEventListener("click", () => {
       acts.remove(); mark(e.id, false);
       tell("not-quite", e.id);
-      if (e.fix && e.fix.length) fixes(e); else unsure([]);
+      botTurn(e.fix && e.fix.length ? e.fix.join(" ").length : 120, () => { if (e.fix && e.fix.length) fixes(e); else unsure([]); });
     });
     card.appendChild(acts);
     bubble("bot", card);
@@ -258,9 +288,10 @@ function mount(holder, pack, opts){
   }
   function askTeacher(){
     const sent = tell("still-stuck", state.last);
-    bubble("bot", opts.teacherWords ||
+    const words = opts.teacherWords ||
       ((sent ? "I've sent your question to your teacher, so they can teach me the answer. " : "") +
-       "Put your hand up and show your teacher what you asked. While you wait, try Ctrl + Z to undo the last thing, and Ctrl + D to clear any selection."));
+       "Put your hand up and show your teacher what you asked. While you wait, try Ctrl + Z to undo the last thing, and Ctrl + D to clear any selection.");
+    botTurn(words.length, () => bubble("bot", words));
   }
 
   /* ---- passing a question on ----
@@ -323,17 +354,22 @@ function mount(holder, pack, opts){
     if (!r) return;
     note(t, r.e ? r.e.id : null, r.kind);
     if (r.kind === "unsure") tell("unsure", null);
-    if (r.kind === "say") bubble("bot", r.text);
-    else if (r.kind === "answer") answer(r.e, r.also);
-    else if (r.kind === "fixes") fixes(r.e);
-    else if (r.kind === "next") log.appendChild(chips((r.e.see || []).map(id => ix.byId[id]), "From there, you might want:"));
-    else unsure(r.near || []);
-    scroll();
+    const size = r.kind === "say" ? r.text.length : r.kind === "answer" ? sizeOf(r.e)
+               : r.kind === "fixes" ? (r.e.fix || []).join(" ").length : 80;
+    botTurn(size, () => {
+      if (r.kind === "say") bubble("bot", r.text);
+      else if (r.kind === "answer") answer(r.e, r.also);
+      else if (r.kind === "fixes") fixes(r.e);
+      else if (r.kind === "next") log.appendChild(chips((r.e.see || []).map(id => ix.byId[id]), "From there, you might want:"));
+      else unsure(r.near || []);
+    });
   }
   form.addEventListener("submit", (e) => { e.preventDefault(); ask(input.value); input.value = ""; input.focus(); });
 
-  bubble("bot", pack.greeting);
-  log.appendChild(chips((pack.starters || []).map(id => ix.byId[id]), "People often ask:"));
+  botTurn(String(pack.greeting || "").length, () => {
+    bubble("bot", pack.greeting);
+    log.appendChild(chips((pack.starters || []).map(id => ix.byId[id]), "People often ask:"));
+  });
   return { ask, focus: () => input.focus() };
 }
 

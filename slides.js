@@ -26,8 +26,6 @@
 "use strict";
 
 const api = () => (window.HUB && window.HUB.API) || "";
-const offline = () => !!(window.HUB && window.HUB.OFFLINE);
-const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 function div(cls, html){ const d = document.createElement("div"); if (cls) d.className = cls; if (html !== undefined) d.innerHTML = html; return d; }
 function btn(cls, html, title){
   const b = document.createElement("button");
@@ -43,51 +41,9 @@ function store(k, v){
   return null;
 }
 
-/* ---------------- the experiments ----------------
-   Every one is off until it is turned on in Settings, and kept with the
-   rest of the display choices in hub_prefs. */
-const LAB = [
-  ["follow",   "Follow the lesson",       "The slides move to the one your teacher matched to the page you are on."],
-  ["live",     "Follow your teacher live", "When your teacher presents to your class, your slides turn with theirs."],
-  ["ghost",    "See-through window",      "A floating slides window fades when the pointer is not over it, so you can see your work underneath."],
-  ["lens",     "Magnifier",               "Hold Shift over a slide to look closer. Good for small writing."],
-  ["pip",      "Pop out on top",          "Puts the slides in a small window that stays on top of everything else on the screen."],
-  ["speak",    "Read aloud",              "A button that reads the words on the slide out loud."],
-  ["scribble", "Scribble on slides",      "Draw on a slide to make notes. Kept on this computer only and never handed in."],
-  ["flip",     "Card flips",              "Slides turn over like cards when you move between them."],
-  ["peek",     "Hover peek",              "When the slides are shrunk to a bubble, point at it to see the slide large."]
-];
-function prefs(){ try{ return JSON.parse(localStorage.getItem("hub_prefs") || "{}"); }catch(e){ return {}; } }
-function lab(name){ const l = prefs().slidesLab; return !!(l && l[name]); }
-function setLab(name, on){
-  const p = prefs();
-  p.slidesLab = Object.assign({}, p.slidesLab || {});
-  if (on) p.slidesLab[name] = true; else delete p.slidesLab[name];
-  try{ localStorage.setItem("hub_prefs", JSON.stringify(p)); }catch(e){}
-  try{ window.dispatchEvent(new Event("hubslideslab")); }catch(e){}
-}
-/* The group drawn into the Settings pop-up. */
-function settingsGroup(holder){
-  if (!holder) return;
-  const g = div("set-group sl-labgroup");
-  g.innerHTML = '<span class="set-label">Slides experiments</span>' +
-    '<p class="subnote" style="margin:0 0 10px">New ideas being tried out. Turn any of them on to see what it is like.</p>';
-  LAB.forEach(([key, name, words]) => {
-    const row = btn("sl-lab", "");
-    row.setAttribute("role", "switch");
-    row.innerHTML = '<span class="sl-lab-words"><b>' + esc(name) + '</b><span>' + esc(words) + '</span></span><span class="sl-lab-pill"></span>';
-    const paint = () => {
-      const on = lab(key);
-      row.classList.toggle("on", on);
-      row.setAttribute("aria-checked", on ? "true" : "false");
-      row.querySelector(".sl-lab-pill").textContent = on ? "On" : "Off";
-    };
-    row.addEventListener("click", () => { setLab(key, !lab(key)); paint(); });
-    paint();
-    g.appendChild(row);
-  });
-  holder.appendChild(g);
-}
+/* There used to be a Settings section of experiments here. Following the
+   lesson is now always on and the rest were taken out, so a slidesLab
+   left in someone's hub_prefs is simply never read. */
 
 /* ---------------- drawing one slide ---------------- */
 function picSrc(p){
@@ -215,28 +171,26 @@ function words(slide){
 
 /* ---------------- moving between slides ----------------
    One holder, two slides in it for the moment of the change, then one. */
-function swapInto(holder, next, dir, style){
+function swapInto(holder, next, dir){
   const old = holder.firstElementChild;
   holder.appendChild(next);
   if (!old || !dir || matchMedia("(prefers-reduced-motion: reduce)").matches){ if (old) old.remove(); return; }
-  const kind = style === "flip" ? "flip" : "glide";
   holder.classList.add("sl-moving");
-  old.classList.add("sl-out", "sl-" + kind, dir > 0 ? "sl-fwd" : "sl-back");
-  next.classList.add("sl-in", "sl-" + kind, dir > 0 ? "sl-fwd" : "sl-back");
-  const done = () => {
+  old.classList.add("sl-out", "sl-glide", dir > 0 ? "sl-fwd" : "sl-back");
+  next.classList.add("sl-in", "sl-glide", dir > 0 ? "sl-fwd" : "sl-back");
+  setTimeout(() => {
     old.remove();
-    next.classList.remove("sl-in", "sl-" + kind, "sl-fwd", "sl-back");
+    next.classList.remove("sl-in", "sl-glide", "sl-fwd", "sl-back");
     holder.classList.remove("sl-moving");
-  };
-  setTimeout(done, kind === "flip" ? 560 : 300);
+  }, 300);
 }
 
 /* ---------------- the student's slides window ----------------
    Opened from a button in the lesson's top bar. It floats over the work
-   and can be dragged anywhere, pinned down the right so the work moves
-   over to make room, filled to the whole screen, or shrunk to a
-   bubble in the corner. On a phone there is not the room to float, so it
-   is a sheet along the bottom instead.
+   and can be dragged anywhere and resized from any corner, pinned down the
+   right so the work moves over to make room, or filled to the whole
+   screen. On a phone there is not the room to float, so it is a sheet
+   along the bottom instead.
 
    Nothing here is ever in the way of carrying on: it never opens itself,
    the work underneath stays usable in every mode but full screen, and
@@ -249,19 +203,19 @@ function viewer(o){
   const AT_KEY = "hub_slides_at_" + lessonKey;
   const VIEW_KEY = "hub_slides_view";
   let view = Object.assign({ mode: "float", x: null, y: null, w: 440, side: 420 }, store(VIEW_KEY) || {});
-  /* The slides pin to the right only, where the documents pin too. A
-     place remembered from when they could also go left is the right. */
+  /* The slides pin to the right only, where the documents pin too, and
+     there is no bubble any more. A place remembered from before either of
+     those went is the right, or floating. */
   if (view.mode === "left") view.mode = "right";
+  if (view.mode === "mini") view.mode = "float";
   let cur = Math.min(Math.max(0, +store(AT_KEY) || 0), list.length - 1);
-  let shown = false, lastMode = view.mode === "full" || view.mode === "mini" ? "float" : view.mode;
-  let live = null, drifted = false, liveTimer = null;
-  let pipWin = null;
+  let shown = false, lastMode = view.mode === "full" ? "float" : view.mode;
 
   /* ---- the button in the top bar ---- */
   const open = btn("btn-ghost sl-open no-print", '<span class="sl-open-ic" aria-hidden="true"></span><span class="sl-open-word">Slides</span>', "Open the slides");
   if (o.before && o.before.parentNode) o.before.parentNode.insertBefore(open, o.before);
   else document.body.appendChild(open);
-  open.addEventListener("click", () => { if (shown && view.mode !== "mini") hide(); else show(); });
+  open.addEventListener("click", () => { if (shown) hide(); else show(); });
 
   /* ---- the window ---- */
   const win = div("sl-win no-print");
@@ -271,83 +225,68 @@ function viewer(o){
   win.tabIndex = -1;
   win.style.setProperty("--r", ratioOf(deck));
   const bar = div("sl-bar");
-  const grip = div("sl-grip", '<span class="sl-count"></span><span class="sl-livechip" hidden></span>');
+  const grip = div("sl-grip", '<span class="sl-count"></span>');
   const tools = div("sl-tools");
   const bFloat = btn("sl-tool", "&#10697;", "Float over the page");
   const bRight = btn("sl-tool", "&#9704;", "Pin to the right");
   const bFull = btn("sl-tool", "&#9974;", "Fill the screen");
-  const bPip = btn("sl-tool", "&#8663;", "Pop out on top of everything");
-  const bMini = btn("sl-tool", "&#8212;", "Shrink to a bubble");
   const bClose = btn("sl-tool", "&#10005;", "Close the slides");
   /* only for a teacher: the whole screen, with the laser, pen and notes */
   const bShow = btn("sl-tool sl-tool-text", "&#9654; Present", "Present these slides to the class");
   bShow.hidden = !o.present;
   bShow.addEventListener("click", () => o.present(cur));
-  [bShow, bFloat, bRight, bFull, bPip, bMini, bClose].forEach(b => tools.appendChild(b));
+  [bShow, bFloat, bRight, bFull, bClose].forEach(b => tools.appendChild(b));
   bar.appendChild(grip); bar.appendChild(tools);
 
   const stage = div("sl-stage");
   const holder = div("sl-hold");
   stage.appendChild(holder);
-  const prevZone = btn("sl-zone sl-zone-prev", "&#8249;", "Previous slide");
-  const nextZone = btn("sl-zone sl-zone-next", "&#8250;", "Next slide");
-  stage.appendChild(prevZone); stage.appendChild(nextZone);
-  const ink = document.createElement("canvas");
-  ink.className = "sl-ink"; ink.hidden = true;
-  stage.appendChild(ink);
-  const lens = div("sl-lens"); lens.hidden = true;
-  stage.appendChild(lens);
-  const backToTeacher = btn("sl-backlive", "", "Go back to the slide your teacher is on");
-  backToTeacher.hidden = true;
-  stage.appendChild(backToTeacher);
 
   const foot = div("sl-foot");
   const bPrev = btn("sl-step", "&#8592;", "Previous slide");
   const track = div("sl-track"); const fill = div("sl-trackfill"); track.appendChild(fill);
   const bThumbs = btn("sl-tool sl-tool-text", "All slides", "Show every slide");
-  const bSpeak = btn("sl-tool", "&#128264;", "Read this slide aloud");
-  const bPen = btn("sl-tool", "&#9998;", "Scribble on this slide");
-  const bWipe = btn("sl-tool", "&#9003;", "Rub out your scribbles on this slide");
   const bNext = btn("sl-step", "&#8594;", "Next slide");
-  [bPrev, track, bThumbs, bSpeak, bPen, bWipe, bNext].forEach(x => foot.appendChild(x));
+  [bPrev, track, bThumbs, bNext].forEach(x => foot.appendChild(x));
   const thumbs = div("sl-thumbs"); thumbs.hidden = true;
-  const sizer = div("sl-sizer"); sizer.title = "Drag to resize";
+  /* A handle in each corner while it floats. Drawn as two short lines and
+     only while the pointer is over the window, so they say "this can be
+     resized" without sitting on top of the slide the rest of the time. */
+  const corners = ["nw", "ne", "sw", "se"].map(c => {
+    const h = div("sl-corner sl-corner-" + c);
+    h.dataset.corner = c;
+    h.title = "Drag to resize";
+    return h;
+  });
   const split = div("sl-split"); split.title = "Drag to make the slides wider or narrower";
   const snapHint = div("sl-snaphint no-print"); snapHint.hidden = true;
-  const peek = div("sl-peek no-print"); peek.hidden = true;
 
-  [bar, stage, foot, thumbs, sizer, split].forEach(x => win.appendChild(x));
+  [bar, stage, foot, thumbs, split].concat(corners).forEach(x => win.appendChild(x));
   document.body.appendChild(win);
   document.body.appendChild(snapHint);
-  document.body.appendChild(peek);
 
   /* ---- showing a slide ---- */
   function paint(dir){
     const s = list[cur];
-    swapInto(holder, draw(s, deck), dir, lab("flip") ? "flip" : "glide");
+    swapInto(holder, draw(s, deck), dir);
     grip.querySelector(".sl-count").textContent = (cur + 1) + " / " + list.length;
     fill.style.width = ((cur + 1) / list.length * 100) + "%";
     bPrev.disabled = cur === 0; bNext.disabled = cur === list.length - 1;
-    prevZone.hidden = cur === 0; nextZone.hidden = cur === list.length - 1;
     thumbs.querySelectorAll(".sl-thumb").forEach((t, i) => t.classList.toggle("on", i === cur));
     const on = thumbs.querySelector(".sl-thumb.on");
     if (on && !thumbs.hidden) on.scrollIntoView({ block: "nearest", inline: "nearest" });
     store(AT_KEY, cur);
-    paintLive();
-    drawInk();
-    if (speaking) speakNow();
   }
-  function go(n, quiet){
+  function go(n){
     n = Math.min(Math.max(0, n), list.length - 1);
     if (n === cur && holder.firstElementChild) return;
     const dir = n > cur ? 1 : -1;
     cur = n;
-    if (!quiet && live && live.on) drifted = cur !== live.slide;
     paint(dir);
   }
   const step = (d) => go(cur + d);
-  [bPrev, prevZone].forEach(b => b.addEventListener("click", () => step(-1)));
-  [bNext, nextZone].forEach(b => b.addEventListener("click", () => step(1)));
+  bPrev.addEventListener("click", () => step(-1));
+  bNext.addEventListener("click", () => step(1));
   track.addEventListener("click", (e) => {
     const r = track.getBoundingClientRect();
     go(Math.floor((e.clientX - r.left) / r.width * list.length));
@@ -377,7 +316,7 @@ function viewer(o){
   function setMode(m, keep){
     if (m === "left") m = "right";
     if (narrow() && (m === "float" || m === "right")) m = "sheet";
-    if (m !== "full" && m !== "mini") lastMode = m;
+    if (m !== "full") lastMode = m;
     /* pinned, there is a column of room under the slide: every slide goes
        in it, unless they have been put away while pinned before */
     if (m === "right" && thumbs.hidden && !view.noThumbs){
@@ -407,47 +346,39 @@ function viewer(o){
     bRight.classList.toggle("on", m === "right");
     bFloat.classList.toggle("on", m === "float"); bFull.classList.toggle("on", m === "full");
     [bRight, bFloat].forEach(x => { x.hidden = narrow(); });
-    bPip.hidden = !lab("pip") || !!pipWin;
-    win.classList.toggle("ghost", lab("ghost") && m === "float");
     open.classList.toggle("on", shown);
     open.setAttribute("aria-pressed", shown ? "true" : "false");
     /* the page's own layout has just changed width */
     try{ window.dispatchEvent(new Event("resize")); }catch(e){}
-    requestAnimationFrame(drawInk);
   }
   function clampSide(w){ return Math.round(Math.min(Math.max(260, w || 420), Math.max(280, innerWidth - 380))); }
   function show(){
     shown = true;
     win.hidden = false;
-    if (view.mode === "mini") view.mode = lastMode;
     setMode(view.mode);
     if (!holder.firstElementChild) paint(0);
-    paintLab();
+    paintPage();
     win.focus({ preventScroll: true });
   }
   function hide(){
     shown = false;
     if (view.mode === "full") view.mode = lastMode;
     win.hidden = true;
-    stopSpeaking();
     place();
+    paintPage();
   }
   bRight.addEventListener("click", () => setMode("right"));
   bFloat.addEventListener("click", () => setMode("float"));
   bFull.addEventListener("click", () => setMode(view.mode === "full" ? lastMode : "full", true));
-  bMini.addEventListener("click", () => setMode("mini", true));
   bClose.addEventListener("click", hide);
-  win.addEventListener("click", (e) => {
-    if (view.mode === "mini" && !e.target.closest(".sl-tools")){ setMode(lastMode); }
-  });
-  addEventListener("resize", () => { if (shown && !pipWin) placeSoon(); });
+  addEventListener("resize", () => { if (shown) placeSoon(); });
   let placeTimer = null;
   function placeSoon(){
     clearTimeout(placeTimer);
     placeTimer = setTimeout(() => {
       if (narrow() && /^(float|right)$/.test(view.mode)) setMode("sheet", true);
       else if (!narrow() && view.mode === "sheet") setMode(lastMode === "sheet" ? "float" : lastMode, true);
-      else { win.dataset.mode = view.mode; drawInk(); }
+      else win.dataset.mode = view.mode;
     }, 120);
   }
 
@@ -457,8 +388,8 @@ function viewer(o){
      edge it comes loose and floats under the pointer. */
   let drag = null;
   bar.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0 || e.target.closest("button") || pipWin) return;
-    if (view.mode === "full" || view.mode === "sheet" || view.mode === "mini") return;
+    if (e.button !== 0 || e.target.closest("button")) return;
+    if (view.mode === "full" || view.mode === "sheet") return;
     const r = win.getBoundingClientRect();
     drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, sx: e.clientX, sy: e.clientY, from: view.mode, moved: false, snap: null };
     bar.setPointerCapture(e.pointerId);
@@ -505,11 +436,11 @@ function viewer(o){
     setMode(view.mode === "full" ? lastMode : "full", true);
   });
 
-  /* resizing: the corner when floating, the inside edge when pinned */
+  /* resizing: any corner when floating, the inside edge when pinned */
   function resizer(handle, onMove){
     let start = null;
     handle.addEventListener("pointerdown", (e) => {
-      start = { x: e.clientX, y: e.clientY, w: view.w, side: view.side };
+      start = { x: e.clientX, y: e.clientY, side: view.side, rect: win.getBoundingClientRect() };
       handle.setPointerCapture(e.pointerId); e.preventDefault();
       win.classList.add("sl-dragging");
     });
@@ -518,9 +449,21 @@ function viewer(o){
     handle.addEventListener("pointerup", end);
     handle.addEventListener("pointercancel", end);
   }
-  resizer(sizer, (e, s) => {
-    view.w = Math.min(Math.max(260, s.w + (e.clientX - s.x)), innerWidth - 16);
-    win.style.width = view.w + "px";
+  /* The slide keeps its shape, so a corner only decides the width; the
+     height follows. The corner opposite the one held stays where it is,
+     which means a left corner moves the window's left edge and a top
+     corner its top, measured once the new height is known. */
+  corners.forEach(h => {
+    const c = h.dataset.corner;
+    resizer(h, (e, s) => {
+      const dx = e.clientX - s.x;
+      view.w = Math.round(Math.min(Math.max(260, s.rect.width + (c.includes("e") ? dx : -dx)), innerWidth - 16));
+      win.style.width = view.w + "px";
+      view.x = Math.round(c.includes("w") ? s.rect.right - view.w : s.rect.left);
+      view.y = Math.round(c.includes("n") ? s.rect.bottom - win.offsetHeight : s.rect.top);
+      win.style.left = view.x + "px";
+      win.style.top = view.y + "px";
+    });
   });
   resizer(split, (e, s) => {
     view.side = clampSide(s.side + (s.x - e.clientX));
@@ -533,12 +476,12 @@ function viewer(o){
      the student's, never the slides'. */
   let over = false;
   win.addEventListener("pointerenter", () => { over = true; });
-  win.addEventListener("pointerleave", () => { over = false; hideLens(); });
+  win.addEventListener("pointerleave", () => { over = false; });
   function onKey(e){
     if (!shown || e.ctrlKey || e.metaKey || e.altKey) return;
     const t = e.target;
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-    const using = pipWin || over || view.mode === "full" || win.contains(document.activeElement);
+    const using = over || view.mode === "full" || win.contains(document.activeElement);
     if (e.key === "Escape" && view.mode === "full"){ setMode(lastMode, true); e.preventDefault(); return; }
     if (!using) return;
     const k = e.key;
@@ -552,7 +495,7 @@ function viewer(o){
   /* ---- a finger swipes ---- */
   let swipe = null;
   stage.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "mouse" || penOn) return;
+    if (e.pointerType === "mouse") return;
     swipe = { x: e.clientX, y: e.clientY };
   });
   stage.addEventListener("pointerup", (e) => {
@@ -562,255 +505,25 @@ function viewer(o){
     if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4) step(dx < 0 ? 1 : -1);
   });
 
-  /* ================= the experiments ================= */
-  function paintLab(){
-    bSpeak.hidden = !lab("speak") || !("speechSynthesis" in window);
-    bPen.hidden = !lab("scribble");
-    bWipe.hidden = !lab("scribble") || !penOn;
-    if (!lab("scribble") && penOn) togglePen();
-    ink.hidden = !lab("scribble");
-    if (!lab("speak")) stopSpeaking();
-    if (!lab("live")) stopLive(); else startLive();
-    place();
-    drawInk();
-  }
-  addEventListener("hubslideslab", () => { paintLab(); paintPage(); });
-
-  /* -- read aloud -- */
-  let speaking = false;
-  function speakNow(){
-    try{
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(words(list[cur]) || "This slide has no words on it.");
-      const v = speechSynthesis.getVoices().find(x => /en[-_]GB/i.test(x.lang));
-      if (v) u.voice = v;
-      u.rate = 0.95;
-      u.onend = () => { if (speaking){ speaking = false; bSpeak.classList.remove("on"); } };
-      speechSynthesis.speak(u);
-    }catch(e){}
-  }
-  function stopSpeaking(){
-    if (!speaking) return;
-    speaking = false; bSpeak.classList.remove("on");
-    try{ speechSynthesis.cancel(); }catch(e){}
-  }
-  bSpeak.addEventListener("click", () => {
-    if (speaking){ stopSpeaking(); return; }
-    speaking = true; bSpeak.classList.add("on"); speakNow();
-  });
-
-  /* -- the magnifier: hold Shift over the slide -- */
-  let lensAt = null;
-  function showLens(x, y){
-    if (!holder.lastElementChild) return;
-    const r = holder.getBoundingClientRect();
-    if (x < r.left || x > r.right || y < r.top || y > r.bottom){ hideLens(); return; }
-    const Z = 2.4, R = Math.max(70, Math.min(130, r.width * 0.22));
-    if (lens.hidden || lens.dataset.at !== String(cur) + ":" + Math.round(r.width)){
-      lens.innerHTML = "";
-      const big = draw(list[cur], deck);
-      big.style.width = (r.width * Z) + "px";
-      lens.appendChild(big);
-      lens.dataset.at = String(cur) + ":" + Math.round(r.width);
-    }
-    lens.hidden = false;
-    const sr = stage.getBoundingClientRect();
-    lens.style.width = lens.style.height = (R * 2) + "px";
-    lens.style.left = (x - sr.left - R) + "px"; lens.style.top = (y - sr.top - R) + "px";
-    const big = lens.firstElementChild;
-    big.style.left = (R - (x - r.left) * Z) + "px"; big.style.top = (R - (y - r.top) * Z) + "px";
-  }
-  function hideLens(){ lens.hidden = true; }
-  stage.addEventListener("pointermove", (e) => {
-    lensAt = { x: e.clientX, y: e.clientY };
-    if (lab("lens") && e.shiftKey && !penOn) showLens(e.clientX, e.clientY); else hideLens();
-  });
-  const lensKey = (e) => {
-    if (e.key !== "Shift" || !lab("lens") || !lensAt || !over) return;
-    if (e.type === "keydown") showLens(lensAt.x, lensAt.y); else hideLens();
-  };
-  document.addEventListener("keydown", lensKey);
-  document.addEventListener("keyup", lensKey);
-
-  /* -- scribble: strokes kept per slide, on this computer only --
-     Kept as points, not as a picture, and only in this browser. A stroke
-     is a list of numbers out of 1000 across and down the slide, so it
-     lands in the same place at any size. */
-  const INK_KEY = "hub_slides_ink_" + lessonKey;
-  let inkData = store(INK_KEY) || {};
-  let penOn = false, stroke = null;
-  const slideKey = () => (list[cur] && list[cur].id) || String(cur);
-  function togglePen(){
-    penOn = !penOn;
-    bPen.classList.toggle("on", penOn);
-    ink.classList.toggle("drawing", penOn);
-    bWipe.hidden = !penOn;
-  }
-  bPen.addEventListener("click", togglePen);
-  bWipe.addEventListener("click", () => { delete inkData[slideKey()]; store(INK_KEY, inkData); drawInk(); });
-  /* Measured on the holder, never the slide: mid-flip the slide is turned
-     edge on and measures nothing, and the last slide's scribbles were left
-     on the next one. */
-  function inkBox(){
-    if (!holder.lastElementChild) return null;
-    const r = holder.getBoundingClientRect(), sr = stage.getBoundingClientRect();
-    return { x: r.left - sr.left, y: r.top - sr.top, w: r.width, h: r.height };
-  }
-  function drawInk(){
-    if (ink.hidden) return;
-    const b = inkBox();
-    if (!b || !b.w) return;
-    const dpr = devicePixelRatio || 1;
-    ink.style.left = b.x + "px"; ink.style.top = b.y + "px";
-    ink.style.width = b.w + "px"; ink.style.height = b.h + "px";
-    ink.width = Math.round(b.w * dpr); ink.height = Math.round(b.h * dpr);
-    const g = ink.getContext("2d");
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.clearRect(0, 0, b.w, b.h);
-    g.lineCap = g.lineJoin = "round";
-    g.strokeStyle = "#E5397A";
-    g.lineWidth = Math.max(2, b.w / 260);
-    const strokes = (inkData[slideKey()] || []).concat(stroke ? [stroke] : []);
-    strokes.forEach(pts => {
-      g.beginPath();
-      for (let i = 0; i < pts.length; i += 2){
-        const x = pts[i] / 1000 * b.w, y = pts[i + 1] / 1000 * b.h;
-        if (i) g.lineTo(x, y); else g.moveTo(x, y);
-      }
-      if (pts.length === 2) g.lineTo(pts[0] / 1000 * b.w + 0.1, pts[1] / 1000 * b.h);
-      g.stroke();
-    });
-  }
-  const inkPoint = (e) => {
-    const r = ink.getBoundingClientRect();
-    return [Math.round((e.clientX - r.left) / r.width * 1000), Math.round((e.clientY - r.top) / r.height * 1000)];
-  };
-  ink.addEventListener("pointerdown", (e) => {
-    if (!penOn) return;
-    stroke = inkPoint(e);
-    ink.setPointerCapture(e.pointerId); e.preventDefault();
-  });
-  ink.addEventListener("pointermove", (e) => {
-    if (!stroke) return;
-    const p = inkPoint(e);
-    const n = stroke.length;
-    if (Math.abs(p[0] - stroke[n - 2]) + Math.abs(p[1] - stroke[n - 1]) < 3) return;
-    stroke.push(p[0], p[1]);
-    drawInk();
-  });
-  const endStroke = () => {
-    if (!stroke) return;
-    const k = slideKey();
-    (inkData[k] = inkData[k] || []).push(stroke.slice(0, 4000));
-    stroke = null;
-    /* a few hundred strokes is plenty, and keeps this well inside what
-       the browser will hold */
-    if (inkData[k].length > 300) inkData[k].shift();
-    store(INK_KEY, inkData);
-    drawInk();
-  };
-  ink.addEventListener("pointerup", endStroke);
-  ink.addEventListener("pointercancel", endStroke);
-
-  /* -- hover peek on the bubble -- */
-  win.addEventListener("pointerenter", () => {
-    if (view.mode !== "mini" || !lab("peek")) return;
-    peek.innerHTML = "";
-    peek.appendChild(draw(list[cur], deck));
-    peek.hidden = false;
-  });
-  win.addEventListener("pointerleave", () => { peek.hidden = true; });
-
-  /* -- pop out on top: the Document Picture-in-Picture window --
-     The window itself is moved into it rather than copied, so everything
-     above keeps working, and moved back when it closes. */
-  bPip.addEventListener("click", async () => {
-    if (!("documentPictureInPicture" in window)){
-      note("This browser cannot pop the slides out yet. It works in Chrome and Edge.");
-      return;
-    }
-    try{
-      const w = Math.round(Math.min(640, Math.max(360, win.offsetWidth)));
-      pipWin = await window.documentPictureInPicture.requestWindow({ width: w, height: Math.round(w / ratioOf(deck) + 92) });
-      document.querySelectorAll('link[rel="stylesheet"], style').forEach(s => pipWin.document.head.appendChild(s.cloneNode(true)));
-      const root = document.documentElement;
-      ["look", "bg", "font"].forEach(k => { if (root.dataset[k]) pipWin.document.documentElement.dataset[k] = root.dataset[k]; });
-      pipWin.document.body.className = "sl-pipbody";
-      win.dataset.mode = "pip";
-      pipWin.document.body.appendChild(win);
-      pipWin.addEventListener("keydown", onKey);
-      document.body.classList.remove("sl-pin-right", "sl-sheet");
-      bPip.hidden = true;
-      pipWin.addEventListener("pagehide", () => {
-        pipWin = null;
-        document.body.appendChild(win);
-        setMode(lastMode, true);
-      });
-    }catch(e){ pipWin = null; note("The slides could not be popped out."); }
-  });
-  function note(words){
-    if (window.hubUI && window.hubUI.toast){ window.hubUI.toast(words); return; }
-    const n = div("sl-note", esc(words));
-    stage.appendChild(n);
-    setTimeout(() => n.remove(), 3500);
-  }
-
-  /* -- follow the lesson --
-     The builder can match a slide to a page. Changing page then moves the
+  /* ---- following the lesson ----
+     The builder can match a slide to a page. Changing page moves the
      slides there, and the Slides button glows on a page that has one, as
-     a nudge rather than an interruption. */
+     a nudge rather than an interruption. This was a Settings experiment
+     and is now simply how the slides behave. */
   let pageIdx = null;
   function paintPage(){
     const id = pageIdx !== null && o.slideForPage ? o.slideForPage(pageIdx) : null;
     const at = id ? list.findIndex(s => s.id === id) : -1;
-    open.classList.toggle("sl-hint", at >= 0 && lab("follow") && !shown);
+    open.classList.toggle("sl-hint", at >= 0 && !shown);
     return at;
   }
   function page(i){
     pageIdx = i;
     const at = paintPage();
-    if (at >= 0 && lab("follow") && !(live && live.on && !drifted)) go(at, true);
+    if (at >= 0) go(at);
   }
 
-  /* -- live with the teacher --
-     The teacher's presenter says which slide it is on through the release
-     route, which a class is already asking about. Asked every five
-     seconds, and only while this tab is in front: the route keeps a few
-     seconds' cache, so a whole class asking at once is a handful of reads. */
-  function startLive(){
-    if (liveTimer || !o.live || offline() || !api()) return;
-    const ask = async () => {
-      if (document.hidden) return;
-      try{
-        const r = await fetch(api() + "/api/release?live=1&lesson=" + encodeURIComponent(o.live.lesson) +
-                              "&group=" + encodeURIComponent(o.live.group) + "&t=" + Date.now(), { cache: "no-store" });
-        if (!r.ok) return;
-        const d = await r.json();
-        const was = live;
-        live = d && d.live && d.live.on ? { on: true, slide: Math.min(Math.max(0, +d.live.slide || 0), list.length - 1) } : null;
-        if (live && (!was || !was.on)) drifted = false;
-        if (live && !drifted && shown && live.slide !== cur) go(live.slide, true);
-        paintLive();
-      }catch(e){}
-    };
-    ask();
-    liveTimer = setInterval(ask, 5000);
-  }
-  function stopLive(){ clearInterval(liveTimer); liveTimer = null; live = null; paintLive(); }
-  function paintLive(){
-    const chip = grip.querySelector(".sl-livechip");
-    const on = !!(live && live.on);
-    chip.hidden = !on;
-    chip.textContent = drifted ? "Teacher on " + (live ? live.slide + 1 : "") : "Live";
-    chip.classList.toggle("away", on && drifted);
-    open.classList.toggle("sl-live", on && !shown);
-    backToTeacher.hidden = !(on && drifted && live.slide !== cur);
-    backToTeacher.textContent = on ? "Back to your teacher, slide " + (live.slide + 1) : "";
-    if (on && drifted && live.slide === cur) drifted = false;
-  }
-  backToTeacher.addEventListener("click", () => { drifted = false; if (live) go(live.slide, true); paintLive(); });
-
-  paintLab();
+  place();
   return { show, hide, go, page, get index(){ return cur; } };
 }
 
@@ -818,8 +531,8 @@ function viewer(o){
    The whole screen, for the front of the room. Keys: arrows or space to
    move, B for a black screen, W for a white one, L for the laser, P for
    the pen, C to clear the pen, N for the notes in a window of their own,
-   Escape to leave. With a class given, every move is sent to the class
-   so a student following live turns with it. */
+   Escape to leave. It is for the projector only: students' slides do not
+   follow it. */
 function present(deck, o){
   o = o || {};
   const list = deck.list;
@@ -846,22 +559,19 @@ function present(deck, o){
   const bWhite = btn("sl-hudb", "&#9633;", "White screen (W)");
   const bNotes = btn("sl-hudb", "&#128221;", "Notes in their own window (N)");
   const clock = div("sl-hudclock");
-  const liveTag = div("sl-hudlive", esc(o.liveLabel || "Live")); liveTag.hidden = !o.live;
-  liveTag.title = "The class following along live sees the slide you are on";
   const bExit = btn("sl-hudb", "&#10005;", "Stop presenting (Esc)");
-  [bPrev, count, bNext, bLaser, bPen, bClear, bBlack, bWhite, bNotes, clock, liveTag, bExit].forEach(x => hud.appendChild(x));
+  [bPrev, count, bNext, bLaser, bPen, bClear, bBlack, bWhite, bNotes, clock, bExit].forEach(x => hud.appendChild(x));
   [stage, canvas, trail, cover, hud].forEach(x => root.appendChild(x));
   document.body.appendChild(root);
   document.body.classList.add("sl-presenting");
   try{ if (o.fullscreen !== false && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); }catch(e){}
 
   function paint(dir){
-    swapInto(holder, draw(list[cur], deck), dir, "glide");
+    swapInto(holder, draw(list[cur], deck), dir);
     count.textContent = (cur + 1) + " / " + list.length;
     bPrev.disabled = cur === 0; bNext.disabled = cur === list.length - 1;
     requestAnimationFrame(drawPen);
     paintNotes();
-    if (o.live) o.live.post(cur);
   }
   function go(n){
     n = Math.min(Math.max(0, n), list.length - 1);
@@ -988,9 +698,6 @@ function present(deck, o){
     clock.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
     if (notesWin && !notesWin.closed){ const c = notesWin.document.getElementById("c"); if (c) c.textContent = "Presenting for " + clock.textContent; }
   }, 1000);
-  /* while presenting live, say so every half minute, so a teacher who
-     simply closes the laptop stops being followed before long */
-  const beat = o.live ? setInterval(() => o.live.post(cur), 30000) : null;
 
   function key(e){
     const k = e.key;
@@ -1018,8 +725,7 @@ function present(deck, o){
     document.removeEventListener("keydown", key, true);
     document.removeEventListener("fullscreenchange", onFs);
     removeEventListener("resize", onResize);
-    clearInterval(tick); clearInterval(beat);
-    if (o.live) o.live.stop();
+    clearInterval(tick);
     try{ if (notesWin && !notesWin.closed) notesWin.close(); }catch(e){}
     try{ if (document.fullscreenElement) document.exitFullscreen(); }catch(e){}
     root.remove();
@@ -1032,5 +738,5 @@ function present(deck, o){
   return { go, close };
 }
 
-window.hubSlides = { has, draw, words, viewer, present, settingsGroup, picSrc, lab, ratioOf };
+window.hubSlides = { has, draw, words, viewer, present, picSrc, ratioOf };
 })();

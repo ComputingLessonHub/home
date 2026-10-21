@@ -8,17 +8,16 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="look.css">
 <script src="icons.js"></script>
-<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
 <script src="config.js"></script>
 <script src="teacher.js"></script>
 <script src="settings.js"></script>
 <script src="slides.js"></script>
 </head>
 <body class="sl-start">
-<!-- The teacher's presenter, opened from Manage on a class. Presenting from
-     here also tells that class which slide is showing, so anyone following
-     live turns with it. Full screen needs a press first, which is what the
-     big button is for. -->
+<!-- The teacher's presenter, opened from Manage on a class. It is for the
+     projector: students' own slides do not follow it. Full screen needs a
+     press first, which is what the big button is for. -->
 <main class="sl-startbox">
   <p class="modal-eyebrow" id="who">Slides</p>
   <h1 id="title">Loading the slides&hellip;</h1>
@@ -26,7 +25,6 @@
   <div class="sl-startgrid" id="grid"></div>
   <div class="sl-startacts">
     <button class="btn-primary" id="go" type="button" disabled>&#9654; Present</button>
-    <label class="sl-startlive" id="liveRow" hidden><input type="checkbox" id="live" checked> Let the class follow along live</label>
   </div>
   <p class="sl-startkeys">Arrow keys or a click to move on. <b>L</b> laser, <b>P</b> pen, <b>C</b> clear the pen, <b>B</b> black screen, <b>W</b> white screen, <b>N</b> your notes in their own window, a slide number then pause to jump, <b>Esc</b> to stop.</p>
 </main>
@@ -60,15 +58,6 @@ async function load(){
   return d.lesson;
 }
 
-/* Telling the class. A failure here is never shown in front of the room:
-   the slides carry on, and following live simply does not happen. */
-function liveTo(){
-  if (OFFLINE || !group || !$("live").checked) return null;
-  const post = (body) => fetch(API + "/api/release", { method: "POST", headers: window.teacherAuth.json(),
-    body: JSON.stringify(Object.assign({ lesson: lessonId, group }, body)), keepalive: true }).catch(() => {});
-  return { post: (n) => post({ live: true, slide: n }), stop: () => post({ live: false }) };
-}
-
 function paint(){
   $("title").textContent = lesson.title || "Slides";
   const n = lesson.slides.list.length;
@@ -87,10 +76,9 @@ function paint(){
     grid.appendChild(b);
   });
   $("go").disabled = false;
-  $("liveRow").hidden = OFFLINE || !group;
 }
 $("go").addEventListener("click", () => {
-  window.hubSlides.present(lesson.slides, { start, live: liveTo(), liveLabel: "Live to " + group, onClose: (at) => { start = at; paint(); } });
+  window.hubSlides.present(lesson.slides, { start, onClose: (at) => { start = at; paint(); } });
 });
 
 load().then(l => {

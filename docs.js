@@ -5,9 +5,9 @@
                    open: true }    // open as the lesson starts
 
    A document is docked down the right with the lesson on the left, and
-   that is the only place it goes: it can fill the screen, shrink to a
-   bubble or be closed, but it cannot be floated off or moved to the
-   left. A worksheet is read alongside the work, and one that can come
+   that is the only place it goes: it can fill the screen for a moment or
+   be closed, but it cannot be floated off, shrunk to a bubble or moved
+   to the left. A worksheet is read alongside the work, and one that can come
    loose ends up dragged over the very task it is for. (Lessons saved when
    a document could be unlocked still say unlock; it is ignored.)
 
@@ -63,14 +63,14 @@ function viewer(o){
   const list = docs.list;
   const KEY = "hub_docs_view_" + (o.lessonId || "x");
   let view = Object.assign({ mode: "right", side: 440, zoom: 1, at: 0, tops: {} }, store(KEY) || {});
-  /* only the right, full screen or a bubble now; anything else saved from
-     before (left, floating) is the right */
-  if (!/^(right|full|mini)$/.test(view.mode)) view.mode = "right";
+  /* only the right or full screen now; anything else saved from before
+     (left, floating, the bubble) is the right */
+  if (!/^(right|full)$/.test(view.mode)) view.mode = "right";
   let cur = Math.min(Math.max(0, view.at || 0), list.length - 1);
   let shown = false;
   const save = () => store(KEY, view);
   const narrow = () => matchMedia(NARROW).matches;
-  /* where it goes back to from full screen or the bubble */
+  /* where it goes back to from full screen */
   const docked = () => narrow() ? "sheet" : "right";
 
   /* ---- the button in the top bar ---- */
@@ -79,7 +79,7 @@ function viewer(o){
     "Open the " + (list.length > 1 ? "documents" : "document"));
   if (o.before && o.before.parentNode) o.before.parentNode.insertBefore(open, o.before);
   else document.body.appendChild(open);
-  open.addEventListener("click", () => { if (shown && view.mode !== "mini") hide(); else show(); });
+  open.addEventListener("click", () => { if (shown) hide(); else show(); });
 
   /* ---- the window ---- */
   const win = div("sl-win dc-win no-print");
@@ -101,9 +101,8 @@ function viewer(o){
   const bSmaller = btn("sl-tool", "A&#8722;", "Smaller writing");
   const bBigger = btn("sl-tool", "A+", "Bigger writing");
   const bFull = btn("sl-tool", "&#9974;", "Fill the screen");
-  const bMini = btn("sl-tool", "&#8212;", "Shrink to a bubble");
   const bClose = btn("sl-tool", "&#10005;", "Close the document");
-  [bContents, bSmaller, bBigger, bFull, bMini, bClose].forEach(b => tools.appendChild(b));
+  [bContents, bSmaller, bBigger, bFull, bClose].forEach(b => tools.appendChild(b));
   bar.appendChild(name); bar.appendChild(tools);
   const menu = div("dc-menu"); menu.hidden = true;
   const stage = div("dc-stage");
@@ -192,7 +191,6 @@ function viewer(o){
   function show(){
     shown = true;
     win.hidden = false;
-    if (view.mode === "mini") view.mode = "right";
     setMode(view.mode, true);
     if (!stage.firstElementChild) paint();
   }
@@ -204,11 +202,7 @@ function viewer(o){
     place();
   }
   bFull.addEventListener("click", () => setMode(view.mode === "full" ? "right" : "full", true));
-  bMini.addEventListener("click", () => setMode("mini", true));
   bClose.addEventListener("click", hide);
-  win.addEventListener("click", (e) => {
-    if (view.mode === "mini" && !e.target.closest(".sl-tools")) setMode("right");
-  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && shown && view.mode === "full"){ setMode("right", true); e.preventDefault(); }
   });

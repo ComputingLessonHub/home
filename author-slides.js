@@ -442,10 +442,6 @@ window.slideIds = function(l){
   return new Set(l && l.slides && Array.isArray(l.slides.list) ? l.slides.list.map(s => s.id).filter(Boolean) : []);
 };
 
-/* The experiments are a student's, but a teacher trying them in the
-   preview turns them on here. */
-if (typeof window.settingsSection !== "function")
-  window.settingsSection = (holder) => { if (window.hubSlides) window.hubSlides.settingsGroup(holder); };
 
 document.addEventListener("DOMContentLoaded", () => {
   const b = document.getElementById("slidesBtn");

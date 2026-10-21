@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="look.css">
 <script src="icons.js"></script>
-<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");if(_p.look!=="classic")document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
+<script>try{var _p=JSON.parse(localStorage.getItem("hub_prefs")||"{}");document.documentElement.dataset.look="new";if(_p.bg)document.documentElement.dataset.bg=_p.bg;if(_p.font)document.documentElement.dataset.font=_p.font;}catch(e){}</script>
 <script src="pyhub.js"></script>
 <script src="webhub.js"></script>
 <script src="autograder.js"></script>
@@ -1203,7 +1203,7 @@ function hideWaitModal(){ $("waitModal").hidden = true; }
    teacher looking at work ever sees this, and only where the id matches, so
    a leftover box from another lesson cannot stand in for the real one. */
 /* The lesson's slides, if it has any: a button in the top bar and a window
-   a student can float, pin beside the work, fill the screen with or shrink
+   a student can float, pin beside the work or fill the screen with
    (slides.js). Never on a page made for marking or for the PDF, where
    there is nobody to move it about. */
 let slideViewer = null;
@@ -1215,9 +1215,6 @@ function startSlides(l){
     deck: l.slides, lessonId, before: $("setBtn"),
     /* the builder can tie a slide to a page; the page carries its id */
     slideForPage: (i) => { const b = l.blocks && l.blocks[i]; return b && b.slide ? b.slide : null; },
-    /* Following the teacher needs to know the class, and there is no class
-       to follow in offline mode or in a teacher's own preview. */
-    live: (!OFFLINE && group && !spectate) ? { lesson: lessonId, group } : null,
     present: teacher ? (at) => window.hubSlides.present(l.slides, { start: at }) : null
   });
 }
@@ -1232,9 +1229,6 @@ function startDocs(l){
     docForPage: (i) => { const b = l.blocks && l.blocks[i]; return b && b.doc ? b.doc : null; }
   });
 }
-window.settingsSection = (holder) => {
-  if (window.hubSlides && lesson && window.hubSlides.has(lesson)) window.hubSlides.settingsGroup(holder);
-};
 
 function handedLesson(){
   if (OFFLINE || !spectate || viewParam === null) return null;

@@ -582,8 +582,7 @@
       /* Presenting is part of teaching the lesson, the same as pacing it, so
          it lives here. It was on the old Manage in admin.html and was lost
          when this pop-up replaced it. Its own tab, because it goes full screen
-         and the console should still be there afterwards; with a class named,
-         anyone following live turns with it. */
+         and the console should still be there afterwards. */
       if (lessonJson && lessonJson.slides && Array.isArray(lessonJson.slides.list) && lessonJson.slides.list.length){
         const pres = el("button","btn-ghost pace-present","▶ Present slides");
         pres.type = "button";
