@@ -6612,6 +6612,9 @@ body.has-rail #setBtn{display:none}
 
 /* ---------- Manage: pacing a lesson ---------- */
 .pacebox .pace-sub{margin:-6px 0 14px; color:var(--muted); font-size:var(--text-base); text-align:left}
+.pace-top{display:flex; align-items:flex-start; justify-content:space-between; gap:8px 12px; flex-wrap:wrap}
+.pace-top .pace-sub{flex:1 1 220px}
+.pace-present{flex:none; margin:-10px 0 12px}
 .pacebox h2{text-align:left}
 .pace-head{display:grid; grid-template-columns:auto 1fr; align-items:center; gap:10px 16px; text-align:left;
   padding:14px 16px; border-radius:var(--rad-lg); background:var(--panel-2); border:1.5px solid var(--line); margin-bottom:10px}

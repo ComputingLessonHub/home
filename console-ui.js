@@ -577,7 +577,20 @@
       x.addEventListener("click", closeModal);
       box.appendChild(x);
       modalTitle(box, titleOf(lessonId));
-      const sub = el("p","pace-sub"); sub.id = "paceSub"; box.appendChild(sub);
+      const top = el("div","pace-top"); box.appendChild(top);
+      const sub = el("p","pace-sub"); sub.id = "paceSub"; top.appendChild(sub);
+      /* Presenting is part of teaching the lesson, the same as pacing it, so
+         it lives here. It was on the old Manage in admin.html and was lost
+         when this pop-up replaced it. Its own tab, because it goes full screen
+         and the console should still be there afterwards; with a class named,
+         anyone following live turns with it. */
+      if (lessonJson && lessonJson.slides && Array.isArray(lessonJson.slides.list) && lessonJson.slides.list.length){
+        const pres = el("button","btn-ghost pace-present","▶ Present slides");
+        pres.type = "button";
+        pres.addEventListener("click", () => window.open("slides.html?id=" + encodeURIComponent(lessonId) +
+                                                         "&group=" + encodeURIComponent(cls), "_blank"));
+        top.appendChild(pres);
+      }
       const head = el("div","pace-head"); head.id = "paceHead"; box.appendChild(head);
       const msg = el("p","hint pace-msg",""); msg.id = "relMsg"; box.appendChild(msg);
       const list = el("div","pace-list"); list.id = "paceList"; box.appendChild(list);

@@ -9,6 +9,7 @@
    wants to know whether the thing they noticed is meant to be there, not a
    full account of the work. */
 window.CHANGES = [
+  { v:"14.5.1", text:"Present slides is back in Manage, beside Pacing for the class, on any lesson that has slides." },
   { v:"14.5", text:"The Clearer look is part of the New look, with lesson tasks a little wider. A new page in a lesson now lights up as it arrives, and any page on the progress bar can be pressed, waiting like Continue if it is not open yet. Students can open their own profile from their name. Lessons and the sandbox have a Home button with the logo, the console has a menu button on small screens, the builder's pages are numbered with their titles on hover, and every icon is drawn the same way." },
   { v:"14.4.1", text:"The Clearer look keeps lesson tasks almost as wide as before, all the same width on every page. Settings has one Dyslexia friendly font switch in place of the three fonts: Lexend, with more space between letters, words and lines, bold instead of slanted words, and no words in capitals." },
   { v:"14.4", text:"A Clearer look to try in Settings, off until you turn it on. Text and box edges are easier to see, there is a clear ring round whatever the keyboard is on, the smallest text is a little bigger, and a lesson's tasks line up under the title in the middle of the screen instead of running across the whole width." },
