@@ -799,10 +799,39 @@
     psdSmart:   (L) => L.filter(l => l.k === "smart").length,
     psdFonts:   (L) => new Set([].concat.apply([], L.map(l => l.fo || []))).size
   };
-  function psdCount(stats, kind){
-    const L = (stats && Array.isArray(stats.layers)) ? stats.layers : [];
+  /* Which layers are showing in the picture. A layer is off when its own
+     eye is, when any group it sits in is, or when it is clipped to a layer
+     that is off, since a clipped layer only shows through the one under it.
+     The list runs top to bottom with a group's contents after the group, so
+     groups are settled walking down and clipping walking back up, the base
+     of a clipped layer being the first unclipped one below it. */
+  function showing(L){
+    const off = new Array(L.length);
+    const groupOff = [];            // by depth, whether the group open at that depth is off
+    L.forEach((l, i) => {
+      const d = l.d || 0;
+      groupOff.length = Math.min(groupOff.length, d);
+      off[i] = !!l.h || groupOff.some(Boolean);
+      if (l.k === "group") groupOff[d] = off[i];
+    });
+    let baseOff = false;
+    for (let i = L.length - 1; i >= 0; i--){
+      if (L[i].c) off[i] = off[i] || baseOff;
+      else baseOff = off[i];
+    }
+    return L.filter((l, i) => !off[i]);
+  }
+  /* Every layer by default; only the ones showing when asked. */
+  function psdCount(stats, kind, onlyShowing){
+    let L = (stats && Array.isArray(stats.layers)) ? stats.layers : [];
+    if (onlyShowing) L = showing(L);
     return COUNT[kind] ? COUNT[kind](L) : null;
   }
+  /* Hidden layers count: work switched off is still work done, and a
+     student hiding a layer to compare two ideas should not lose the tick.
+     A teacher should still know when that is what decided it, so a line
+     whose answer would be different with only the showing layers carries
+     a flag saying so. */
   window.runPsdChecks = function(checks, stats){
     return (checks || []).map(c => {
       const label = (c && c.label) || "Check";
@@ -810,15 +839,17 @@
       const n = psdCount(stats, c && c.kind);
       if (n === null) return { ok:false, broken:true, label, note:"Unknown kind of check: " + (c && c.kind) };
       const want = Math.max(0, parseInt(c.count, 10) || 1);
-      const ok = !stats ? false
-               : c.compare === "exactly" ? n === want
-               : c.compare === "atMost" ? n <= want
-               : n >= want;
+      const meets = (k) => c.compare === "exactly" ? k === want : c.compare === "atMost" ? k <= want : k >= want;
+      const ok = !!stats && meets(n);
       /* As on a coding task, a line not met yet says only the teacher's hint. */
-      return { label, ok, note: ok ? "" : String(c.hint || "").trim() };
+      const out = { label, ok, note: ok ? "" : String(c.hint || "").trim() };
+      if (stats && meets(psdCount(stats, c.kind, true)) !== ok)
+        out.flag = ok ? "From a hidden layer" : "Hidden layers counted";
+      return out;
     });
   };
   window.psdCount = psdCount;
+  window.psdShowing = showing;
 
   window.readPsd = readPsd;
   window.isPsdFile = (file) => !!file && (/\.psd$/i.test(file.name || "") || file.type === "image/vnd.adobe.photoshop");

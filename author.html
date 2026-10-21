@@ -2993,7 +2993,11 @@ const SCRATCH_CHECKS = [
   ["runCount",   "Clicks the green flag at least...", "number"]
 ];
 /* What a Photoshop file can be checked for. Each counts something in the
-   file's layers (runPsdChecks in psd.js), so every one takes how many. */
+   file's layers (runPsdChecks in psd.js), so every one takes how many.
+   Smart objects are no longer offered: a picture pasted in is one until
+   it is rasterised, and a student editing it will rasterise it, so the
+   line rewarded leaving work untouched. psd.js still counts psdSmart, so
+   a lesson that already has the line keeps working. */
 const PSD_CHECKS = [
   ["psdText",    "Text layers",                   "count"],
   ["psdImages",  "Image layers (not the background)", "count"],
@@ -3005,10 +3009,12 @@ const PSD_CHECKS = [
   ["psdMasks",   "Layer masks",                   "count"],
   ["psdGroups",  "Groups",                        "count"],
   ["psdBlend",   "Layers with a blend mode",      "count"],
-  ["psdSmart",   "Smart objects",                 "count"],
   ["psdFonts",   "Different fonts",               "count"],
   ["psdLayers",  "Layers of any kind",            "count"]
 ];
+/* Kinds no longer offered, by name, so a line made with one still says
+   what it is in the builder rather than showing an empty dropdown. */
+const RETIRED_CHECKS = { psdSmart: "Smart objects" };
 const isPsdKind = (kind) => /^psd/.test(String(kind || ""));
 const USES_OPTIONS = ["for loop","while loop","if","else","elif","input","print",
                       "list","function","variable","comment","random","turtle"];
@@ -3384,7 +3390,7 @@ function checklistPopup(block, isWeb, psd){
            says what sort of check it is without being opened. */
         if (shut){
           const what = c.manual === true ? "Teacher checks this"
-            : ((kinds.find(k => k[0] === (c.kind || kinds[0][0])) || [])[1] || "");
+            : ((kinds.find(k => k[0] === (c.kind || kinds[0][0])) || [])[1] || RETIRED_CHECKS[c.kind] || "");
           const extra = (Array.isArray(c.more) ? c.more.filter(m => m && (m.value || m.count || m.selector)) : []).length;
           head.appendChild(el("span","checkkind",
             what + (extra ? "  +" + extra + " more" : "")));
@@ -3488,6 +3494,11 @@ function checklistPopup(block, isWeb, psd){
           o.value = k[0]; o.textContent = k[1];
           pick.appendChild(o);
         });
+        if (RETIRED_CHECKS[c.kind] && !kinds.some(k => k[0] === c.kind)){
+          const o = document.createElement("option");
+          o.value = c.kind; o.textContent = RETIRED_CHECKS[c.kind];
+          pick.appendChild(o);
+        }
         pick.value = c.kind || kinds[0][0];
         pick.addEventListener("change", () => {
           c.kind = pick.value;
