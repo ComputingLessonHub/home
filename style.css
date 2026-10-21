@@ -636,42 +636,129 @@ html[data-bg=dark] .shot-full-btn:hover,html[data-bg=night] .shot-full-btn:hover
    showPictureFull's sums assume. */
 .shot-viewer-img{width:100%; height:100%; object-fit:contain; transform-origin:0 0}
 
-/* A screenshot task's picture that came from a Photoshop file, and what the
-   teacher is shown about how it was made. Three classes on the pop-up so it
-   beats .modal.wide wherever that ends up, and reads left to right, being
-   lists rather than a message. */
+/* A screenshot task's picture that came from a Photoshop file. */
 .psd-from{font-size:14px; color:var(--muted); text-align:center; margin:-6px 0 12px; overflow-wrap:anywhere}
 .psd-from[hidden],.psd-details-btn[hidden],.psd-reading[hidden]{display:none}
 .psd-reading{font-weight:600; color:var(--text)}
-.modal.wide.psd-modal{max-width:760px; text-align:left}
-.psd-modal .modal-text{margin-bottom:18px; overflow-wrap:anywhere}
-.psd-h{font-size:16px; margin:22px 0 10px}
-.psd-tiles{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px}
-.psd-tile{border:1.5px solid var(--line-2); border-radius:12px; padding:10px 8px; text-align:center; background:var(--panel)}
-.psd-tile b{display:block; font-size:24px; line-height:1.1}
-.psd-tile span{display:block; font-size:12.5px; color:var(--muted); margin-top:3px}
-.psd-tile.none{opacity:.55}
-.psd-chips{display:flex; flex-wrap:wrap; gap:6px}
-.psd-chip{padding:5px 11px; border-radius:999px; background:var(--mint-dim); color:var(--text); font-size:13.5px; font-weight:600}
-.psd-none{font-size:14px; color:var(--muted); margin:6px 0 0}
-.psd-layers{list-style:none; margin:0; padding:0; border:1.5px solid var(--line-2); border-radius:12px; overflow:hidden}
-.psd-layer{display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:7px 10px; border-top:1px solid var(--line); font-size:14px}
-.psd-layer:first-child{border-top:0}
-.psd-layer.grp{background:var(--panel-2); font-weight:700}
-.psd-layer.off .psd-lname{color:var(--muted); text-decoration:line-through}
-.psd-lname{flex:1 1 140px; min-width:0; overflow-wrap:anywhere}
-.psd-kind{flex:none; min-width:84px; font-size:12px; font-weight:700; color:var(--muted)}
-.psd-tag{font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--line-2); color:var(--muted); white-space:nowrap}
-.psd-texts{display:flex; flex-direction:column; gap:8px}
-.psd-text{border-left:4px solid var(--amber); padding:4px 0 4px 12px}
-.psd-text p{margin:0 0 4px; white-space:pre-wrap; overflow-wrap:anywhere}
-.psd-facts{display:grid; grid-template-columns:max-content minmax(0,1fr); gap:6px 16px; margin:0; font-size:14.5px}
-.psd-facts dt{color:var(--muted)}
-.psd-facts dd{margin:0; overflow-wrap:anywhere}
-@media (max-width:600px){
-  .psd-tiles{grid-template-columns:repeat(2, minmax(0,1fr))}
-  .psd-facts{grid-template-columns:minmax(0,1fr)}
-  .psd-facts dd{margin-bottom:6px}
+/* The full screen view of a picture from a Photoshop file, dressed as
+   Photoshop's own window: menu bar, document tab, the canvas on a dark
+   workspace and the panels down the right. Photoshop's greys whatever the
+   site's theme, because the point is that it looks like Photoshop. Two
+   classes throughout so .shot-viewer's centring and padding lose. */
+.shot-viewer.ps-win{
+  --ps-app:#2b2b2b; --ps-panel:#323232; --ps-head:#282828; --ps-line:#1c1c1c; --ps-field:#262626;
+  --ps-text:#d4d4d4; --ps-dim:#9a9a9a; --ps-sel:#4d4d4d; --ps-work:#1f1f1f; --ps-blue:#1473e6;
+  --ps-bright:#f0f0f0; --ps-hover:#3a3a3a; --ps-close:#c42b1c; --ps-red:#e03c31; --ps-amber:#e3b65c;
+  --ps-logo:#001e36; --ps-logo-ink:#31a8ff; --ps-chip:#1d3b5c; --ps-chip-ink:#e6f1ff; --ps-vec:#5a5a5a;
+  padding:0; flex-direction:column; align-items:stretch; justify-content:stretch;
+  background:var(--ps-app); color:var(--ps-text); cursor:default;
+  font:13px/1.35 "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+.shot-viewer.ps-win .shot-viewer-close{
+  position:static; flex:none; margin-left:auto; width:44px; height:100%; border-radius:0;
+  background:transparent; color:var(--ps-text); font-size:24px;
+}
+.shot-viewer.ps-win .shot-viewer-close:hover{background:var(--ps-close); color:var(--ps-bright)}
+.ps-menu{flex:none; display:flex; align-items:center; height:36px; background:var(--ps-app);
+  border-bottom:1px solid var(--ps-line); overflow:hidden}
+.ps-logo{flex:none; display:flex; align-items:center; justify-content:center; width:24px; height:22px; margin:0 10px;
+  border-radius:4px; background:var(--ps-logo); color:var(--ps-logo-ink); border:1.5px solid var(--ps-logo-ink); font-weight:700; font-size:12px}
+.ps-menu-words{display:flex; gap:2px; min-width:0; overflow:hidden; white-space:nowrap}
+.ps-menu-words span{padding:3px 8px; color:var(--ps-text)}
+.ps-main{flex:1; min-height:0; display:flex}
+.ps-doc{flex:1; min-width:0; display:flex; flex-direction:column; background:var(--ps-work)}
+.ps-tab{flex:none; display:flex; height:30px; background:var(--ps-head); border-bottom:1px solid var(--ps-line)}
+.ps-tab-name{display:flex; align-items:center; max-width:100%; padding:0 14px; background:var(--ps-panel);
+  border-right:1px solid var(--ps-line); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--ps-bright)}
+.ps-canvas{flex:1; min-height:0; position:relative; overflow:hidden; padding:18px; cursor:zoom-out}
+/* the shadow belongs to the picture, not to the box object-fit leaves round it */
+.shot-viewer.ps-win .shot-viewer-img{filter:drop-shadow(0 3px 10px rgba(0,0,0,.55))}
+.ps-status{flex:none; display:flex; gap:18px; height:24px; align-items:center; padding:0 10px;
+  background:var(--ps-app); border-top:1px solid var(--ps-line); color:var(--ps-dim); font-size:12px; white-space:nowrap; overflow:hidden}
+.ps-zoom{min-width:44px; color:var(--ps-text)}
+
+.ps-side{flex:none; width:320px; overflow-y:auto; overscroll-behavior:contain; background:var(--ps-line);
+  border-left:1px solid var(--ps-line); display:flex; flex-direction:column; gap:2px}
+.ps-panel{flex:none; background:var(--ps-panel)}
+.ps-panel-head{display:flex; height:28px; background:var(--ps-head)}
+.ps-panel-tab{display:flex; align-items:center; padding:0 12px; background:var(--ps-panel); color:var(--ps-bright); font-weight:600}
+.ps-panel-body{padding:8px 10px 10px}
+.ps-layers-panel .ps-panel-body{padding:0}
+.ps-note{margin:8px 0 0; color:var(--ps-dim); font-size:12px}
+
+.ps-lctl{display:flex; flex-direction:column; gap:6px; padding:8px 10px; border-bottom:1px solid var(--ps-line)}
+.ps-lnums{display:flex; align-items:center; gap:6px}
+.ps-lab{color:var(--ps-dim)}
+.ps-lab + .ps-field + .ps-lab{margin-left:auto}
+.ps-field{display:inline-block; padding:2px 8px; background:var(--ps-field); border:1px solid var(--ps-hover); border-radius:3px; color:var(--ps-text)}
+.ps-blend{position:relative; padding-right:22px}
+.ps-blend::after{content:""; position:absolute; right:8px; top:50%; margin-top:-2px;
+  border:4px solid transparent; border-top-color:var(--ps-dim); border-bottom:0}
+.ps-num{min-width:52px; text-align:right}
+.ps-layers{list-style:none; margin:0; padding:0}
+.ps-layer{display:flex; align-items:stretch; min-height:40px; border-bottom:1px solid var(--ps-line); cursor:pointer}
+.ps-layer:hover{background:var(--ps-hover)}
+.ps-layer.ps-on{background:var(--ps-sel)}
+.ps-layer.ps-effect{min-height:24px}
+.ps-eye{flex:none; width:30px; display:flex; align-items:center; justify-content:center; color:var(--ps-text);
+  border-right:1px solid var(--ps-line)}
+.ps-eye svg{width:16px; height:16px}
+.ps-lbody{flex:1; min-width:0; display:flex; align-items:center; gap:6px; padding:4px 8px 4px 6px}
+.ps-twist{flex:none; width:10px; color:var(--ps-text); font-size:13px}
+.ps-clip{flex:none; color:var(--ps-dim)}
+.ps-clip svg{width:14px; height:14px; display:block}
+.ps-thumb{flex:none; position:relative; width:36px; height:28px; display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--ps-line); color:var(--ps-bright); font:700 16px/1 Georgia, serif;
+  background:repeating-conic-gradient(#cfcfcf 0 25%, #fff 0 50%) 0 0/8px 8px}
+.ps-thumb svg{width:18px; height:18px}
+.ps-thumb.bg{background:#fff}
+.ps-thumb.k-text,.ps-thumb.k-adjust,.ps-thumb.k-fill,.ps-thumb.k-shape{background:var(--ps-work)}
+.ps-thumb.k-group{background:none; border-color:transparent; color:var(--ps-text)}
+.ps-thumb.k-group svg{width:20px; height:20px}
+.ps-layer.hid .ps-thumb{opacity:.5}
+.ps-smart{position:absolute; right:-1px; bottom:-1px; width:12px; height:12px}
+.ps-smart svg{width:12px; height:12px; display:block}
+.ps-chain{flex:none; width:6px; color:var(--ps-dim); margin:0 -3px}
+.ps-chain svg{width:6px; height:12px; display:block}
+.ps-mask{background:#fff}
+.ps-mask.vec{background:var(--ps-vec)}
+.ps-mask.off::before,.ps-mask.off::after{content:""; position:absolute; left:50%; top:-4px; bottom:-4px; width:2px;
+  margin-left:-1px; background:var(--ps-red); transform:rotate(38deg)}
+.ps-mask.off::after{transform:rotate(-38deg)}
+.ps-lname{flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.ps-lname.bg{font-style:italic}
+.ps-layer.grp .ps-lname{font-weight:600}
+.ps-effect .ps-lname{color:var(--ps-dim); font-size:12px}
+.ps-lnote{flex:none; max-width:45%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px;
+  color:var(--ps-amber)}
+.ps-fx{flex:none; font:italic 700 12px/1 Georgia, serif; color:var(--ps-text)}
+.ps-lock{flex:none; color:var(--ps-dim)}
+.ps-lock svg{width:13px; height:13px; display:block}
+.ps-lfoot{padding:6px 10px; color:var(--ps-dim); font-size:12px; background:var(--ps-head)}
+
+.ps-counts{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:4px; margin-bottom:8px}
+.ps-count{padding:6px 2px; text-align:center; background:var(--ps-field); border-radius:3px}
+.ps-count b{display:block; font-size:18px; line-height:1.1; color:var(--ps-bright)}
+.ps-count span{display:block; font-size:10.5px; line-height:1.2; color:var(--ps-dim); margin-top:2px}
+.ps-count.none{opacity:.45}
+.ps-chips{display:flex; flex-wrap:wrap; gap:4px}
+.ps-chip{padding:3px 8px; border-radius:3px; background:var(--ps-chip); color:var(--ps-chip-ink); font-size:12px}
+.ps-text{padding:6px 0 6px 10px; border-left:3px solid var(--ps-blue); margin-bottom:6px}
+.ps-text p{margin:0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--ps-bright)}
+.ps-font{display:block; margin-top:3px; font-size:12px; color:var(--ps-dim)}
+.ps-links{list-style:none; margin:0; padding:0}
+.ps-links li{padding:4px 0; border-bottom:1px solid var(--ps-line); overflow-wrap:anywhere}
+.ps-links li:last-child{border-bottom:0}
+.ps-facts{display:grid; grid-template-columns:max-content minmax(0,1fr); gap:4px 12px; margin:0}
+.ps-facts dt{color:var(--ps-dim)}
+.ps-facts dd{margin:0; overflow-wrap:anywhere}
+/* Narrow, as in View Work's frame beside the marking column or on a phone:
+   the panels go under the picture rather than squeezing it to a strip. */
+@media (max-width:760px){
+  .ps-main{flex-direction:column}
+  .ps-doc{flex:none; height:55%}
+  .ps-side{flex:1; width:auto; border-left:0; border-top:1px solid var(--ps-line)}
+  .ps-menu-words{display:none}
 }
 /* only while zoomed, so a phone can still pinch the picture the usual way */
 .shot-viewer.zoomed .shot-viewer-img{cursor:grab; touch-action:none}

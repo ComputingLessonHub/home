@@ -8266,130 +8266,239 @@ function psdOneLine(st){
   if (sum.masks) bits.push(sum.masks + (sum.masks === 1 ? " mask" : " masks"));
   return "From " + (st.file || "a Photoshop file") + ": " + bits.join(", ");
 }
-function showPsdDetails(st){
+/* The picture full screen, laid out the way Photoshop itself would have
+   shown it: the canvas in the middle, the Layers panel and the rest down
+   the right in Photoshop's own greys. A teacher marking knows that window,
+   so the layers read at a glance, and nothing has to be opened on top of
+   the picture to see how it was made. It used to be a pop-up, which hid
+   the very picture it was describing.
+
+   This builds the window's pieces around a picture element it is handed;
+   showPictureFull keeps the zooming, and calls zoomed() so the percentage
+   in the document tab and the status bar follows the wheel. */
+const PS_ICON = {
+  eye: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2.1" fill="currentColor"/></svg>',
+  folder: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 3.5h4.6l1.5 1.6h6.9v7.4h-13z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
+  lock: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1" fill="currentColor"/><path d="M5.3 7V5.2a2.7 2.7 0 0 1 5.4 0V7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  chain: '<svg viewBox="0 0 8 16" aria-hidden="true"><rect x="1.5" y="1.5" width="5" height="6" rx="2.5" fill="none" stroke="currentColor"/><rect x="1.5" y="8.5" width="5" height="6" rx="2.5" fill="none" stroke="currentColor"/></svg>',
+  clip: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2.5v7h6.5M9 7l2.5 2.5L9 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  adjust: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 2.4a5.6 5.6 0 0 1 0 11.2z" fill="currentColor"/></svg>',
+  smart: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h7l3 3v9H3z" fill="#fff" stroke="#000" stroke-width="1"/><path d="M10 2v3h3" fill="none" stroke="#000" stroke-width="1"/></svg>',
+  vector: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 8 3l5 10z" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="6.6" y="1.6" width="2.8" height="2.8" fill="currentColor"/></svg>'
+};
+const PS_MENU = ["File","Edit","Image","Layer","Type","Select","Filter","3D","View","Plugins","Window","Help"];
+function psWindow(st, picture){
   const sum = psdSummary(st);
-  const back = el("div","modal-back");
-  const box = el("div","modal wide psd-modal");
-  const x = el("button","btn-ghost iconbtn modal-x","✕");
-  x.addEventListener("click", () => back.remove());
-  box.appendChild(x);
-  box.appendChild(el("h2","","Photoshop details"));
-  box.appendChild(el("p","modal-text", "Read from <b></b> when it was handed in."));
-  box.lastChild.querySelector("b").textContent = st.file || "the Photoshop file";
+  const layers = Array.isArray(st.layers) ? st.layers : [];
+  const mode = String(st.mode || "RGB").replace("Greyscale", "Grey");
+  const docName = (st.file || "Untitled.psd") + " @ ";
+  const docTail = "% (" + mode + "/" + (st.depth || 8) + ")";
 
-  const tiles = el("div","psd-tiles");
-  [["Layers", sum.layers], ["Groups", sum.groups], ["Text layers", sum.text],
-   ["Layer styles", sum.styled], ["Masks", sum.masks], ["Adjustment and fill", sum.adjust],
-   ["Shapes", sum.shapes], ["Smart objects", sum.smart]].forEach(([name, n]) => {
-    const t = el("div","psd-tile" + (n ? "" : " none"));
-    t.appendChild(el("b","", String(n)));
-    t.appendChild(el("span","", name));
-    tiles.appendChild(t);
+  const menu = el("div","ps-menu");
+  menu.appendChild(el("span","ps-logo","Ps"));
+  const words = el("span","ps-menu-words");
+  words.setAttribute("aria-hidden","true");
+  PS_MENU.forEach(w => words.appendChild(tel("span","", w)));
+  menu.appendChild(words);
+
+  /* the document: its tab, the grey workspace the picture sits in, and the
+     status bar along the bottom */
+  const doc = el("div","ps-doc");
+  const tab = el("div","ps-tab");
+  const tabName = tel("span","ps-tab-name","");
+  tab.appendChild(tabName);
+  const stage = el("div","ps-canvas");
+  stage.appendChild(picture);
+  const status = el("div","ps-status");
+  const statusZoom = tel("span","ps-zoom","");
+  status.appendChild(statusZoom);
+  status.appendChild(tel("span","", (st.w && st.h ? st.w + " px × " + st.h + " px" : "") +
+                                     (st.ppi ? " (" + st.ppi + " ppi)" : "")));
+  doc.appendChild(tab); doc.appendChild(stage); doc.appendChild(status);
+
+  const side = el("aside","ps-side");
+  side.setAttribute("aria-label","Photoshop details");
+  const panel = (title, cls) => {
+    const p = el("section","ps-panel" + (cls ? " " + cls : ""));
+    const head = el("div","ps-panel-head");
+    head.appendChild(tel("span","ps-panel-tab", title));
+    p.appendChild(head);
+    const body = el("div","ps-panel-body");
+    p.appendChild(body);
+    side.appendChild(p);
+    return body;
+  };
+  const facts = (into, rows) => {
+    const dl = el("dl","ps-facts");
+    rows.filter(r => r[1] !== "" && r[1] !== undefined && r[1] !== null && r[1] !== 0).forEach(([k, v]) => {
+      dl.appendChild(tel("dt","", k));
+      dl.appendChild(tel("dd","", String(v)));
+    });
+    if (dl.children.length) into.appendChild(dl);
+    return dl.children.length;
+  };
+  const note = (into, words) => into.appendChild(tel("p","ps-note", words));
+
+  /* ---- Layers ----
+     The selected layer's blend mode, opacity and fill sit above the list,
+     as they do in Photoshop, and clicking a layer selects it. */
+  const lp = panel("Layers", "ps-layers-panel");
+  const ctl = el("div","ps-lctl");
+  const blendBox = tel("span","ps-field ps-blend","");
+  const opBox = tel("span","ps-field ps-num",""), fillBox = tel("span","ps-field ps-num","");
+  ctl.appendChild(blendBox);
+  const nums = el("div","ps-lnums");
+  nums.appendChild(tel("span","ps-lab","Opacity:")); nums.appendChild(opBox);
+  nums.appendChild(tel("span","ps-lab","Fill:")); nums.appendChild(fillBox);
+  ctl.appendChild(nums);
+  lp.appendChild(ctl);
+
+  const list = el("ol","ps-layers");
+  let selected = null;
+  function pick(row, l){
+    if (selected) selected.classList.remove("ps-on");
+    selected = row;
+    if (row) row.classList.add("ps-on");
+    blendBox.textContent = (l && l.b) || (l && l.k === "group" ? "Pass Through" : "Normal");
+    opBox.textContent = (l && l.o !== undefined ? l.o : 100) + "%";
+    fillBox.textContent = (l && l.f !== undefined ? l.f : 100) + "%";
+  }
+  const lastReal = layers.length - 1;
+  layers.forEach((l, i) => {
+    const background = i === lastReal && l.k === "pixel" && !l.d && /^background$/i.test(String(l.n || "").trim());
+    const row = el("li","ps-layer" + (l.k === "group" ? " grp" : "") + (l.h ? " hid" : ""));
+    const eye = el("span","ps-eye", l.h ? "" : PS_ICON.eye);
+    eye.title = l.h ? "Hidden" : "Showing";
+    row.appendChild(eye);
+    const body = el("span","ps-lbody");
+    body.style.paddingLeft = (6 + (l.d || 0) * 18) + "px";
+    if (l.k === "group") body.appendChild(el("span","ps-twist","&#9662;"));
+    if (l.c) body.appendChild(el("span","ps-clip", PS_ICON.clip));
+    const thumb = el("span","ps-thumb k-" + l.k + (background ? " bg" : "") + (l.e ? " empty" : ""));
+    if (l.k === "group") thumb.innerHTML = PS_ICON.folder;
+    else if (l.k === "text") thumb.textContent = "T";
+    else if (l.k === "adjust" || l.k === "fill") thumb.innerHTML = PS_ICON.adjust;
+    else if (l.k === "shape") thumb.innerHTML = PS_ICON.vector;
+    else if (l.k === "smart") thumb.appendChild(el("span","ps-smart", PS_ICON.smart));
+    body.appendChild(thumb);
+    if (l.m || l.vm){
+      body.appendChild(el("span","ps-chain", PS_ICON.chain));
+      const mask = el("span","ps-thumb ps-mask" + (l.vm && !l.m ? " vec" : "") + (l.m === 2 ? " off" : ""));
+      if (l.vm && !l.m) mask.innerHTML = PS_ICON.vector;
+      mask.title = l.m === 2 ? "Layer mask, switched off" : l.m === 3 ? "Layer mask, nothing painted on it"
+                 : l.m ? "Layer mask" : "Vector mask";
+      body.appendChild(mask);
+    }
+    const name = tel("span","ps-lname" + (background ? " bg" : ""), l.n || "(no name)");
+    body.appendChild(name);
+    /* What Photoshop only shows for the selected layer, said on every row,
+       so a blend mode or a cut-out is not missed for want of a click. */
+    const extra = [];
+    if (l.b) extra.push(l.b);
+    if (l.o !== undefined) extra.push(l.o + "%");
+    if (l.cut) extra.push("cut out");
+    if (l.e) extra.push("empty");
+    if (extra.length) body.appendChild(tel("span","ps-lnote", extra.join(", ")));
+    if (l.fx && l.fx.length) body.appendChild(el("span","ps-fx","<i>fx</i>"));
+    if (background) body.appendChild(el("span","ps-lock", PS_ICON.lock));
+    row.appendChild(body);
+    row.title = (l.n || "") + (l.k === "text" && l.t && l.t !== l.n ? "\n" + l.t : "") +
+                "\n" + (l.a || PSD_KIND[l.k] || l.k) + (l.h ? ", hidden" : "");
+    row.addEventListener("click", () => pick(row, l));
+    list.appendChild(row);
+    if (!selected) pick(row, l);
+
+    /* A layer style is listed under its layer, Effects and then each one,
+       as Photoshop draws it. */
+    if (l.fx && l.fx.length){
+      const sub = (words, depth) => {
+        const r = el("li","ps-layer ps-effect" + (l.h ? " hid" : ""));
+        r.appendChild(el("span","ps-eye", PS_ICON.eye));
+        const b = el("span","ps-lbody");
+        b.style.paddingLeft = (6 + (l.d || 0) * 18 + depth) + "px";
+        b.appendChild(tel("span","ps-lname", words));
+        r.appendChild(b);
+        r.addEventListener("click", () => pick(row, l));
+        list.appendChild(r);
+      };
+      sub("Effects", 40);
+      l.fx.forEach(f => sub(f, 58));
+    }
   });
-  box.appendChild(tiles);
+  if (layers.length) lp.appendChild(list);
+  else { pick(null, null); note(lp, "Only a background, no layers."); }
+  const foot = [sum.layers + (sum.layers === 1 ? " layer" : " layers")];
+  if (sum.groups) foot.push(sum.groups + (sum.groups === 1 ? " group" : " groups"));
+  if (sum.hidden) foot.push(sum.hidden + " hidden");
+  lp.appendChild(tel("div","ps-lfoot", foot.join(", ") +
+    (layers.length >= 300 ? ". Only the first 300 are listed." : "")));
 
-  const section = (title) => { box.appendChild(el("h3","psd-h", title)); };
-  const chips = (list) => {
-    const row = el("div","psd-chips");
-    list.forEach(([name, n]) => {
-      const c = el("span","psd-chip");
-      c.textContent = n > 1 ? name + " ×" + n : name;
-      row.appendChild(c);
+  /* ---- Techniques ----
+     Not a Photoshop panel. It is the marking question, what did they use,
+     answered once rather than worked out by reading every row above. */
+  const tp = panel("Techniques");
+  const counts = el("div","ps-counts");
+  [["Layers", sum.layers], ["Text", sum.text], ["Layer styles", sum.styled], ["Shapes", sum.shapes],
+   ["Masks, smart objects and fills", sum.masks + sum.smart + sum.adjust], ["Groups", sum.groups]]
+    .forEach(([k, n]) => {
+      const c = el("div","ps-count" + (n ? "" : " none"));
+      c.appendChild(tel("b","", String(n)));
+      c.appendChild(tel("span","", k));
+      counts.appendChild(c);
     });
-    box.appendChild(row);
-  };
-  const facts = (rows) => {
-    const dl = el("dl","psd-facts");
-    rows.filter(r => r[1] !== "" && r[1] !== undefined && r[1] !== null).forEach(([k, v]) => {
-      dl.appendChild(el("dt","", k));
-      const dd = el("dd"); dd.textContent = String(v); dl.appendChild(dd);
-    });
-    box.appendChild(dl);
-  };
-
-  section("Techniques used");
+  tp.appendChild(counts);
   const used = [];
   sum.effects.forEach(e => used.push(e));
   if (sum.cut) used.push(["Cut out from a background", sum.cut]);
   if (sum.clipped) used.push(["Clipping mask", sum.clipped]);
-  sum.blends.forEach(([name, n]) => used.push(["Blend mode: " + name, n]));
+  sum.blends.forEach(([n, k]) => used.push(["Blend mode: " + n, k]));
   if (sum.faded) used.push(["Opacity or fill changed", sum.faded]);
   sum.adjustments.forEach(e => used.push(e));
   if (sum.deepest > 1) used.push(["Groups inside groups", 1]);
   if (st.placed && st.placed.length) used.push(["Placed images", st.placed.length]);
   if (st.guides) used.push(["Guides", st.guides]);
-  if (used.length) chips(used);
-  else box.appendChild(el("p","psd-none","No layer styles, masks, blend modes or adjustments."));
-  if (sum.cut) box.appendChild(el("p","psd-none",
-    "Cut out means part of an image layer has been made see-through, as the Magic Wand or Quick Selection " +
-    "and Delete leave it. A picture downloaded with no background looks the same in the file."));
+  if (used.length){
+    const chips = el("div","ps-chips");
+    used.forEach(([n, k]) => chips.appendChild(tel("span","ps-chip", k > 1 ? n + " ×" + k : n)));
+    tp.appendChild(chips);
+  } else note(tp, "No layer styles, masks, blend modes or adjustments.");
 
-  const layers = Array.isArray(st.layers) ? st.layers : [];
-  section("Layers, top to bottom" + (sum.hidden ? " (" + sum.hidden + " hidden)" : ""));
-  if (!layers.length) box.appendChild(el("p","psd-none","Only a background, no layers."));
-  else {
-    const list = el("ol","psd-layers");
-    layers.forEach(l => {
-      const li = el("li","psd-layer" + (l.h ? " off" : "") + (l.k === "group" ? " grp" : ""));
-      li.style.paddingLeft = (10 + (l.d || 0) * 22) + "px";
-      const name = el("span","psd-lname"); name.textContent = l.n || "(no name)";
-      li.appendChild(el("span","psd-kind k-" + l.k, l.a || PSD_KIND[l.k] || l.k));
-      li.appendChild(name);
-      const tags = [];
-      (l.fx || []).forEach(f => tags.push(f));
-      if (l.m) tags.push(l.m === 3 ? "Blank mask" : l.m === 2 ? "Mask (switched off)" : "Mask");
-      if (l.vm) tags.push("Vector mask");
-      if (l.cut) tags.push("Cut out");
-      if (l.c) tags.push("Clipped");
-      if (l.b) tags.push(l.b);
-      if (l.o !== undefined) tags.push("Opacity " + l.o + "%");
-      if (l.f !== undefined) tags.push("Fill " + l.f + "%");
-      if (l.h) tags.push("Hidden");
-      if (l.e) tags.push("Empty");
-      tags.forEach(t => { const s = el("span","psd-tag"); s.textContent = t; li.appendChild(s); });
-      list.appendChild(li);
-    });
-    box.appendChild(list);
-    if (layers.length >= 300) box.appendChild(el("p","psd-none","Only the first 300 layers are listed."));
-  }
-
+  /* ---- Character: the words, and what they are set in ---- */
   const texts = layers.filter(l => l.k === "text");
   if (texts.length){
-    section("Words in text layers");
-    const tl = el("div","psd-texts");
+    const cp = panel("Character");
     texts.forEach(l => {
-      const q = el("div","psd-text");
-      const said = el("p",""); said.textContent = l.t || "(empty)";
-      q.appendChild(said);
-      if (l.fo && l.fo.length){
-        const f = el("span","psd-tag"); f.textContent = l.fo.map(psdFontName).join(", "); q.appendChild(f);
-      }
-      tl.appendChild(q);
+      const q = el("div","ps-text");
+      q.appendChild(tel("p","", l.t || "(empty)"));
+      if (l.fo && l.fo.length) q.appendChild(tel("span","ps-font", l.fo.map(psdFontName).join(", ")));
+      cp.appendChild(q);
     });
-    box.appendChild(tl);
-    if (sum.fonts.length) facts([["Fonts used", sum.fonts.map(f => psdFontName(f[0])).join(", ")]]);
   }
 
+  /* ---- Links: Photoshop's own name for the files placed into it ---- */
   if (st.placed && st.placed.length){
-    section("Images placed into it");
-    chips(st.placed.map(n => [n, 1]));
+    const kp = panel("Links");
+    const ul = el("ul","ps-links");
+    st.placed.forEach(n => ul.appendChild(tel("li","", n)));
+    kp.appendChild(ul);
   }
 
-  section("The file");
-  const mb = st.bytes ? (st.bytes / 1048576).toFixed(st.bytes < 10485760 ? 1 : 0) + " MB" : "";
-  facts([
-    ["Size on disk", mb],
-    ["Canvas", st.w && st.h ? st.w + " × " + st.h + " pixels" : ""],
-    ["Resolution", st.ppi ? st.ppi + " pixels per inch" : ""],
-    ["Colour", (st.mode || "") + (st.depth ? ", " + st.depth + " bit" : "")],
+  /* ---- Properties of the document ---- */
+  const pp = panel("Properties");
+  facts(pp, [
+    ["Canvas", st.w && st.h ? st.w + " × " + st.h + " px" : ""],
+    ["Resolution", st.ppi ? st.ppi + " ppi" : ""],
+    ["Mode", (st.mode || "") + (st.depth ? ", " + st.depth + " bit" : "")],
+    ["File size", st.bytes ? (st.bytes / 1048576).toFixed(st.bytes < 10485760 ? 1 : 0) + " MB" : ""],
     ["Saved selections", st.alphas || ""],
     ["Layer comps", st.comps || ""],
-    ["Patterns saved in it", st.patterns || ""]
+    ["Patterns", st.patterns || ""]
   ]);
 
+  /* ---- History: the file's saves, not undo steps, so it says so ---- */
   if (st.created || st.modified || st.saves || st.tool){
-    section("History");
-    facts([
+    const hp = panel("History");
+    facts(hp, [
       ["Made with", st.tool || ""],
       ["Started", st.created ? psdWhen(st.created) : ""],
       ["Last saved", st.modified ? psdWhen(st.modified) : ""],
@@ -8397,14 +8506,18 @@ function showPsdDetails(st){
       ["Days worked on", st.days || ""],
       ["Other files copied in", st.ancestors || ""]
     ]);
-    box.appendChild(el("p","psd-none",
-      "Started is when the file was first made. A file that began as a starter file you handed out shows when you made that."));
   }
 
-  scrollBody(box);
-  back.appendChild(box);
-  back.addEventListener("mousedown", (e) => { if (e.target === back) back.remove(); });
-  document.body.appendChild(back);
+  const main = el("div","ps-main");
+  main.appendChild(doc); main.appendChild(side);
+  return {
+    menu, main, stage,
+    zoomed(pct){
+      const p = pct >= 10 ? Math.round(pct) : Math.round(pct * 10) / 10;
+      tabName.textContent = docName + p + docTail;
+      statusZoom.textContent = p + "%";
+    }
+  };
 }
 
 /* ---------- IMAGE: paste a screenshot, or pick a file ----------
@@ -8452,7 +8565,7 @@ function shrinkDrawn(source, w, h){
 /* A screenshot squeezed into the page is often too small to read code in,
    for the student checking it and the teacher marking it. View Work shows
    this same page inside a frame, so this one button serves both. */
-function fullScreenButton(getSrc){
+function fullScreenButton(getSrc, getPsd){
   const btn = el("button","shot-full-btn",
     '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
     '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>');
@@ -8462,7 +8575,7 @@ function fullScreenButton(getSrc){
   btn.addEventListener("click", () => {
     const src = getSrc();
     const item = btn.closest(".pg-item");
-    if (src) showPictureFull(src, item ? item.dataset.blockId : "");
+    if (src) showPictureFull(src, item ? item.dataset.blockId : "", getPsd ? getPsd() : null);
   });
   return btn;
 }
@@ -8483,7 +8596,7 @@ function reopenFullPicture(){
   };
   setTimeout(go, 0);
 }
-function showPictureFull(src, blockId){
+function showPictureFull(src, blockId, psd){
   /* the marking screen around an embedded view keeps it open between students */
   const tellParent = (id) => {
     if (embedParam === null || !blockId) return;
@@ -8497,7 +8610,16 @@ function showPictureFull(src, blockId){
   big.src = src; big.alt = "Screenshot, full screen";
   const x = el("button","shot-viewer-close","&times;");
   x.type = "button"; x.title = "Close"; x.setAttribute("aria-label","Close full screen");
-  view.appendChild(big); view.appendChild(x);
+  /* From a Photoshop file, the picture goes into a Photoshop window with
+     its layers down the right, and the close button into its menu bar. */
+  const ps = psd ? psWindow(psd, big) : null;
+  if (ps){
+    view.classList.add("ps-win");
+    view.setAttribute("aria-label","Photoshop file, full screen");
+    big.alt = "The Photoshop file's picture, full screen";
+    ps.menu.appendChild(x);
+    view.appendChild(ps.menu); view.appendChild(ps.main);
+  } else { view.appendChild(big); view.appendChild(x); }
   document.body.appendChild(view);
   let shut = false;
   function close(){
@@ -8505,6 +8627,7 @@ function showPictureFull(src, blockId){
     shut = true;
     document.removeEventListener("keydown", onKey, true);
     document.removeEventListener("fullscreenchange", onFsChange);
+    window.removeEventListener("resize", showZoom);
     if (document.fullscreenElement === view && document.exitFullscreen) document.exitFullscreen().catch(() => {});
     view.remove();
     tellParent("");
@@ -8515,8 +8638,10 @@ function showPictureFull(src, blockId){
   document.addEventListener("keydown", onKey, true);
   view.addEventListener("click", (e) => {
     /* A click that was the end of dragging a zoomed picture about is not a
-       request to close it. */
+       request to close it. Nor is one on the Photoshop panels, which is a
+       teacher picking a layer or scrolling. */
     if (e.target === big && (dragged || scale > 1)) return;
+    if (ps && !ps.stage.contains(e.target)) return;
     close();
   });
   x.addEventListener("click", (e) => { e.stopPropagation(); close(); });
@@ -8526,9 +8651,25 @@ function showPictureFull(src, blockId){
      of code being read stays where it is while it grows. Zoomed in, the
      picture is dragged to move around it. */
   let scale = 1, tx = 0, ty = 0, dragged = false;
+  /* Photoshop's percentage is of the file's own pixels, not of the 1400px
+     copy kept, so it is worked out from what is drawn against the canvas
+     width the file gave. object-fit leaves the box the full stage, so the
+     drawn width is the picture fitted into the image box. */
+  const showZoom = () => {
+    if (!ps) return;
+    const nw = big.naturalWidth || 1, nh = big.naturalHeight || 1;
+    const fitted = Math.min(big.offsetWidth / nw, big.offsetHeight / nh) * nw;   // before the zoom transform
+    ps.zoomed(fitted ? fitted * scale / (psd.w || nw) * 100 : 100);
+  };
   const paint = () => { big.style.transform = "translate(" + tx + "px," + ty + "px) scale(" + scale + ")";
-                        view.classList.toggle("zoomed", scale > 1); };
-  view.addEventListener("wheel", (e) => {
+                        view.classList.toggle("zoomed", scale > 1); showZoom(); };
+  if (ps){
+    ps.zoomed(100);
+    if (big.complete) requestAnimationFrame(showZoom); else big.addEventListener("load", showZoom);
+    window.addEventListener("resize", showZoom);
+  }
+  /* Over the Photoshop panels the wheel scrolls them, as it would there. */
+  (ps ? ps.stage : view).addEventListener("wheel", (e) => {
     e.preventDefault();
     const box = big.getBoundingClientRect();
     const next = Math.min(8, Math.max(1, scale * Math.exp(-e.deltaY * 0.0015)));
@@ -8707,7 +8848,11 @@ function rImage(b){
   const img = el("img","shot-img");
   img.alt = "Your screenshot";
   shotFrame.appendChild(img);
-  shotFrame.appendChild(fullScreenButton(() => img.src));
+  /* A teacher full-screening a picture from a Photoshop file gets the
+     Photoshop window. Not on Original: the file read was the new one. */
+  const psdShown = () => (dataUrl && !showingOriginal && spectate && pdfParam === null) ? psdStatsFor(b.id) : null;
+  const fullBtn = fullScreenButton(() => img.src, psdShown);
+  shotFrame.appendChild(fullBtn);
   /* Original and Updated, for a screenshot taken again after feedback.
      Only there when the builder turned it on, and only once there is both
      a new picture and an earlier one to put beside it: a student who was
@@ -8735,11 +8880,12 @@ function rImage(b){
   const redo = el("button","btn-ghost","Replace picture");
   shotRow.appendChild(redo);
   /* Only a teacher is offered the details: a student knows what they did,
-     and a list of their own layers is one more thing on the page. */
+     and a list of their own layers is one more thing on the page. The
+     button opens the same Photoshop window full screen does. */
   const details = el("button","btn-ghost psd-details-btn","Photoshop details");
   details.type = "button";
   details.hidden = true;
-  details.addEventListener("click", () => { const st = psdStatsFor(b.id); if (st) showPsdDetails(st); });
+  details.addEventListener("click", () => { showingOriginal = false; paintCompare(); fullBtn.click(); });
   shotRow.appendChild(details);
   const fromFile = el("p","psd-from");
   fromFile.hidden = true;
