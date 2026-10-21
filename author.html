@@ -1473,7 +1473,8 @@ function compileOne(b, id, target){
              width: b.width || "100%", height: b.height || 520, confirm: b.confirm === true }));
     else if (b.type === "link")
       push(keepArrays({ type:"link", id, url: b.url || "", title: b.title || "Open this",   // the button needs words
-             heading: b.heading || "", task: b.task || "", confirm: b.confirm === true }));
+             heading: b.heading || "", task: b.task || "", confirm: b.confirm === true,
+             download: b.download === true, app: b.download ? (b.app || "") : "" }));
     /* An option written in a formatting box is kept as a line: its
        paragraph wrapper goes, so it sits beside its radio button. */
     else if (b.type === "mc")

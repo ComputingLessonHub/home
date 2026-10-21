@@ -1439,11 +1439,20 @@ EDITORS.embed = function(b, k){
 EDITORS.link = function(b, k){
   const { F, toggleRow, settings } = k;
   F("Heading (optional)", "heading");
-  F("Address", "url");
+  F("Address", "url",
+    { help: b.download ? "A file in the site's files folder is written as files/whatever.psd." : "" });
   F("Button label", "title");
   F("What to do there (optional)", "task", { area:true, rows:2 });
   settings(() => {
-    toggleRow([["confirm","Confirmation", false]]);
+    /* A starter file a student opens in another program, a .psd for
+       Photoshop say: the button saves it instead of opening a tab. */
+    toggleRow([["download","A file to download", false], ["confirm","Confirmation", false]], "",
+      "On for a starter file a student opens in another program, a .psd for Photoshop say. "
+      + "The button saves the file instead of opening a new tab.");
+    if (b.download)
+      F("It opens in (optional)", "app",
+        { placeholder:"Photoshop",
+          help:"Named in the line under the button, so they know what should happen when they click the file." });
   });
 };
 

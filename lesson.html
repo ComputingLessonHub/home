@@ -5315,8 +5315,21 @@ function rLink(b){
   const s = el("section");
   const a = el("a","btn-primary linkout", b.title || "Open this");
   a.href = b.url || "#";
-  a.target = "_blank"; a.rel = "noopener";
-  s.appendChild(a);
+  /* A starter file is saved rather than opened, and Windows then hands it to
+     whatever program owns that kind of file. That is as close as a web page
+     can get to starting Photoshop: browsers will not launch a program
+     themselves. The download attribute is only honoured for a file on this
+     site, so a file kept anywhere else opens in a tab as an ordinary link. */
+  if (b.download){
+    a.setAttribute("download", "");
+    s.appendChild(a);
+    s.appendChild(el("p","hint", b.app
+      ? "When it has downloaded, click on it and it will open in " + b.app + "."
+      : "When it has downloaded, click on it to open it."));
+  } else {
+    a.target = "_blank"; a.rel = "noopener";
+    s.appendChild(a);
+  }
   if (b.note) s.appendChild(el("p","hint", b.note));
   const wantTick = b.confirm === true;
   let cb = null;
