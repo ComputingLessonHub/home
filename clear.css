@@ -1,0 +1,185 @@
+/* =====================================================================
+   clear.css, the Clearer look.
+
+   Every rule here starts html[data-clear="on"], which Settings > Clearer
+   look sets. It is off until someone turns it on, so the site with it off is
+   exactly what style.css and look.css draw, and the two can be compared on
+   the same page by flicking the switch.
+
+   It sits on top of whichever look is on, New or Classic, and changes only
+   what was measured to be wrong in the browser, not what someone might
+   prefer:
+
+   - text and borders that fell short of WCAG AA contrast;
+   - a focus ring too faint to find, on boxes you type into;
+   - text set at 11 and 12px on the teacher's screens;
+   - a lesson whose tasks ran the full width of the screen from the left
+     while the brief above them sat in the middle;
+   - a question heading drawn differently from every other task heading,
+     and three coloured bars down the left of one page.
+
+   Loaded after look.css, and the attribute on html out-ranks a lone class in
+   either file. The few !important lines below are each beating one there.
+   ===================================================================== */
+
+/* ---------- colours that now pass ----------
+   Measured on the Light theme, which is the only one that has no data-bg.
+   Done Green on the page grey was 4.27:1, under the 4.5 small text needs:
+   "Looking good!", a Strength, "7 of 30 marked". Dim labels were 4.36:1.
+   A box you type into was outlined at 1.56:1 against white, and the edge
+   of a field has to reach 3:1 for someone to see there is a box there. */
+html[data-clear="on"]:not([data-bg]){
+  --mint:#276C4F;      /* 5.36:1 on the page grey, 6.3:1 on white */
+  --dim:#646462;       /* 5.2:1 on the page grey */
+  --field-line:#8C8C8A; /* 3.4:1 on white */
+}
+html[data-clear="on"][data-bg=night]{
+  --field-line:#7A7A84; /* 3.3:1 on the dark cards */
+}
+
+/* ---------- the smallest text, one step up ----------
+   The builder and the console both lean on 11 and 12px for counts, chips
+   and labels a teacher is reading at arm's length. Nothing in the scale is
+   now smaller than 12px. */
+html[data-clear="on"]{
+  --text-2xs:12px;
+  --text-xs:13px;
+}
+
+/* ---------- where the keyboard is ----------
+   One ring, everywhere, the same width and colour: what has focus should be
+   findable at a glance, by a student tabbing through a quiz and by a teacher
+   marking with the keyboard. Before this some things had a 2px ring, some a
+   soft tint and some nothing. !important because a good many rules in
+   style.css say outline:none on :focus with a selector longer than this. */
+html[data-clear="on"] :focus-visible{
+  outline:3px solid var(--amber) !important;
+  outline-offset:2px !important;
+}
+/* A box you type into keeps its ring tight to its edge, so it does not
+   reach over the label above it. */
+html[data-clear="on"] input:focus-visible,
+html[data-clear="on"] textarea:focus-visible,
+html[data-clear="on"] select:focus-visible,
+html[data-clear="on"] [contenteditable]:focus-visible{
+  outline-offset:1px !important;
+}
+/* The code editor's typing box lies transparently over the coloured code,
+   so a ring on it would sit inside the editor's frame. The frame takes it. */
+html[data-clear="on"] .ide-code:focus-visible{outline:none !important}
+html[data-clear="on"] .ide-editor:has(.ide-code:focus-visible){
+  outline:3px solid var(--amber); outline-offset:-3px;
+}
+
+/* ---------- boxes you can see are boxes ---------- */
+html[data-clear="on"] input[type=text]:not(:focus),
+html[data-clear="on"] input[type=password]:not(:focus),
+html[data-clear="on"] input[type=number]:not(:focus),
+html[data-clear="on"] input[type=date]:not(:focus),
+html[data-clear="on"] input[type=search]:not(:focus),
+html[data-clear="on"] input:not([type]):not(:focus),
+html[data-clear="on"] textarea:not(.ide-code):not(.code):not(:focus),
+html[data-clear="on"] select:not(:focus){
+  border-color:var(--field-line, var(--line-2));
+}
+
+/* ---------- links say they are links ----------
+   Colour alone does not say it to someone who cannot tell blue from black,
+   so a link inside reading text is underlined too. */
+html[data-clear="on"] .prose a,
+html[data-clear="on"] .rt-box a,
+html[data-clear="on"] .q-ask a,
+html[data-clear="on"] .pg-t a,
+html[data-clear="on"] .banner a,
+html[data-clear="on"] .hint a,
+html[data-clear="on"] .subnote a{
+  text-decoration:underline; text-decoration-thickness:1.5px; text-underline-offset:.18em;
+}
+
+/* ---------- a button that is off reads as off, and can still be read ----
+   It was white on light grey, 1.6:1: the words on it could not be made out
+   to know what it would do once it came on. */
+html[data-clear="on"] .btn-primary:disabled{
+  background:var(--panel-2) !important; background-image:none !important;
+  color:var(--muted) !important; border-color:var(--line-2) !important; box-shadow:none !important;
+}
+
+/* ---------- the parts the browser draws ---------- */
+html[data-clear="on"] ::selection{background:color-mix(in srgb, var(--brand) 32%, transparent)}
+html[data-clear="on"] input, html[data-clear="on"] textarea{caret-color:var(--amber)}
+
+/* ---------- tabs that wrap ----------
+   On a phone the three tabs on a student's home page do not fit on one line
+   and wrap, and the pill they sit in stretched into a lumpy oval round them.
+   Wrapped, the track takes the card's curve instead. */
+@media (max-width:640px){
+  html[data-clear="on"][data-look="new"] .tabs{border-radius:var(--rad-lg)}
+}
+
+/* =====================================================================
+   A lesson
+   ===================================================================== */
+
+/* The brief sits in the middle of the screen, 760px wide, and the tasks
+   under it ran from the far left to the far right: two different lines down
+   the page, and on a lab monitor a written answer box over 1800px wide.
+
+   Now the column is centred, and a task you read or write in is the brief's
+   own width, straight under it: about 75 characters to a line, which a child
+   can follow back to its start. A task that needs room keeps it: code with
+   its console beside it, block coding, a picture to label, a drawing, a
+   video, the choose-your-challenge columns. A table stays in the column:
+   one too wide for it already scrolls sideways in its own box.
+
+   The row has the task icons down its left, so it is padded the same amount
+   on the right, which is what puts the tasks in the true middle rather than
+   48px to the right of it. */
+html[data-clear="on"] body.lesson .stagerow{max-width:1228px; margin-left:auto; margin-right:auto}
+/* Above 720px only: below it style.css takes the icons away altogether, and
+   the space would be taken from a phone for nothing. */
+@media (min-width:721px){
+  html[data-clear="on"] body.lesson .stagerow:has(> .taskrail:not([hidden])){padding-right:48px}
+}
+/* On a page with nothing wide on it the whole row narrows to the brief, so
+   the icons stay beside the tasks they belong to instead of out on their
+   own at the left of the screen. Every page of the lesson is in the
+   document at once with the others hidden, so the question is asked of the
+   page on show only. */
+html[data-clear="on"] body.lesson .stagerow:not(:has(#blocks > :not([hidden]) :is(.ide, .scratch, canvas, iframe, video, img, .choice-panel))){max-width:856px}
+html[data-clear="on"] body.lesson #blocks .pg-item:not(:has(.ide, .scratch, canvas, iframe, video, img, .choice-panel)){
+  max-width:760px; margin-left:auto; margin-right:auto;
+}
+/* The notice about feedback belongs to the whole lesson, so it lines up
+   with the brief above it. */
+html[data-clear="on"] body.lesson .banner-frozen{max-width:760px; margin-left:auto; margin-right:auto}
+
+/* A question is a task heading like every other one. It was the one heading
+   drawn in a grey band with a bar down its left, so a page with a question
+   and a short answer on it had two kinds of heading for the same thing. */
+html[data-clear="on"] .q-ask{
+  background:none; border:0; border-radius:0; padding:0; margin:0 0 8px;
+}
+
+/* One coloured edge on a page rather than three. The brief, the banner
+   about feedback and the question each had a thick bar down the left, and
+   together they told the eye nothing about which mattered. */
+html[data-clear="on"][data-look="new"] .brief{border-left:1px solid var(--line)}
+html[data-clear="on"] .banner-frozen{
+  border-left-width:1.5px; border-radius:var(--rad-md);
+  background:color-mix(in srgb, var(--brand) 7%, var(--panel)) !important;
+}
+html[data-clear="on"] .feedbackNote,
+html[data-clear="on"] .fb-card{border-left-width:1.5px; border-radius:var(--rad-md)}
+html[data-clear="on"] .check-hinttext{border-left:0}
+html[data-clear="on"] .done-locked{border-left:0}
+
+/* =====================================================================
+   The builder
+   ===================================================================== */
+
+/* "Page 1 of 8" was small grey capitals in the code font, 11px at 4.4:1.
+   The code font is for code; this is a label. */
+html[data-clear="on"] .pv-eyebrow{
+  font-family:var(--body); text-transform:none; letter-spacing:0;
+  font-weight:600; color:var(--muted);
+}

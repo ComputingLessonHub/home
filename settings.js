@@ -85,6 +85,11 @@
        of it behind this one attribute. */
     if (p.look === "classic") delete document.documentElement.dataset.look;
     else document.documentElement.dataset.look = "new";
+    /* The Clearer look, clear.css, sits on top of whichever look is on and is
+       off until someone turns it on, so the two can be compared on the same
+       page by flicking one switch. */
+    if (p.clear === "on") document.documentElement.dataset.clear = "on";
+    else delete document.documentElement.dataset.clear;
     if (p.bg) document.documentElement.dataset.bg = p.bg; else delete document.documentElement.dataset.bg;
     if (p.font) document.documentElement.dataset.font = p.font; else delete document.documentElement.dataset.font;
     applyTint(p);
@@ -121,7 +126,9 @@
          it is the design as a whole that someone prefers or does not. */
       '<div class="set-group"><span class="set-label">Design</span>' +
       '<button class="btn-ghost set-look" type="button" id="setLook" role="switch" style="width:100%"></button>' +
-      '<p class="subnote" style="margin:8px 0 0">The New look gives the site its newer design. Turn it off for the design it had before.</p></div>' +
+      '<p class="subnote" style="margin:8px 0 0">The New look gives the site its newer design. Turn it off for the design it had before.</p>' +
+      '<button class="btn-ghost set-look" type="button" id="setClear" role="switch" style="width:100%; margin-top:12px"></button>' +
+      '<p class="subnote" style="margin:8px 0 0">The Clearer look makes text easier to read, shows clearly where you are when you use the keyboard, and lines lessons up down the middle of the screen.</p></div>' +
       '<div class="set-group"><span class="set-label">Theme</span><div class="swatches" id="setSw">' +
       THEMES.map(b => '<button class="swatch swatch-wide" data-bg="' + b[0] + '" style="background:' + b[2] + '">' + b[1] + '</button>').join("") +
       '</div></div>' +
@@ -172,6 +179,13 @@
         lk.setAttribute("aria-checked", onNow ? "true" : "false");
         lk.classList.toggle("on", onNow);
       }
+      const cl = back.querySelector("#setClear");
+      if (cl){
+        const clearNow = p.clear === "on";
+        cl.textContent = "Clearer look: " + (clearNow ? "on" : "off");
+        cl.setAttribute("aria-checked", clearNow ? "true" : "false");
+        cl.classList.toggle("on", clearNow);
+      }
       const ov = back.querySelector("#setOldView");
       if (ov) ov.textContent = window.hubUI.oldView() ? "Switch to new view" : "Switch to old view";
       /* the lesson page may have changed it since this was last opened */
@@ -193,6 +207,12 @@
     if (lookBtn) lookBtn.addEventListener("click", () => {
       const p = prefs();
       p.look = p.look === "classic" ? "new" : "classic";
+      save(p); paint();
+    });
+    const clearBtn = back.querySelector("#setClear");
+    if (clearBtn) clearBtn.addEventListener("click", () => {
+      const p = prefs();
+      p.clear = p.clear === "on" ? "" : "on";
       save(p); paint();
     });
     const ovBtn = back.querySelector("#setOldView");

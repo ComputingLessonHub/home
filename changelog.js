@@ -9,6 +9,7 @@
    wants to know whether the thing they noticed is meant to be there, not a
    full account of the work. */
 window.CHANGES = [
+  { v:"14.4", text:"A Clearer look to try in Settings, off until you turn it on. Text and box edges are easier to see, there is a clear ring round whatever the keyboard is on, the smallest text is a little bigger, and a lesson's tasks line up under the title in the middle of the screen instead of running across the whole width." },
   { v:"14.3", text:"Photoshop help is a task you add to a page, under Thinking and notes, and what it could not answer shows under that task in the builder. Slides and documents dock on the right only, and a document can no longer be floated off." },
   { v:"14.2.3", text:"Preview shows the lesson on the pretend student's home page again, and the document bar keeps its buttons on screen when it is narrow." },
   { v:"14.2.2", text:"Help questions on each class: what students asked the Photoshop helper that it could not answer, with no names, so you can see what it needs to learn." },
