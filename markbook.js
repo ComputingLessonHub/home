@@ -829,8 +829,9 @@
   }
 
   /* The spreadsheet half of the markbook, for a lesson's markbook in
-     work.html: the same picking, copying and saving, so a lesson and an
-     assessment behave as one thing rather than two that look alike. */
+     work.html and the console's Results: the same picking, copying and
+     saving, so every markbook behaves as one thing rather than several that
+     look alike. */
   const sheet = {
     selectable: mbSelectable,
     /* a press that ended a drag was picking cells, not sorting */
@@ -844,5 +845,8 @@
     },
     save: mbSave
   };
-  window.markbook = { build: build, paint: paint, sheet: sheet };
+  /* selectable, copyTable and dragged are the names resultsbook.js, from
+     the original site, calls them by: the same functions as sheet's. */
+  window.markbook = { build: build, paint: paint, sheet: sheet,
+                      selectable: sheet.selectable, copyTable: sheet.copyAll, dragged: sheet.moved };
 })();

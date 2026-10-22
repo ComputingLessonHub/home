@@ -7706,3 +7706,63 @@ body.hp-page{height:100vh; height:100dvh; display:flex; flex-direction:column; o
 .hq-tools{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 10px}
 .hq-tools .btn-ghost{font-size:var(--text-sm); padding:6px 12px}
 .hq-list .hq-row{background:var(--panel-2)}
+/* Results in the console: the filters, each assessment's grade boundaries
+   with how the year group falls into them, then the markbook. The pills
+   are the Student Voice filters' shape, so picking a class looks like
+   picking anything else in a markbook. */
+.resfilters{display:grid; gap:10px; margin:16px 0 20px}
+.resfilter{display:grid; grid-template-columns:8.5em minmax(0,1fr); gap:6px 14px; align-items:center}
+.resfilter-label{font-size:13.5px; font-weight:800; color:var(--muted)}
+.resfilter-none{font-size:14.5px}
+.respills{display:flex; flex-wrap:wrap; gap:8px}
+.respill{display:inline-flex; align-items:center; padding:6px 14px; border-radius:999px;
+  border:1.5px solid var(--line-2); background:var(--panel); color:var(--text); font:inherit; font-size:14px;
+  font-weight:600; cursor:pointer}
+.respill:hover{border-color:var(--amber)}
+.respill.on{border-color:var(--amber); background:color-mix(in srgb, var(--amber) 10%, var(--panel))}
+.restabs{width:fit-content; margin:0}
+.resunit{max-width:360px}
+.resbounds{margin:0 0 22px}
+.resbounds-head h3{margin:0 0 2px}
+.resbounds-head .hint{margin:0 0 12px; font-size:14.5px}
+.resbound-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px}
+.resbound{display:flex; flex-direction:column; gap:8px; padding:14px 16px; border:1px solid var(--line);
+  border-radius:12px; background:var(--panel); color:var(--text); min-width:0}
+.resbound-title{font-size:15.5px; line-height:1.3}
+.resbound-sub{font-size:13px; color:var(--muted); margin-top:-4px}
+.resbound-status{margin:0; font-size:13.5px; color:var(--muted)}
+.resbound-status b{color:var(--text)}
+.resbound-warn{margin:0; font-size:14px; border-color:var(--amber)}
+.resbound-warn.bad{border-color:var(--red)}
+.resbound-marks{display:grid; gap:6px}
+.resbound-row{display:grid; grid-template-columns:6.5em 5.5em minmax(0,1fr); align-items:center; gap:8px; font-size:14px}
+.resbound-band{font-weight:700}
+.resbound-in{width:100%; box-sizing:border-box; padding:6px 8px; border:1.5px solid var(--line-2); border-radius:8px;
+  background:var(--panel); color:var(--text); font:inherit; font-size:15px}
+.resbound-in:focus{outline:none; border-color:var(--amber)}
+.resbound-unit{color:var(--muted); font-size:13px}
+.resbound-floor{margin:0; font-size:13px; color:var(--muted)}
+.resbound-floor.bad{color:var(--red); font-weight:700}
+.resbound-tools{display:flex; flex-wrap:wrap; gap:8px; margin-top:2px}
+.ressplit .subnote{margin:0; font-size:12.5px}
+/* How the year group falls into the grades. The line on each bar is the
+   share that grade was aimed at, so too many or too few reads at a glance. */
+.reschart{display:grid; gap:4px; padding:8px 0 2px}
+.reschart-row{display:grid; grid-template-columns:2.6em minmax(0,1fr) 3em; align-items:center; gap:8px; font-size:13px}
+.reschart-band{font-weight:700}
+.reschart-bar{position:relative; height:12px; border-radius:99px; background:var(--panel-2); overflow:visible}
+.reschart-fill{display:block; height:100%; max-width:100%; border-radius:99px; background:var(--amber)}
+.reschart-aim{position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; background:var(--text); opacity:.55}
+.reschart-pct{text-align:right; font-weight:700}
+.reschart-key{font-size:12px; color:var(--dim)}
+.resbook-title{margin:0}
+.mbtable td.rescombined{font-weight:800}
+@media (max-width:640px){
+  .resfilter{grid-template-columns:minmax(0,1fr)}
+  .resunit{max-width:100%; width:100%}
+  .resbound-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media (pointer:coarse){
+  .respill{min-height:44px}
+  .resbound-in{min-height:44px}
+}

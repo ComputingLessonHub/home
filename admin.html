@@ -20,6 +20,8 @@
 <script src="menus.js"></script>
 <script src="dragline.js"></script>
 <script src="progressmath.js"></script>
+<script src="markbook.js"></script>
+<script src="resultsbook.js"></script>
 <script src="teacher.js"></script>
 <script src="ui.js"></script>
 <script src="settings.js"></script>
@@ -180,7 +182,21 @@ setTimeout(function(){
       <button class="classtile" id="openHub"><b><span data-icon="lessons" data-size="22"></span> Lessons</b><span id="hubCount">All units and lessons</span></button>
       <button class="classtile" id="openClasses"><b><span data-icon="classes" data-size="22"></span> Classes</b><span id="clsCount">Publish, pace and mark</span></button>
       <button class="classtile" id="openPractice" hidden><b><span data-icon="practice" data-size="22"></span> Practice</b><span>Your own sandbox, and students' programs</span></button>
+      <button class="classtile" id="openResults" hidden><b><span data-icon="progress" data-size="22"></span> Results</b><span>Marks and grades from assessments and practicals</span></button>
     </div>
+  </div>
+
+  <!-- ============ results ============
+       Across classes rather than inside one, because a grade is read
+       against the whole year group. resultsbook.js draws everything under
+       the heading. -->
+  <div id="resultsView" hidden>
+    <button class="crumb" id="backHome3">&larr; Home</button>
+    <button class="btn-ghost iconbtn refresh" id="refResults" title="Refresh">&#8635;</button>
+    <h2 style="margin:14px 0 4px">Results</h2>
+    <p class="hint">Marks and grades from assessments and practicals, including the grade range of a practical students are only shown levels for.</p>
+    <div class="resfilters" id="resFilters"></div>
+    <div id="resBody"></div>
   </div>
 
   <!-- ============ practice ============
@@ -617,6 +633,7 @@ function paintCrumbs(){
   if (v === "classesView") return crumbs([{ name:"Classes" }]);
   if (v === "timetableView") return crumbs([home, { name:"Timetable" }]);
   if (v === "practiceView") return crumbs([{ name:"Practice" }]);
+  if (v === "resultsView") return crumbs([{ name:"Results" }]);
   if (v === "pwView") return crumbs([{ name:"Passwords" }]);
   if (v === "keepView") return crumbs([{ name:"Backups" }]);
   if (v === "classView") return crumbs([home, { name: cls }]);
@@ -648,7 +665,7 @@ function crumbName(id){
 }
 
 /* ---------- view switching ---------- */
-const VIEWS = ["keyView","whoView","homeView","hubView","hubUnitsView","hubCompView","hubPointView","hubPointLessonsView","hubLessonsView","classesView","classView","studentsView","coverView","unitsView","partsView","lessonsView","keepView","pwView","practiceView","progressView","timetableView","studentView"];
+const VIEWS = ["keyView","whoView","homeView","hubView","hubUnitsView","hubCompView","hubPointView","hubPointLessonsView","hubLessonsView","classesView","classView","studentsView","coverView","unitsView","partsView","lessonsView","keepView","pwView","practiceView","progressView","timetableView","studentView","resultsView"];
 let goingBack = false;          // set while the browser's Back is driving
 function show(view, quiet){
   /* Signing in and choosing who is teaching are pop-ups over Home, so Home
@@ -743,6 +760,7 @@ try{
       else if (st.view === "lessonsView"){ nameLessonShelf(); paintLessonGrid(); }
       else if (st.view === "studentsView") loadStudents();
       else if (st.view === "progressView") openProgressView();
+      else if (st.view === "resultsView") toResults();
       else if (st.view === "classView"){ $("clsName").textContent = cls; }
       else if (st.view === "timetableView" && window.timetable) window.timetable.paintEditor();
       else if (st.view === "studentView" && window.studentProfile) window.studentProfile.reopen(st.stu);
@@ -1109,6 +1127,7 @@ async function restoreSpot(spot){
     /* Nothing is fetched until something is searched for, so this comes back
        whole with only the box waiting in it. */
     if (spot.view === "practiceView"){ toPractice(); return; }
+    if (spot.view === "resultsView"){ await toResults(); return; }
     if (here && spot.view === "classView"){ openClass(cls); return; }
     if (here && spot.view === "studentsView"){ openClass(cls); show("studentsView"); loadStudents(); return; }
     /* The screens off the side menu and the class's own reports. Each was
@@ -3594,6 +3613,40 @@ on("pracSearch", "keydown", (e) => { if (e.key === "Enter") searchStudents(); })
 function openStudent(st){
   if (window.studentProfile) window.studentProfile.open(st); else openPrograms(st);
 }
+
+/* ---------- results ----------
+   Drawn by resultsbook.js, which is handed what it needs from the console
+   rather than reaching into it, so the two can be read apart. The catalogue
+   is what it picks from: year groups, units, which lessons are assessments
+   and which classes have been given them. */
+async function toResults(){
+  wait("resBody", "Loading the assessments", true);
+  $("resFilters").innerHTML = "";
+  show("resultsView");
+  try{ await loadCatalogue(); }
+  catch(e){
+    $("resBody").innerHTML = "";
+    $("resBody").appendChild(el("p","hint","The assessments could not be loaded (" + e.message + ")."));
+    return;
+  }
+  window.resultsBook.open({
+    api: () => API, headers: H, jsonHeaders: HJ,
+    catalogue: () => cat, titleOf: titleOf, fetchLesson: fetchLesson,
+    allClasses: allClasses, myClasses: myClasses, me: () => meCode,
+    /* who saved a set of boundaries, as the next teacher will read it */
+    who: () => meCode ? (teacherNames[meCode] ? teacherNames[meCode] + " (" + meCode + ")" : meCode) : "Admin",
+    waiting: waiting, openModal: openModal, closeModal: closeModal, say: say
+  });
+}
+/* Offline there are no results to read, the same as Practice. */
+if (!OFFLINE){ const tile = $("openResults"); if (tile) tile.hidden = false; }
+on("openResults", "click", toResults);
+on("backHome3", "click", toHome);
+on("refResults", "click", async () => {
+  try{ await loadCatalogue(true); }catch(e){}
+  toResults().then(() => window.resultsBook.refresh());
+});
+
 /* Their programs, in the same viewer a lesson's work opens in. */
 function openPrograms(st){
   consoleNav.go("work.html?practice=1&group=" + encodeURIComponent(st.group_name || cls) +
