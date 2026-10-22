@@ -9,7 +9,7 @@
    when beside them.
 
    The first time an assessment is opened the boundaries are worked out to
-   give the split saved under '__split' (15% / 40% / 30% / 15% to start
+   give the split saved under '__split' (15% / 35% / 35% / 15% to start
    with). That can fail, most often because a short test leaves half the
    year on the same mark, and then the page says so and leaves the marks
    for the teacher to set by hand.
@@ -18,12 +18,17 @@
    against the level the student reached, which Mark work saves and nothing
    a student sees reads.
 
+   The markbook is what the page is for, so it takes the room. The filters
+   are one row of drop-downs above it, and the boundaries are behind a
+   button, opening in a panel beside the table so the grades can be watched
+   changing while the marks are moved.
+
    The table is drawn with the markbook's own pieces from markbook.js, so
    cells pick, copy and sort the same way as on every other markbook. */
 (function(){
   const BANDS = ["1-3", "4-5", "6-7", "8-9"];
   const CUT_KEYS = ["4-5", "6-7", "8-9"];
-  const START_SPLIT = [15, 40, 30, 15];
+  const START_SPLIT = [15, 35, 35, 15];
   /* Below this many results a split is guesswork: ten students cannot be
      cut into fifteen percents. */
   const FEWEST = 10;
@@ -44,6 +49,14 @@
   let split = START_SPLIT.slice(), splitSaved = START_SPLIT.slice(), splitBy = "", splitAt = "";
   let sort = { key: "username", dir: 1 };
   let fetchTimer = null;
+  /* The boundaries panel: whether it is out, which assessment it is on, and
+     whether the split is opened up inside it. Not remembered between
+     visits: the markbook is what a teacher comes back for. */
+  let drawer = { open: false, lesson: "", split: false };
+  /* The filter drop-down that is open, if any. Ticking inside one changes
+     what is picked straight away but leaves the row alone until it shuts,
+     because redrawing the row would shut it under the pointer. */
+  let drop = null;               // { wrap, panel, btn, dirty }
 
   function el(tag, cls, text){
     const e = document.createElement(tag);
@@ -100,12 +113,20 @@
     const l = (cat().lessons || []).find(x => x.lesson_id === id);
     return (l && (l.title || ctx.titleOf(id))) || id;
   };
+  /* What a column heading calls an assessment. The number a title starts
+     with and the word Practical say nothing the column does not, and they
+     are most of the width: "8.1.5 - Practical: Make a quiz" is a quiz. */
+  function shortTitle(id){
+    const t = titleOf(id).replace(/^\s*\d+(\.\d+)*\s*[-:–—]?\s*/, "").replace(/^practical\s*[-:]\s*/i, "").trim();
+    return t || titleOf(id);
+  }
   function kindOf(id){
     const l = (cat().lessons || []).find(x => x.lesson_id === id) || {};
     if (!l.practical) return "test";
     const json = lessonJson[id];
     return json && window.progressMath.rubricRun(json) ? "rubric" : "score";
   }
+  const gradedLessons = () => pick.lessons.filter(id => kindOf(id) !== "rubric");
 
   /* ---------- turning marks into grades ---------- */
   function bandOfMark(mark, cuts){
@@ -168,7 +189,7 @@
       return { ok: false, cuts: evenly(),
                why: (marks.length === 1 ? "Only 1 student has" : "Only " + marks.length + " students have") +
                     " a mark so far, which is too few to split. These marks are shared out evenly across the " +
-                    outOf + " instead. Change them below, or calculate again once more have sat it." };
+                    outOf + " instead. Change them, or calculate again once more have sat it." };
     const below = (m) => 100 * marks.filter(x => x < m).length / marks.length;
     const cuts = [];
     aim.forEach((t, i) => {
@@ -186,7 +207,7 @@
       return { ok: false, cuts: cuts,
                why: "The grades could not be split the way you asked, because too many students have the same mark. " +
                     "The closest it gets is " + got.map((p, i) => BANDS[i] + ": " + Math.round(p) + "%").join(", ") +
-                    ". Change the marks below to find a balance you are happy with." };
+                    ". Change the marks to find a balance you are happy with." };
     return { ok: true, cuts: cuts, why: "" };
   }
 
@@ -216,6 +237,10 @@
   const cutsProblem = (cuts, outOf) =>
     cuts.some(n => !Number.isInteger(n) || n < 1 || n > outOf) || !(cuts[0] < cuts[1] && cuts[1] < cuts[2])
       ? "Each grade needs more marks than the one below it, between 1 and " + outOf + "." : "";
+  /* An assessment whose grades the teacher ought to look at before
+     trusting them: the working out failed and nothing has been saved over
+     it since. */
+  const needsLook = (id) => { const b = bounds[id]; return !!(b && b.auto && !b.auto.ok && unsaved(b)); };
 
   /* ---------- the page ---------- */
   function open(context){
@@ -243,89 +268,159 @@
     if (!pick.lessons.length) pick.lessons = ids.slice();
     remember();
   }
-  /* A row of pills to pick any number from, with All in front. */
-  function pills(label, names, chosen, onChange, empty){
-    const row = el("div", "resfilter");
-    row.appendChild(el("span", "resfilter-label", label));
-    const box = el("div", "respills");
-    if (!names.length){ box.appendChild(el("span", "hint resfilter-none", empty)); row.appendChild(box); return row; }
-    const all = names.every(n => chosen.some(c => low(c) === low(n.value)));
-    const allBtn = el("button", "respill" + (all ? " on" : ""), "All");
-    allBtn.type = "button";
-    allBtn.setAttribute("aria-pressed", String(all));
-    allBtn.addEventListener("click", () => onChange(all ? [] : names.map(n => n.value)));
-    box.appendChild(allBtn);
-    names.forEach(n => {
-      const on = chosen.some(c => low(c) === low(n.value));
-      const b = el("button", "respill" + (on ? " on" : ""), n.label);
-      b.type = "button";
-      b.setAttribute("aria-pressed", String(on));
-      b.addEventListener("click", () => onChange(on ? chosen.filter(c => low(c) !== low(n.value)) : chosen.concat([n.value])));
-      box.appendChild(b);
+
+  /* ---------- the filters ---------- */
+  function shutDrop(){
+    if (!drop) return;
+    const was = drop;
+    drop = null;
+    was.panel.hidden = true;
+    was.btn.setAttribute("aria-expanded", "false");
+    /* Only now is the row redrawn, so a filter that depends on this one
+       offers the right things the next time it is opened. */
+    if (was.dirty) paintFilters();
+  }
+  document.addEventListener("pointerdown", (e) => {
+    if (drop && !drop.wrap.contains(e.target)) shutDrop();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && drop){ const btn = drop.btn; shutDrop(); if (document.body.contains(btn)) btn.focus(); }
+  });
+  /* A field with its name over it, the same for the drop-downs and the
+     plain selects, so the row reads as one set of controls. */
+  function field(label, control){
+    const f = el("div", "resfield");
+    f.appendChild(el("span", "resfield-label", label));
+    f.appendChild(control);
+    return f;
+  }
+  /* A drop-down of tick boxes, with All at the top. What is picked shows on
+     the button: None, All, the one name, or how many. */
+  function tickDrop(label, options, chosen, onPick, empty){
+    const wrap = el("div", "resdrop");
+    const btn = el("button", "resdrop-btn");
+    btn.type = "button";
+    btn.setAttribute("aria-haspopup", "true");
+    btn.setAttribute("aria-expanded", "false");
+    const value = el("span", "resdrop-value");
+    btn.appendChild(value);
+    btn.appendChild(el("span", "resdrop-caret", "▾"));
+    const panel = el("div", "resdrop-panel");
+    panel.hidden = true;
+    panel.setAttribute("role", "group");
+    panel.setAttribute("aria-label", label);
+    const has = (v) => chosen.some(c => low(c) === low(v));
+    const summary = () => {
+      if (!options.length || !chosen.length) return "None";
+      if (chosen.length === options.length && options.length > 1) return "All";
+      if (chosen.length === 1){ const o = options.find(x => low(x.value) === low(chosen[0])); return o ? o.label : chosen[0]; }
+      return chosen.length + " picked";
+    };
+    const boxes = [];
+    let allBox = null;
+    const sync = () => {
+      value.textContent = summary();
+      boxes.forEach(b => { b.input.checked = has(b.value); });
+      if (allBox){
+        allBox.checked = options.length > 0 && chosen.length === options.length;
+        allBox.indeterminate = chosen.length > 0 && chosen.length < options.length;
+      }
+    };
+    const pickNow = (list) => {
+      chosen = list;
+      onPick(list);
+      if (drop) drop.dirty = true;
+      sync();
+    };
+    if (!options.length) panel.appendChild(el("p", "hint resdrop-none", empty));
+    else {
+      if (options.length > 1){
+        const row = el("label", "resdrop-opt resdrop-all");
+        allBox = el("input");
+        allBox.type = "checkbox";
+        allBox.addEventListener("change", () => pickNow(allBox.checked ? options.map(o => o.value) : []));
+        row.appendChild(allBox);
+        row.appendChild(el("span", "", "All"));
+        panel.appendChild(row);
+      }
+      options.forEach(o => {
+        const row = el("label", "resdrop-opt");
+        const input = el("input");
+        input.type = "checkbox";
+        input.addEventListener("change", () =>
+          pickNow(input.checked ? chosen.concat([o.value]) : chosen.filter(c => low(c) !== low(o.value))));
+        row.appendChild(input);
+        row.appendChild(el("span", "", o.label));
+        panel.appendChild(row);
+        boxes.push({ input: input, value: o.value });
+      });
+    }
+    btn.addEventListener("click", () => {
+      if (drop && drop.wrap === wrap){ shutDrop(); return; }
+      shutDrop();
+      panel.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+      drop = { wrap: wrap, panel: panel, btn: btn, dirty: false };
+      /* Hung from its left edge, unless that runs it off the right of the
+         screen, which on a phone the last drop-down in the row would. */
+      panel.classList.remove("toleft");
+      const r = panel.getBoundingClientRect();
+      if (r.right > window.innerWidth - 8) panel.classList.add("toleft");
+      const first = panel.querySelector("input");
+      if (first) first.focus({ preventScroll: true });
     });
-    row.appendChild(box);
-    return row;
+    sync();
+    wrap.appendChild(btn);
+    wrap.appendChild(panel);
+    return field(label, wrap);
+  }
+  function plainSelect(label, options, value, onPick){
+    const sel = el("select", "sel resselect");
+    sel.setAttribute("aria-label", label);
+    options.forEach(([v, text]) => { const o = el("option", "", text); o.value = v; sel.appendChild(o); });
+    sel.value = value;
+    sel.addEventListener("change", () => onPick(sel.value));
+    return field(label, sel);
   }
   function paintFilters(){
     const box = $("resFilters");
     box.innerHTML = "";
     const changed = () => { tidyPick(); paintFilters(); refresh(false); };
+    const ticked = () => { tidyPick(); refresh(false); };
     /* Only a teacher has classes of their own. Under All (Admin) every
        class is theirs and the choice would change nothing. */
-    if (ctx.me()){
-      const row = el("div", "resfilter");
-      row.appendChild(el("span", "resfilter-label", "Show"));
-      const tabs = el("div", "subtabs restabs");
-      [[true, "Students I teach"], [false, "All students"]].forEach(([v, text]) => {
-        const b = el("button", pick.mine === v ? "on" : "", text);
-        b.type = "button";
-        b.addEventListener("click", () => { if (pick.mine === v) return; pick.mine = v; changed(); });
-        tabs.appendChild(b);
-      });
-      row.appendChild(tabs);
-      box.appendChild(row);
-    }
-    box.appendChild(pills("Year groups", yearNames().map(y => ({ value: y, label: y })), pick.years,
-      (v) => { pick.years = v; changed(); }, "There are no year groups yet."));
-    if (pick.years.length){
-      box.appendChild(pills("Classes", classesOfYears().map(c => ({ value: c, label: c })), pick.classes,
-        (v) => { pick.classes = v; changed(); },
-        pick.mine && ctx.me() ? "None of your classes has been given a lesson in these year groups."
-                              : "No class has been given a lesson in these year groups yet."));
-      const units = unitsOfYears();
-      const row = el("div", "resfilter");
-      row.appendChild(el("span", "resfilter-label", "Unit"));
-      if (!units.length) row.appendChild(el("span", "hint resfilter-none", "No unit in these year groups has an assessment."));
-      else {
-        const sel = el("select", "sel resunit");
-        sel.setAttribute("aria-label", "Unit");
-        if (!pick.unit){ const o = el("option", "", "Choose a unit"); o.value = ""; sel.appendChild(o); }
-        units.forEach(u => {
-          const o = el("option", "", (pick.years.length > 1 && u.year ? u.year + " · " : "") + u.name);
-          o.value = u.name;
-          sel.appendChild(o);
-        });
-        sel.value = pick.unit;
-        sel.addEventListener("change", () => { pick.unit = sel.value; pick.lessons = []; changed(); });
-        row.appendChild(sel);
-      }
-      box.appendChild(row);
-      /* Only worth a row when there is a choice to make. */
-      const list = pick.unit ? assessmentsOf(pick.unit) : [];
-      if (list.length > 1)
-        box.appendChild(pills("Assessments", list.map(l => ({ value: l.lesson_id, label: titleOf(l.lesson_id) })), pick.lessons,
-          (v) => { pick.lessons = v; changed(); }, ""));
-    }
+    if (ctx.me())
+      box.appendChild(plainSelect("Show", [["mine", "Students I teach"], ["all", "All students"]],
+        pick.mine ? "mine" : "all", (v) => { pick.mine = v === "mine"; changed(); }));
+    box.appendChild(tickDrop("Year groups", yearNames().map(y => ({ value: y, label: y })), pick.years,
+      (v) => { pick.years = v; ticked(); }, "There are no year groups yet."));
+    box.appendChild(tickDrop("Classes", pick.years.length ? classesOfYears().map(c => ({ value: c, label: c })) : [], pick.classes,
+      (v) => { pick.classes = v; ticked(); },
+      !pick.years.length ? "Choose a year group first."
+        : pick.mine && ctx.me() ? "None of your classes has been given a lesson in these year groups."
+        : "No class has been given a lesson in these year groups yet."));
+    const units = pick.years.length ? unitsOfYears() : [];
+    const unitOptions = (pick.unit ? [] : [["", units.length ? "Choose a unit" : "None to choose"]])
+      .concat(units.map(u => [u.name, (pick.years.length > 1 && u.year ? u.year + " · " : "") + u.name]));
+    const unitField = plainSelect("Unit", unitOptions, pick.unit, (v) => { pick.unit = v; pick.lessons = []; changed(); });
+    unitField.querySelector("select").disabled = !units.length;
+    box.appendChild(unitField);
+    /* Only worth a drop-down when there is a choice to make. */
+    const list = pick.unit ? assessmentsOf(pick.unit) : [];
+    if (list.length > 1)
+      box.appendChild(tickDrop("Assessments", list.map(l => ({ value: l.lesson_id, label: titleOf(l.lesson_id) })), pick.lessons,
+        (v) => { pick.lessons = v; ticked(); }, ""));
   }
 
-  /* Asked for once the picking has settled, so pressing four class pills
-     in a row is one request and not four. */
+  /* Asked for once the picking has settled, so ticking four classes in a
+     row is one request and not four. */
   function refresh(force){
     clearTimeout(fetchTimer);
     const body = $("resBody");
-    if (!pick.years.length){ body.innerHTML = ""; body.appendChild(el("p", "hint", "Choose a year group to begin.")); return; }
-    if (!pick.unit){ body.innerHTML = ""; body.appendChild(el("p", "hint", "Choose a unit to see its assessments.")); return; }
-    if (!pick.lessons.length){ body.innerHTML = ""; body.appendChild(el("p", "hint", "Choose at least one assessment.")); return; }
+    const say = (text) => { body.innerHTML = ""; body.appendChild(el("p", "hint resempty", text)); };
+    if (!pick.years.length) return say("Choose a year group to begin.");
+    if (!pick.unit) return say("Choose a unit to see its assessments.");
+    if (!pick.lessons.length) return say("Choose at least one assessment.");
     const ids = [];
     pick.lessons.forEach(id => familyOf(id).forEach(x => ids.push(x)));
     const key = JSON.stringify([ids, pick.classes.map(low).sort()]);
@@ -375,23 +470,91 @@
   function paintBody(){
     const body = $("resBody");
     body.innerHTML = "";
-    const graded = pick.lessons.filter(id => kindOf(id) !== "rubric");
-    if (graded.length){
-      const sec = el("section", "resbounds");
-      const head = el("div", "resbounds-head");
-      head.appendChild(el("h3", "", "Grade boundaries"));
-      head.appendChild(el("p", "hint", "Worked out from every student in the year group who has sat it, not only the classes picked. Change a mark and the grades update straight away."));
-      sec.appendChild(head);
-      const grid = el("div", "resbound-grid");
-      graded.forEach(id => grid.appendChild(boundCard(id)));
-      grid.appendChild(splitCard());
-      sec.appendChild(grid);
-      body.appendChild(sec);
-    }
+    const notes = el("div", "resnotes");
+    notes.id = "resNotes";
+    body.appendChild(notes);
+    const graded = gradedLessons();
+    if (!graded.includes(drawer.lesson)) drawer.lesson = graded[0] || "";
+    if (!graded.length) drawer.open = false;
+    const main = el("div", "resmain");
+    main.id = "resMain";
     const holder = el("div", "resbook");
     holder.id = "mbHolder";        // where markbook.js looks for a table to copy from
-    body.appendChild(holder);
+    main.appendChild(holder);
+    const side = el("aside", "resdrawer");
+    side.id = "resDrawer";
+    side.setAttribute("aria-label", "Grade boundaries");
+    main.appendChild(side);
+    body.appendChild(main);
+    paintNotes();
     paintTable();
+    paintDrawer();
+  }
+  /* What has to be said even with the boundaries put away: that the
+     grades of an assessment could not be worked out the way the split asks,
+     and so should be looked at before anybody reads them. One line each,
+     with the way in to fix it. */
+  function paintNotes(){
+    const box = $("resNotes");
+    if (!box) return;
+    box.innerHTML = "";
+    gradedLessons().filter(needsLook).forEach(id => {
+      const line = el("div", "warnline resnote");
+      line.appendChild(el("span", "", "The grades for " + titleOf(id) +
+        " could not be worked out the way the split asks, so they need checking."));
+      const go = el("button", "btn-ghost bmini2", "Check the grade boundaries");
+      go.type = "button";
+      go.addEventListener("click", () => openDrawer(id));
+      line.appendChild(go);
+      box.appendChild(line);
+    });
+  }
+  function openDrawer(id){
+    drawer.open = true;
+    if (id) drawer.lesson = id;
+    paintDrawer();
+    paintTable();
+  }
+  function shutDrawer(){
+    drawer.open = false;
+    paintDrawer();
+    paintTable();
+  }
+  /* The boundaries for one assessment at a time, with a picker when there
+     are several, and the split folded away under them. */
+  function paintDrawer(){
+    const side = $("resDrawer"), main = $("resMain");
+    if (!side || !main) return;
+    main.classList.toggle("open", drawer.open);
+    side.hidden = !drawer.open;
+    side.innerHTML = "";
+    if (!drawer.open || !drawer.lesson) return;
+    const head = el("div", "resdrawer-head");
+    head.appendChild(el("h3", "", "Grade boundaries"));
+    const x = el("button", "btn-ghost iconbtn", "✕");
+    x.type = "button";
+    x.title = "Close";
+    x.addEventListener("click", shutDrawer);
+    head.appendChild(x);
+    side.appendChild(head);
+    side.appendChild(el("p", "resdrawer-note", "Worked out from everyone in the year group who has sat it, not only the classes picked. The grades in the markbook change as you change the marks."));
+    const graded = gradedLessons();
+    if (graded.length > 1){
+      const sel = el("select", "sel resselect");
+      sel.setAttribute("aria-label", "Which assessment");
+      graded.forEach(id => { const o = el("option", "", titleOf(id) + (needsLook(id) ? " (needs checking)" : "")); o.value = id; sel.appendChild(o); });
+      sel.value = drawer.lesson;
+      sel.addEventListener("change", () => { drawer.lesson = sel.value; paintDrawer(); });
+      side.appendChild(sel);
+    }
+    side.appendChild(boundCard(drawer.lesson));
+    const more = el("button", "btn-ghost bmini2 ressplit-toggle",
+      (drawer.split ? "Hide the split" : "Change the split") + " (" + split.slice().reverse().join(" / ") + ")");
+    more.type = "button";
+    more.setAttribute("aria-expanded", String(drawer.split));
+    more.addEventListener("click", () => { drawer.split = !drawer.split; paintDrawer(); });
+    side.appendChild(more);
+    if (drawer.split) side.appendChild(splitCard());
   }
 
   /* One marked assessment's boundaries: the three marks, how the year
@@ -399,7 +562,7 @@
   function boundCard(id){
     const b = bounds[id], outOf = outOfFor(id);
     const card = el("div", "resbound");
-    card.appendChild(el("b", "resbound-title", titleOf(id)));
+    if (gradedLessons().length === 1) card.appendChild(el("b", "resbound-title", titleOf(id)));
     const n = yearMarks(id).length;
     card.appendChild(el("span", "resbound-sub", "Out of " + outOf + " · " +
       (n === 1 ? "1 student" : n + " students") + " in the year group have a mark"));
@@ -444,7 +607,7 @@
       /* Kept up while the marks are being changed by hand, since that is
          exactly when the teacher needs to know what the split got wrong,
          and taken down once what they settled on is saved. */
-      const showWhy = b.auto && !b.auto.ok && unsaved(b);
+      const showWhy = needsLook(id);
       warn.hidden = !problem && !showWhy && !b.msg;
       warn.textContent = problem || b.msg || (showWhy ? b.auto.why : "");
       warn.classList.toggle("bad", !!problem);
@@ -485,6 +648,8 @@
       }
       save.textContent = "Save marks";
       paintCard();
+      paintNotes();
+      paintTable();
     });
     /* Calculating again throws away whatever is in the boxes, which may be
        somebody's careful afternoon, so it asks first. */
@@ -504,6 +669,7 @@
           ctx.closeModal();
           inputs.forEach((inp, i) => { inp.value = String(b.cuts[i]); });
           paintCard();
+          paintNotes();
           paintTable();
         });
         const keep = el("button", "btn-ghost modal-stay", "Keep these marks");
@@ -540,8 +706,7 @@
      school, and used the next time anybody presses Calculate again. */
   function splitCard(){
     const card = el("div", "resbound ressplit");
-    card.appendChild(el("b", "resbound-title", "How the year group is split"));
-    card.appendChild(el("span", "resbound-sub", "The share of students each grade is aimed at when marks are calculated"));
+    card.appendChild(el("span", "resbound-sub", "The share of the year group each grade is aimed at when marks are calculated."));
     const fields = el("div", "resbound-marks");
     const total = el("p", "resbound-floor");
     const status = el("p", "resbound-status");
@@ -603,7 +768,7 @@
     const tools = el("div", "resbound-tools");
     tools.appendChild(save);
     card.appendChild(tools);
-    card.appendChild(el("p", "subnote", "Saving the split does not change any marks. Press Calculate again on an assessment to use it."));
+    card.appendChild(el("p", "subnote", "Saving the split does not change any marks. Press Calculate again to use it."));
     paint();
     return card;
   }
@@ -614,7 +779,7 @@
   function tableRows(){
     const byUser = new Map();
     (book.students || []).forEach(st => byUser.set(low(st.username), {
-      username: st.username, name: st.display_name || st.username, group: st.group_name, cells: {}, bands: [] }));
+      username: st.username, name: st.display_name || st.username, group: st.group_name, cells: {} }));
     pick.lessons.forEach(id => {
       const fam = familyOf(id), kind = kindOf(id), outOf = outOfFor(id);
       const json = lessonJson[id];
@@ -642,7 +807,6 @@
     rows.forEach(r => {
       const got = pick.lessons.map(id => r.cells[id] ? r.cells[id].band : -1).filter(b => b >= 0);
       r.combined = got.length ? Math.round(got.reduce((x, y) => x + y, 0) / got.length) : -1;
-      r.combinedOf = got.length;
     });
     return rows;
   }
@@ -664,12 +828,17 @@
     });
   }
   /* The markbook's own column heading: pressed to sort, unless the press
-     was the end of picking cells. */
-  function headCell(label, key, tip){
-    const th = el("th", "mbsort" + (sort.key === key ? " on" : ""));
-    th.appendChild(el("span", "", label + (sort.key === key ? (sort.dir === 1 ? " ↑" : " ↓") : "")));
-    th.dataset.copy = label;
-    if (tip) th.title = tip;
+     was the end of picking cells. An assessment's columns carry its name
+     on a line of its own above Mark or Grade, cut to two lines, so the
+     heading is as narrow as what is under it. The whole title is in the
+     tooltip and is what copies. */
+  function headCell(label, key, opts){
+    const o = opts || {};
+    const th = el("th", "mbsort" + (sort.key === key ? " on" : "") + (o.over ? " resth" : ""));
+    if (o.over) th.appendChild(el("span", "resth-name", o.over));
+    th.appendChild(el("span", o.over ? "resth-what" : "", label + (sort.key === key ? (sort.dir === 1 ? " ↑" : " ↓") : "")));
+    th.dataset.copy = o.copy || label;
+    if (o.tip) th.title = o.tip;
     th.addEventListener("click", (e) => {
       if (e.shiftKey || window.markbook.dragged()) return;
       if (sort.key === key) sort.dir = -sort.dir;
@@ -678,16 +847,17 @@
     });
     return th;
   }
-  const short = (id) => { const t = titleOf(id); return t.length > 26 ? t.slice(0, 24).trim() + "…" : t; };
   function columns(){
     const cols = [];
     pick.lessons.forEach(id => {
-      const kind = kindOf(id);
-      if (kind !== "rubric") cols.push({ id: id, what: "mark", label: short(id) + " mark", key: "m:" + id });
-      cols.push({ id: id, what: kind === "rubric" ? "range" : "grade", label: short(id) + " grade", key: "g:" + id });
+      const kind = kindOf(id), over = shortTitle(id), full = titleOf(id);
+      if (kind !== "rubric") cols.push({ id: id, what: "mark", label: "Mark", over: over, key: "m:" + id,
+                                         tip: full, copy: full + " mark" });
+      cols.push({ id: id, what: kind === "rubric" ? "range" : "grade", label: "Grade", over: over, key: "g:" + id,
+                  tip: full + (kind === "rubric" ? ": the range of the level reached" : ""), copy: full + " grade" });
     });
     if (pick.lessons.length > 1) cols.push({ what: "combined", label: "Combined", key: "combined",
-      tip: "The average of the grades above, to the nearest grade" });
+      tip: "The average of the grades, to the nearest grade" });
     return cols;
   }
   function cellText(r, col){
@@ -702,25 +872,33 @@
     const holder = $("mbHolder");
     if (!holder || !book) return;
     holder.innerHTML = "";
+    const graded = gradedLessons();
+    const bar = el("div", "mbbar");
+    const said = el("div", "resbook-head");
+    said.appendChild(el("h3", "resbook-title", "Markbook"));
+    const count = el("span", "resbook-count");
+    said.appendChild(count);
+    bar.appendChild(said);
+    const tools = el("div", "mbtools");
+    if (graded.length){
+      const gb = el("button", "btn-ghost bmini2 resgb" + (drawer.open ? " on" : ""), "Grade boundaries");
+      gb.type = "button";
+      gb.setAttribute("aria-expanded", String(drawer.open));
+      if (graded.some(needsLook)){ gb.appendChild(el("span", "resgb-dot", "!")); gb.title = "Some grades need checking"; }
+      gb.addEventListener("click", () => { if (drawer.open) shutDrawer(); else openDrawer(); });
+      tools.appendChild(gb);
+    }
+    bar.appendChild(tools);
+    holder.appendChild(bar);
     if (!pick.classes.length){
-      holder.appendChild(el("p", "hint", "Choose one or more classes to see their students' results."));
+      holder.appendChild(el("p", "hint resempty", "Choose one or more classes to see their students' results."));
       return;
     }
     const rows = tableRows();
     sortRows(rows);
     const cols = columns();
     const sat = rows.filter(r => pick.lessons.some(id => r.cells[id])).length;
-    const stats = el("div", "mbstats");
-    [["Students", String(rows.length)], ["Have a result", sat + " of " + rows.length]].forEach(p => {
-      const c = el("div", "mbstat");
-      c.appendChild(el("b", "", p[1]));
-      c.appendChild(el("span", "", p[0]));
-      stats.appendChild(c);
-    });
-    holder.appendChild(stats);
-    const bar = el("div", "mbbar");
-    bar.appendChild(el("h3", "resbook-title", "Markbook"));
-    const tools = el("div", "mbtools");
+    count.textContent = (rows.length === 1 ? "1 student" : rows.length + " students") + " · " + sat + " with a result";
     const copyAll = el("button", "btn-ghost bmini2", "Copy all");
     copyAll.type = "button";
     copyAll.title = "Copy the whole table, ready to paste into a spreadsheet";
@@ -734,20 +912,21 @@
     excel.type = "button";
     excel.addEventListener("click", () => saveExcel(rows, cols));
     tools.appendChild(copyAll); tools.appendChild(excel);
-    bar.appendChild(tools);
-    holder.appendChild(bar);
 
-    const table = el("table", "mbtable");
+    const table = el("table", "mbtable restable");
     const head = el("tr");
     head.appendChild(headCell("Username", "username"));
     head.appendChild(headCell("Display name", "name"));
     head.appendChild(headCell("Class", "group"));
-    cols.forEach(c => head.appendChild(headCell(c.label, c.key, c.tip || (c.id ? titleOf(c.id) : ""))));
+    cols.forEach(c => head.appendChild(headCell(c.label, c.key, c)));
     table.appendChild(head);
     rows.forEach(r => {
       const tr = el("tr");
-      tr.appendChild(el("td", "", r.username || ""));
-      tr.appendChild(el("td", "", r.name));
+      /* The two kept on screen while the rest scrolls sideways can be cut
+         short, so each says its whole self on hover. */
+      const user = el("td", "", r.username || ""); user.title = r.username || "";
+      const name = el("td", "", r.name); name.title = r.name;
+      tr.appendChild(user); tr.appendChild(name);
       tr.appendChild(el("td", "", r.group || ""));
       cols.forEach(c => {
         const td = el("td", c.what === "combined" ? "rescombined" : "", cellText(r, c));

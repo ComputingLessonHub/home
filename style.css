@@ -7706,30 +7706,84 @@ body.hp-page{height:100vh; height:100dvh; display:flex; flex-direction:column; o
 .hq-tools{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 10px}
 .hq-tools .btn-ghost{font-size:var(--text-sm); padding:6px 12px}
 .hq-list .hq-row{background:var(--panel-2)}
-/* Results in the console: the filters, each assessment's grade boundaries
-   with how the year group falls into them, then the markbook. The pills
-   are the Student Voice filters' shape, so picking a class looks like
-   picking anything else in a markbook. */
-.resfilters{display:grid; gap:10px; margin:16px 0 20px}
-.resfilter{display:grid; grid-template-columns:8.5em minmax(0,1fr); gap:6px 14px; align-items:center}
-.resfilter-label{font-size:13.5px; font-weight:800; color:var(--muted)}
-.resfilter-none{font-size:14.5px}
-.respills{display:flex; flex-wrap:wrap; gap:8px}
-.respill{display:inline-flex; align-items:center; padding:6px 14px; border-radius:999px;
-  border:1.5px solid var(--line-2); background:var(--panel); color:var(--text); font:inherit; font-size:14px;
-  font-weight:600; cursor:pointer}
-.respill:hover{border-color:var(--amber)}
-.respill.on{border-color:var(--amber); background:color-mix(in srgb, var(--amber) 10%, var(--panel))}
-.restabs{width:fit-content; margin:0}
-.resunit{max-width:360px}
-.resbounds{margin:0 0 22px}
-.resbounds-head h3{margin:0 0 2px}
-.resbounds-head .hint{margin:0 0 12px; font-size:14.5px}
-.resbound-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px}
-.resbound{display:flex; flex-direction:column; gap:8px; padding:14px 16px; border:1px solid var(--line);
-  border-radius:12px; background:var(--panel); color:var(--text); min-width:0}
+/* Results in the console. The markbook is the page: one row of drop-downs
+   over it, and the grade boundaries in a panel beside it that stays shut
+   until it is asked for. The page is let out wider than the console's usual
+   900px while it is up, because a markbook of four assessments is wider
+   than that and there is no reason to scroll one sideways on a desktop. */
+.page:has(> #resultsView:not([hidden])){max-width:1440px}
+.resfilters{display:flex; flex-wrap:wrap; gap:10px 12px; align-items:flex-end; margin:12px 0 14px}
+.resfield{display:flex; flex-direction:column; gap:4px; min-width:0}
+.resfield-label{font-size:12.5px; font-weight:800; color:var(--muted)}
+.resselect{width:auto; max-width:300px; padding:8px 12px; font-size:15px}
+.resdrop{position:relative}
+.resdrop-btn{display:inline-flex; align-items:center; justify-content:space-between; gap:10px; min-width:150px;
+  max-width:260px; padding:8px 12px; border:1.5px solid var(--line-2); border-radius:10px; background:var(--bg);
+  color:var(--text); font:inherit; font-size:15px; text-align:left; cursor:pointer}
+.resdrop-btn:hover,.resdrop-btn[aria-expanded=true]{border-color:var(--amber)}
+.resdrop-value{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.resdrop-caret{color:var(--muted); font-size:12px}
+.resdrop-panel{position:absolute; left:0; top:calc(100% + 4px); z-index:40; min-width:220px;
+  max-width:min(340px, calc(100vw - 24px)); max-height:min(60vh, 360px); overflow-y:auto; padding:6px;
+  background:var(--panel); border:1.5px solid var(--line-2); border-radius:12px; box-shadow:0 8px 22px rgba(0,0,0,.16)}
+.resdrop-panel[hidden]{display:none}
+.resdrop-panel.toleft{left:auto; right:0}
+.resdrop-opt{display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; font-size:15px;
+  color:var(--text); cursor:pointer}
+.resdrop-opt:hover{background:var(--panel-2)}
+.resdrop-opt input{width:18px; height:18px; margin:0; accent-color:var(--amber); flex:none}
+.resdrop-all{border-bottom:1px solid var(--line); border-radius:8px 8px 0 0; margin-bottom:4px; font-weight:700}
+.resdrop-none{margin:6px 8px; font-size:14px}
+.resempty{margin:24px 0}
+.resnotes{display:grid; gap:8px}
+.resnote{display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin:0 0 10px; padding:9px 14px;
+  font-size:14.5px; border-color:var(--amber)}
+.resnote .btn-ghost{margin-left:auto}
+/* the markbook, and the boundaries beside it once opened */
+.resmain{display:grid; grid-template-columns:minmax(0,1fr); gap:16px; align-items:start}
+.resmain.open{grid-template-columns:minmax(0,1fr) 340px}
+.resbook{min-width:0}
+.resbook .mbbar{margin:0 0 8px}
+.resbook-head{display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 12px}
+.resbook-title{margin:0}
+.resbook-count{font-size:13.5px; color:var(--muted)}
+.resgb.on{border-color:var(--amber); background:color-mix(in srgb, var(--amber) 10%, var(--panel))}
+.resgb-dot{display:inline-block; margin-left:6px; min-width:18px; padding:0 5px; border-radius:999px;
+  background:var(--amber); color:var(--amber-ink); font-size:12px; font-weight:800; text-align:center}
+/* As tall as the window leaves room for, and never so short that it is a
+   letterbox. */
+.resbook .mbscroll{max-height:none; height:calc(100vh - 250px); height:calc(100dvh - 250px); min-height:380px; margin:0 0 10px}
+.restable th{vertical-align:bottom}
+.restable .mbsort{white-space:normal}
+.restable th.resth{min-width:4.5em; max-width:9em}
+.resth-name{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  font-weight:600; color:var(--dim); line-height:1.25; margin-bottom:2px}
+.resth-what{display:block; white-space:nowrap}
+.restable td{white-space:nowrap}
+/* Username and display name stay put while the marks scroll under them.
+   Each has a fixed width so the second knows where the first ends; a long
+   name is cut short and says itself in full on hover. */
+.restable th:nth-child(-n+2),.restable td:nth-child(-n+2){position:sticky; z-index:1; background:var(--panel);
+  box-sizing:border-box; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.restable th:nth-child(-n+2){z-index:3}
+.restable th:nth-child(1),.restable td:nth-child(1){left:0; width:9em; min-width:9em; max-width:9em}
+.restable th:nth-child(2),.restable td:nth-child(2){left:9em; width:11em; min-width:11em; max-width:11em;
+  box-shadow:inset -1px 0 0 var(--line-2)}
+.restable td.mbsel:nth-child(-n+2),.restable th.mbsel:nth-child(-n+2){background:color-mix(in srgb, var(--amber) 22%, var(--panel))}
+.mbtable td.rescombined{font-weight:800}
+.resdrawer{position:sticky; top:12px; display:flex; flex-direction:column; gap:10px; padding:14px 16px;
+  border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--text);
+  max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px); overflow-y:auto; min-width:0}
+.resdrawer[hidden]{display:none}
+.resdrawer-head{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.resdrawer-head h3{margin:0}
+.resdrawer-note{margin:0; font-size:13px; color:var(--muted)}
+.resdrawer .resselect{max-width:100%; width:100%}
+.ressplit-toggle{align-self:flex-start}
+.resbound{display:flex; flex-direction:column; gap:8px; min-width:0}
+.resbound.ressplit{padding-top:10px; border-top:1px solid var(--line)}
 .resbound-title{font-size:15.5px; line-height:1.3}
-.resbound-sub{font-size:13px; color:var(--muted); margin-top:-4px}
+.resbound-sub{font-size:13px; color:var(--muted)}
 .resbound-status{margin:0; font-size:13.5px; color:var(--muted)}
 .resbound-status b{color:var(--text)}
 .resbound-warn{margin:0; font-size:14px; border-color:var(--amber)}
@@ -7755,14 +7809,20 @@ body.hp-page{height:100vh; height:100dvh; display:flex; flex-direction:column; o
 .reschart-aim{position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; background:var(--text); opacity:.55}
 .reschart-pct{text-align:right; font-weight:700}
 .reschart-key{font-size:12px; color:var(--dim)}
-.resbook-title{margin:0}
-.mbtable td.rescombined{font-weight:800}
+/* Narrower than the markbook and the panel side by side: the panel goes
+   above the table instead, still only when it is asked for. */
+@media (max-width:1000px){
+  .resmain.open{grid-template-columns:minmax(0,1fr)}
+  .resdrawer{position:static; max-height:none; order:-1}
+}
 @media (max-width:640px){
-  .resfilter{grid-template-columns:minmax(0,1fr)}
-  .resunit{max-width:100%; width:100%}
-  .resbound-grid{grid-template-columns:minmax(0,1fr)}
+  .resfilters{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .resselect,.resdrop-btn{width:100%; max-width:100%; min-width:0}
+  .resdrop-panel{min-width:100%}
+  .restable th:nth-child(1),.restable td:nth-child(1){width:6.5em; min-width:6.5em; max-width:6.5em}
+  .restable th:nth-child(2),.restable td:nth-child(2){left:6.5em; width:7.5em; min-width:7.5em; max-width:7.5em}
+  .resbook .mbscroll{height:calc(100vh - 200px); height:calc(100dvh - 200px); min-height:320px}
 }
 @media (pointer:coarse){
-  .respill{min-height:44px}
-  .resbound-in{min-height:44px}
+  .resdrop-btn,.resdrop-opt,.resbound-in{min-height:44px}
 }
