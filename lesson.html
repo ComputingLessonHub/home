@@ -1724,44 +1724,60 @@ async function loadSaved(){
         once (covers wiped profiles and switching computers). A first-ever
         open also lands here, the one small read is how we find out it is
         the first time, and it returns nothing. */
+  /* Except for something handed in once and marked. A copy here that is not
+     finished may only be older than the one on the server: started on this
+     computer and handed in on another, or saved as not finished while it was
+     locked for marking. Trusted, it opened a marked practical on its first
+     page under "Welcome back", with no feedback and nothing frozen, and the
+     next save would have sent that old copy over the handed-in one. So that
+     copy waits for the server's answer, which costs one read, and only on an
+     assessment nobody has finished on this computer. */
+  let local = null;
   try{
     const raw = localStorage.getItem(WORK_KEY);
-    if (raw){
-      const d = JSON.parse(raw);
-      restoredData = d; wasDone = !!d.__done;
-      if (wasDone) finished = true;          // later saves must keep the flag
-      Object.entries(d).forEach(([id, val]) => {
-        if (!fields[id]) return;
-        try{ fields[id].set(val); }catch(e){ console.warn("Could not restore " + id, e); }
-      });
-      if (typeof d.__step === "number") step = Math.min(Math.max(d.__step, 0), steps.length - 1);
-      lastSaved = JSON.stringify(snapshot());
-      restoredWork = worthMentioning(d);
-      return;                       // cache hit: the database is not contacted
-    }
+    if (raw) local = JSON.parse(raw);
   }catch(e){ /* unreadable cache: fall through to the server copy */ }
+  const handedInOnce = !!(lesson && (lesson.practical || lesson.assessment));
+  const askServer = !local || (handedInOnce && !local.__done && token && apiReady);
+  const putBack = (d) => {
+    restoredData = d; wasDone = !!d.__done;
+    if (wasDone) finished = true;          // later saves must keep the flag
+    Object.entries(d).forEach(([id, val]) => {
+      if (!fields[id]) return;
+      try{ fields[id].set(val); }catch(e){ console.warn("Could not restore " + id, e); }
+    });
+    if (typeof d.__step === "number") step = Math.min(Math.max(d.__step, 0), steps.length - 1);
+    restoredWork = worthMentioning(d);
+  };
+  /* The copy here, as it is: saved already, so nothing needs writing back. */
+  const putBackLocal = () => {
+    try{ putBack(local); lastSaved = JSON.stringify(snapshot()); }catch(e){}
+  };
+  if (local && !askServer){ putBackLocal(); return; }   // cache hit: the database is not contacted
 
-  if (!token || !apiReady) return;
+  if (!token || !apiReady){ if (local) putBackLocal(); return; }
   hideLoader("Fetching your saved work\u2026");
+  let fromServer = false;
   try{
     const r = await fetch(API + "/api/work?lesson=" + encodeURIComponent(lessonId),
-                          { headers: { Authorization: "Bearer " + token } });
-    if (!r.ok) return;
-    const d = await r.json();
-    if (d && d.feedback) showFeedback(d.feedback);
-    if (lesson && (lesson.practical || lesson.assessment)) await loadMyMark();
-    if (d && d.data){
-      restoredData = d.data; wasDone = !!d.data.__done;
-      if (wasDone) finished = true;          // so the write-back below keeps it
-      Object.entries(d.data).forEach(([id, val]) => {
-        if (!fields[id]) return;
-        try{ fields[id].set(val); }catch(e){ console.warn("Could not restore " + id, e); }
-      });
-      if (typeof d.data.__step === "number") step = Math.min(Math.max(d.data.__step, 0), steps.length - 1);
-      restoredWork = worthMentioning(d.data);
-      save();                       // write the server copy back into this browser
+                          { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
+    if (r.ok){
+      const d = await r.json();
+      if (d && d.feedback) showFeedback(d.feedback);
+      if (handedInOnce) await loadMyMark();
+      /* An unfinished copy here is still the newer one while the server's is
+         unfinished too: it is what they were doing on this computer. */
+      if (d && d.data && (!local || d.data.__done)){
+        putBack(d.data);
+        fromServer = true;
+        save();                     // write the server copy back into this browser
+      }
     }
-  }catch(e){ /* offline: start fresh; the browser copy takes over from here */ }
+  }catch(e){ /* offline: the browser copy takes over from here */ }
+  if (!fromServer && local) putBackLocal();
+  /* Marked by the teacher without ever being handed in, from Mark work: what
+     to do next is on the summary, the same as for one that was. */
+  if (!wasDone && practicalMarked()){ wasDone = true; finished = true; }
 }
 
 
@@ -4027,8 +4043,14 @@ function askBypass(){
   box.appendChild(el("h2","","Teacher code console"));
   box.appendChild(el("p","modal-text","<b>Only to be used by your teacher. Close this if you have opened it accidentally!</b>"));
   const reopening = !!assessPages && finished;
+  /* The summary is not a page, and skipping from it went back into the
+     pages: past a marked practical's summary, or into a handed-in test. */
+  const doneUp = $("doneScreen");
+  const fromSummary = !!(doneUp && !doneUp.hidden);
   box.appendChild(el("p","modal-text", reopening
     ? "Type in the correct code below to let this student back into their assessment to change their answers."
+    : fromSummary
+    ? "Type in the correct code below to enable teacher checklist marking."
     : "Type in the correct code below to either skip a page, skip all pages, or enable teacher checklist marking."));
 
   const inp = el("input","bypassin");
@@ -4064,6 +4086,11 @@ function askBypass(){
         return;
       }
       back.remove(); startTeacherTicking();
+      return;
+    }
+    if (fromSummary && (word === "SKIP" || word === "SKIPALL" || strHash(typed) === wanted)){
+      msg.textContent = "That code skips pages, and this is the summary, so there is nothing to skip.";
+      inp.value = ""; inp.focus();
       return;
     }
     if (word === "SKIPALL" || strHash(typed) === wanted){
@@ -11044,8 +11071,10 @@ function doneShell(title){
      place as every other teacher code. Every kind of assessment, a practical
      included, and whether it has been marked or not: asked of the lesson,
      not of assessPages, which a practical does not have, so its summary used
-     to leave the teacher no dot at all. */
-  const keepDot = !!(lesson && lesson.assessment) && !spectate;
+     to leave the teacher no dot at all. A marked practical has no way back
+     to the pages where the dot used to be, and its response tasks have
+     checklists a teacher may need to tick. */
+  const keepDot = !spectate && !!(lesson && (lesson.assessment || lesson.practical));
   dock.classList.toggle("keep-dot", keepDot);
   dock.classList.toggle("gone", !rubricOnSummary() && !keepDot);
   paintFrozenNote(true);
