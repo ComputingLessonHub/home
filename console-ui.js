@@ -65,6 +65,7 @@
     ["hub",      "lessons",  "Lessons",           () => { const t = $("openHub"); if (t && !OFFLINE) t.click(); else toHub(); }],
     ["classes",  "classes",  "Classes",           () => toClasses()],
     ["practice", "practice", "Practice",          () => toPractice()],
+    ["results",  "progress", "Results",           () => toResults()],
     ["gap"],
     ["pw",       "key",      "Passwords",         () => $("pwBtn") && $("pwBtn").click()],
     ["keep",     "backup",   "Backups",           () => $("keepBtn") && $("keepBtn").click()],
@@ -76,7 +77,7 @@
     homeView:"home", hubView:"hub", hubUnitsView:"hub", hubCompView:"hub", hubPointView:"hub",
     hubPointLessonsView:"hub", hubLessonsView:"hub", classesView:"classes", classView:"classes",
     studentsView:"classes", coverView:"classes", unitsView:"classes", partsView:"classes",
-    lessonsView:"classes", progressView:"classes", timetableView:"classes", studentView:"classes", practiceView:"practice",
+    lessonsView:"classes", progressView:"classes", timetableView:"classes", studentView:"classes", practiceView:"practice", resultsView:"results",
     pwView:"pw", keepView:"keep", keyView:"home", whoView:"home"
   };
   let rail = null;
@@ -99,7 +100,7 @@
          between the admin screens and What's changed and Settings */
       if (r[0] === "gap"){ rail.appendChild(el("div","rail-sep")); return; }
       if (r[0] === "line"){ const l = el("div","rail-line"); l.setAttribute("role", "separator"); rail.appendChild(l); return; }
-      if (OFFLINE && ["home","classes","practice","pw","keep"].indexOf(r[0]) >= 0) return;
+      if (OFFLINE && ["home","classes","practice","results","pw","keep"].indexOf(r[0]) >= 0) return;
       const b = el("button","rail-item");
       b.type = "button";
       b.dataset.go = r[0];

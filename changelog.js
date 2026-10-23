@@ -9,6 +9,14 @@
    wants to know whether the thing they noticed is meant to be there, not a
    full account of the work. */
 window.CHANGES = [
+  { v:"14.8", text:"Results in the console: marks and grades from assessments and practicals across a year group, picked by year, class and unit, with grade boundaries shared by every teacher." },
+  { v:"14.7.4", text:"A marked practical always opens on its summary, and the teacher's dot is on a practical's summary too." },
+  { v:"14.7.3", text:"The finished screen of a Photoshop task shows the work with a short card of what the file held." },
+  { v:"14.7.2", text:"In Mark work, a Photoshop file opens full screen as a Photoshop window with its layers down the right. Lines met only by a hidden layer say so." },
+  { v:"14.7.1", text:"A Photoshop task can have a checklist ticked from the file, with lines for the teacher to tick. Any checklist can be hidden from the page and still be marked." },
+  { v:"14.7", text:"Photoshop work: a task where students choose their .psd file. Only the picture and a summary of its layers are saved, never the file." },
+  { v:"14.6.3", text:"Link to a site can hand out a starter file, such as a .psd to open in Photoshop, instead of opening a page." },
+  { v:"14.6.2", text:"Once a practical has a mark, a grade or feedback, students cannot go back into the work from its summary." },
   { v:"14.6.1", text:"A Word document reads properly in dark mode: its writing had turned pale grey on the white page." },
   { v:"14.6", text:"Slides float, pin to the right or close, with no bubble and no arrows on the slide itself, and a floating window can be resized from any corner. Slides always follow the page a teacher matched them to, and the slides experiments, the live follow and the New look switch have gone from Settings. A document is docked or closed, with no bubble. The Photoshop help is a narrower chat that types its answers." },
   { v:"14.5.1", text:"Present slides is back in Manage, beside Pacing for the class, on any lesson that has slides." },
