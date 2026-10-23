@@ -9,6 +9,7 @@
    wants to know whether the thing they noticed is meant to be there, not a
    full account of the work. */
 window.CHANGES = [
+  { v:"14.9", text:"What and why: in Lesson options, say once what a lesson teaches, why it matters and where it can lead. Students see it at the start of the lesson, from Today's lesson in the top bar, and as a recap when they finish." },
   { v:"14.8", text:"Results in the console: marks and grades from assessments and practicals across a year group, picked by year, class and unit, with grade boundaries shared by every teacher." },
   { v:"14.7.4", text:"A marked practical always opens on its summary, and the teacher's dot is on a practical's summary too." },
   { v:"14.7.3", text:"The finished screen of a Photoshop task shows the work with a short card of what the file held." },

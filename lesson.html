@@ -1254,6 +1254,77 @@ function startSlides(l){
     present: teacher ? (at) => window.hubSlides.present(l.slides, { start: at }) : null
   });
 }
+/* ---------- what and why ----------
+   A lesson's what and why (and where it can lead), written once in the
+   builder's Lesson options. Three places it can show, tried side by side on
+   this branch: a card at the top of the first page, a button in the top bar
+   that opens it at any point, and a recap on the finished screen. */
+function whatWhy(l){
+  if (!l || (!l.what && !l.why)) return null;
+  const link = /^https:\/\//i.test(l.careerLink || "") ? l.careerLink : "";
+  return { what: l.what || "", why: l.why || "", career: l.career || "", link };
+}
+function whatWhyCard(l, mode){
+  const ww = whatWhy(l);
+  if (!ww) return null;
+  const recap = mode === "recap";
+  const card = el("section","ww-card ww-" + mode);
+  card.setAttribute("aria-label", recap ? "What you learned" : "Today's lesson");
+  if (mode === "page") card.appendChild(el("h2","ww-head","Today’s lesson"));
+  const grid = el("div","ww-grid");
+  [[recap ? "What you learned" : "What we are learning", ww.what],
+   ["Why it matters", ww.why]].forEach(([head, words]) => {
+    if (!words) return;
+    const part = el("div","ww-part");
+    part.appendChild(el("h3","", head));
+    part.appendChild(el("p","", words));
+    grid.appendChild(part);
+  });
+  card.appendChild(grid);
+  if (ww.career){
+    const job = el("div","ww-career");
+    const words = el("div","ww-career-words");
+    words.appendChild(el("h3","","Where this can lead"));
+    words.appendChild(el("p","", ww.career));
+    job.appendChild(words);
+    if (ww.link){
+      const a = el("a","btn-ghost ww-link","Explore careers");
+      a.href = ww.link; a.target = "_blank"; a.rel = "noopener";
+      job.appendChild(a);
+    }
+    card.appendChild(job);
+  }
+  return card;
+}
+function startWhatWhy(l){
+  if (!whatWhy(l) || embedParam !== null || pdfParam !== null) return;
+  /* On the first page, above its tasks. An assessment's first screen is the
+     welcome, which has enough to say already. */
+  if (!l.assessment && steps[0]){
+    steps[0].section.insertBefore(whatWhyCard(l, "page"), steps[0].section.firstChild);
+  }
+  /* In the top bar beside Slides and Document, for whenever it is wanted. */
+  const open = el("button","btn-ghost sl-open ww-open no-print");
+  open.type = "button";
+  open.innerHTML = '<span class="ww-open-ic" aria-hidden="true">?</span><span class="sl-open-word">Today’s lesson</span>';
+  open.title = "What we are learning and why";
+  open.addEventListener("click", () => {
+    const back = el("div","modal-back");
+    const popup = el("div","modal ww-modal");
+    const x = el("button","btn-ghost iconbtn modal-x","✕");
+    x.addEventListener("click", () => back.remove());
+    popup.appendChild(x);
+    popup.appendChild(el("h2","", "Today’s lesson"));
+    popup.appendChild(whatWhyCard(l, "popup"));
+    scrollBody(popup);
+    back.appendChild(popup);
+    back.addEventListener("mousedown", (e) => { if (e.target === back) back.remove(); });
+    document.body.appendChild(back);
+  });
+  const set = $("setBtn");
+  if (set && set.parentNode) set.parentNode.insertBefore(open, set);
+}
+
 /* The lesson's Word documents (docs.js): open beside the work as the lesson
    starts, pinned right and locked there unless the teacher said otherwise. */
 let docViewer = null;
@@ -1301,6 +1372,7 @@ const handedOver = handedLesson();
     buildTracker();
     startSlides(l);
     startDocs(l);
+    startWhatWhy(l);
     /* Asked before anything is restored: a name change means a different
        child, and the work waiting on this machine is cleared, so restoring
        first would put the last one's answers on screen. */
@@ -11520,6 +11592,10 @@ function showLessonComplete(revisit, justFinished, sentAlready){
   const layout = el("div","done-layout" + (fb || ach ? "" : " alone"));
   const heroCol = el("div","done-hero-col");
   heroCol.appendChild(hero);
+  /* What they learned and why, under the tick: the plenary's question,
+     answered by the lesson itself. */
+  const recap = whatWhyCard(lesson, "recap");
+  if (recap) heroCol.appendChild(recap);
   layout.appendChild(heroCol);
   if (fb || ach){
     const cards = el("div","done-cards");

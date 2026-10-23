@@ -7639,6 +7639,28 @@ body.dc-pin-right .sl-win:not(.dc-win)[data-mode=right]{right:var(--dc-side, 440
 .dce-frame .dc-paper{outline:none; cursor:text}
 .dce-frame .dc-paper:focus{box-shadow:0 0 0 2px var(--brand)}
 
+/* ---- a lesson's what and why (lesson.html: whatWhyCard) ----
+   One card, in three places: the top of the first page, the "Today's lesson"
+   pop-up, and under the tick on the finished screen. Theme variables only,
+   so it follows Light, Dark and every overlay. */
+.ww-card{text-align:left; border:1.5px solid var(--line); border-radius:var(--rad-lg); background:var(--panel);
+  padding:18px 20px; margin:0 0 18px}
+.ww-head{margin:0 0 12px; font-size:var(--text-xl)}
+.ww-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px}
+.ww-part{background:var(--panel-2); border-radius:var(--rad-md); padding:12px 14px}
+.ww-part h3, .ww-career h3{margin:0 0 4px; font-size:var(--text-sm); text-transform:uppercase; letter-spacing:.04em; color:var(--muted)}
+.ww-part p, .ww-career p{margin:0; font-size:var(--text-md); line-height:1.5}
+.ww-career{display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin-top:12px; padding:12px 14px;
+  border-radius:var(--rad-md); border:1.5px dashed var(--line-2)}
+.ww-career-words{flex:1 1 260px; min-width:0}
+.ww-link{flex:none; text-decoration:none; padding:8px 16px}
+.ww-popup{border:0; padding:0; margin:0}
+.ww-modal{max-width:640px}
+.ww-recap{margin:22px auto 0; max-width:560px}
+.ww-open-ic{width:18px; height:18px; border:2px solid currentColor; border-radius:50%; display:inline-grid; place-items:center;
+  font-size:12px; font-weight:800; line-height:1}
+@media (max-width:480px){ .ww-card{padding:14px} }
+
 /* =====================================================================
    THE PHOTOSHOP HELPER (helper.js): the chat, its corner button on a
    lesson, and help.html, the same chat on a page of its own.

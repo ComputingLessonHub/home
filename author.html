@@ -997,6 +997,9 @@ function compile(){
   idsUsed = new Set();
   const out = { title: lesson.title || "Untitled lesson", blocks: [] };
   if (lesson.intro) out.intro = lesson.intro;
+  /* What and why, said once per lesson: what students learn, why it matters,
+     and a career it leads to. Only kept when written. */
+  ["what", "why", "career", "careerLink"].forEach(k => { if (lesson[k]) out[k] = lesson[k]; });
   if (lesson.unit) out.unit = lesson.unit;
   if (lesson.year) out.year = lesson.year;
   /* Where it sits on the specification. Saved with the lesson so reopening
@@ -4249,6 +4252,24 @@ function openLessonOptions(){
       lesson.intro = t2.value; saveDraft(); schedulePreview(); });
     w2.appendChild(t2); secAbout.appendChild(w2);
     box.appendChild(secAbout);
+
+    /* ---- what and why ----
+       Said once for the whole lesson, and shown to students where the
+       lesson page puts it, rather than typed into a task on every page. */
+    const secWhy = optSection("What and why");
+    [["what", "What we are learning", "One sentence. What students will be able to do by the end"],
+     ["why", "Why it matters", "One sentence. Why this is worth learning"],
+     ["career", "Where this can lead", "Optional. A job that uses this, and how"],
+     ["careerLink", "Careers link", "Optional. A National Careers Service page, starting https://"]].forEach(([key, label, hint]) => {
+      const w = el("div","bfield");
+      w.appendChild(el("label","",label));
+      const inp = el(key === "careerLink" ? "input" : "textarea"); inp.value = lesson[key] || "";
+      if (key !== "careerLink") inp.rows = 2;
+      inp.placeholder = hint;
+      inp.addEventListener("input", () => { lesson[key] = inp.value.trim() ? inp.value : ""; saveDraft(); schedulePreview(); });
+      w.appendChild(inp); secWhy.appendChild(w);
+    });
+    box.appendChild(secWhy);
 
     /* ---- where it lives ----
        The real pickers are moved in, not copied, so "+ New year group" and
@@ -7726,6 +7747,7 @@ async function loadUnitsAndMaybeLesson(){
 /* turn a saved lesson file back into editable cards */
 function fromCompiled(data, meta){
   const out = { title: data.title || (meta && meta.title) || "", intro: data.intro || "",
+                what: data.what || "", why: data.why || "", career: data.career || "", careerLink: data.careerLink || "",
                 unit: data.unit || (meta && meta.unit) || "", year: data.year || "",
                 /* The sub-point it was filed under, so reopening a lesson
                    finds both pickers where they were left. */
